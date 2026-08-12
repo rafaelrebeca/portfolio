@@ -1,6 +1,6 @@
 const CACHE_NAME = 'portfolio-manager-v1';
 const APP_SHELL = [
-  '/portfolio.html',
+  '/index.html',
   '/css/portfolio.css',
   '/js/portfolio.js',
   'https://cdn.jsdelivr.net/npm/chart.js'
