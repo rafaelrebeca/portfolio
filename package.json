@@ -1,0 +1,15 @@
+{
+  "name": "portfolio-manager",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev .",
+    "deploy": "wrangler pages deploy . --project-name portfolio-manager"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.33.1"
+  }
+}

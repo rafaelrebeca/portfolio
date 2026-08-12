@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Private portfolio management dashboard.">
+  <meta name="theme-color" content="#0f1420">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Portfolio">
+  <title>Portfolio Manager</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/portfolio.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+  <!-- ============ LOGIN SCREEN ============ -->
+  <div id="loginScreen">
+    <div class="login-box">
+      <h1>Portfolio Manager</h1>
+      <p class="sub">Sign in to manage your private portfolio</p>
+      <form id="loginForm">
+        <div class="field"><label>Username</label><input type="text" id="usernameInput" name="username" required
+            autocomplete="username"></div>
+        <div class="field"><label>Password</label><input type="password" id="passwordInput" name="password" required
+            autocomplete="current-password"></div>
+        <p id="loginError" class="error" role="alert"></p>
+        <button class="btn-primary" type="submit">Sign In</button>
+      </form>
+      <div style="margin-top:16px;text-align:center;">
+        <button id="guestButton" class="btn-sm" type="button" style="width:100%;">Continue as Guest</button>
+      </div>
+      <p class="hint">Guest mode shows demonstration data only and does not save changes.</p>
+    </div>
+  </div>
+
+  <!-- ============ APP SHELL ============ -->
+  <div id="app">
+    <div class="topbar">
+      <div class="brand"><span class="dot"></span> Portfolio Manager</div>
+      <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data">⟳</button>
+      <div class="topbar-right">
+        <span class="role-pill" id="rolePill">guest</span>
+        <span id="usernameLabel" style="font-size:13px;color:var(--muted);"></span>
+        <button class="logout-btn" id="logoutButton">Log out</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="sidebar" aria-label="Main navigation">
+        <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
+        <div class="nav-item" data-page="assets">📈 Assets</div>
+        <div class="nav-item" data-page="dividends">💰 Dividends</div>
+        <div class="nav-item" data-page="providers">🏢 My Providers</div>
+        <div class="nav-item" data-page="accounts">🏦 My Accounts</div>
+        <div class="nav-item" data-page="portfolio">💼 My Portfolio</div>
+        <div class="nav-item" data-page="goals">🎯 Goals</div>
+
+        <div class="nav-section-label" id="adminSectionLabel" style="display:none;">Admin</div>
+        <div class="nav-item" id="navImport" style="display:none;" data-page="import">📥 Import Data</div>
+        <div class="nav-item" id="navExport" style="display:none;" data-page="export">📤 Export Data</div>
+        <div class="nav-item" id="navUsers" style="display:none;" data-page="users">👥 Users</div>
+      </div>
+
+      <div class="main" id="mainScroll">
+
+        <!-- DASHBOARD -->
+        <div class="page active" id="page-dashboard">
+          <div class="page-title">Dashboard</div>
+          <div class="page-desc">Portfolio overview and recent activity</div>
+          <div id="guestBanner" class="banner" style="display:none;">
+            You are viewing demo/mock data as a Guest. Sign in to view and manage your own portfolio.
+          </div>
+          <div class="grid-cards">
+            <div class="card">
+              <div class="label">My Providers</div>
+              <div class="value" id="providerCount">—</div>
+              <div class="delta">banks + brokers</div>
+            </div>
+            <div class="card">
+              <div class="label">My Accounts</div>
+              <div class="value" id="accountCount">—</div>
+              <div class="delta">all types</div>
+            </div>
+            <div class="card">
+              <div class="label">Global Value</div>
+              <div class="value" id="portfolioValue">—</div>
+              <div class="delta up">total net worth</div>
+            </div>
+            <div class="card">
+              <div class="label">Debit / Credit</div>
+              <div class="value" id="debitCreditValue" style="font-size:16px;">—</div>
+            </div>
+          </div>
+          <div class="charts-row">
+            <div class="chart-card">
+              <div style="flex-shrink:0;">
+                <h3>By Type</h3>
+                <p class="page-desc" style="margin-bottom:12px;">Value allocation</p>
+                <div style="position:relative;height:200px;width:200px;"><canvas id="allocationChart"></canvas></div>
+              </div>
+              <div class="chart-legend" id="allocationLegend"></div>
+            </div>
+            <div class="chart-card">
+              <div style="flex-shrink:0;">
+                <h3>By Provider</h3>
+                <p class="page-desc" style="margin-bottom:12px;">Account value by provider</p>
+                <div style="position:relative;height:200px;width:200px;"><canvas id="accountTypeChart"></canvas></div>
+              </div>
+              <div class="chart-legend" id="providerLegend"></div>
+            </div>
+          </div>
+          <div style="margin-top:20px;">
+            <div class="page-title" style="font-size:16px;margin-bottom:12px;">Account Overview</div>
+            <div id="dashboardAccounts">Loading…</div>
+          </div>
+        </div>
+
+        <!-- ASSETS -->
+        <div class="page" id="page-assets">
+          <div class="page-title">Assets</div>
+          <div class="page-desc">All tracked market securities on the platform</div>
+          <div class="toolbar">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <input id="assetSearch" class="search-input" placeholder="Search symbol or name...">
+              <select id="assetTypeFilter">
+                <option value="">All types</option>
+                <option value="stock">Stock</option>
+                <option value="etf">ETF</option>
+                <option value="bond">Bond</option>
+                <option value="cfd">CFD</option>
+                <option value="commodity">Commodity</option>
+              </select>
+            </div>
+            <button class="btn-sm primary write-action admin-action" id="newAssetBtn" style="display:none;">+ New
+              Asset</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Latest Price</th>
+                <th>Yield</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="assetsTable"></tbody>
+          </table>
+        </div>
+
+        <!-- DIVIDENDS -->
+        <div class="page" id="page-dividends">
+          <div class="page-title">Dividend Calendar</div>
+          <div class="page-desc">Yield and payment schedule per asset</div>
+          <div class="toolbar" style="margin-bottom:14px;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <select id="dividendPeriodType" style="min-width:130px;">
+                <option value="">All periods</option>
+                <option value="month">Month</option>
+                <option value="trimester">Trimester</option>
+                <option value="semester">Semester</option>
+              </select>
+              <select id="dividendPeriodValue" style="min-width:130px;display:none;"></select>
+            </div>
+            <div></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Asset</th>
+                <th>Yield</th>
+                <th>Payment Months</th>
+              </tr>
+            </thead>
+            <tbody id="dividendsTable"></tbody>
+          </table>
+        </div>
+
+        <!-- PROVIDERS -->
+        <div class="page" id="page-providers">
+          <div class="page-title">My Providers</div>
+          <div class="page-desc">Financial institutions (banks, brokers) — visible only to you</div>
+          <div class="toolbar">
+            <div></div>
+            <button class="btn-sm primary write-action" id="newProviderBtn">+ New Provider</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Accounts</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="providersTable"></tbody>
+          </table>
+        </div>
+
+        <!-- ACCOUNTS -->
+        <div class="page" id="page-accounts">
+          <div class="page-title">My Accounts</div>
+          <div class="page-desc">Accounts under your providers: loans (debt), interest accounts, bank accounts, and
+            asset accounts</div>
+          <div class="toolbar">
+            <div></div>
+            <button class="btn-sm primary write-action" id="newAccountBtn">+ New Account</button>
+          </div>
+          <div id="accountsList"></div>
+        </div>
+
+        <!-- PORTFOLIO -->
+        <div class="page" id="page-portfolio">
+          <div class="page-title">My Portfolio</div>
+          <div class="page-desc">Every holding is assigned to one of your asset accounts</div>
+          <div class="toolbar">
+            <div></div>
+            <button class="btn-sm primary write-action" id="newHoldingBtn">+ Add Holding</button>
+          </div>
+          <div class="grid-cards">
+            <div class="card">
+              <div class="label">Portfolio Value</div>
+              <div class="value" id="portfolioAssetValue">—</div>
+              <div class="delta up">sum of asset values</div>
+            </div>
+            <div class="card">
+              <div class="label">Total Gain / Loss (%/€)</div>
+              <div class="value" id="portfolioGainLossPct">—</div>
+              <div class="delta" id="portfolioGainLossEurDelta">—</div>
+            </div>
+            <div class="card">
+              <div class="label">Global Dividend Yield</div>
+              <div class="value" id="portfolioGlobalYield">—</div>
+              <div class="delta" id="portfolioGlobalYieldDelta">weighted avg across holdings</div>
+            </div>
+            <div class="card">
+              <div class="label">Yield € (after tax)</div>
+              <div class="value" id="portfolioYieldEur">—</div>
+              <div class="delta" id="portfolioYieldEurDelta">—</div>
+            </div>
+          </div>
+          <div class="charts-row">
+            <div class="chart-card">
+              <div style="flex-shrink:0;">
+                <h3>By Asset</h3>
+                <p class="page-desc" style="margin-bottom:12px;">Market value per asset</p>
+                <div style="position:relative;height:200px;width:200px;"><canvas id="portfolioAssetChart"></canvas>
+                </div>
+              </div>
+              <div class="chart-legend" id="portfolioAssetLegend"></div>
+            </div>
+            <div class="chart-card">
+              <div style="flex-shrink:0;">
+                <h3>By Asset Type</h3>
+                <p class="page-desc" style="margin-bottom:12px;">Market holdings allocation</p>
+                <div style="position:relative;height:200px;width:200px;"><canvas id="portfolioTypeChart"></canvas></div>
+              </div>
+              <div class="chart-legend" id="portfolioTypeLegend"></div>
+            </div>
+          </div>
+          <div id="portfolioFilterBar"></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Account</th>
+                <th>Quantity</th>
+                <th>Purchase Price</th>
+                <th>Market Value</th>
+                <th>Gain / Loss</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="holdingsTable"></tbody>
+          </table>
+        </div>
+
+        <!-- GOALS -->
+        <div class="page" id="page-goals">
+          <div class="page-title">Goals</div>
+          <div class="page-desc">Track your savings and investment targets against your linked accounts</div>
+          <div class="toolbar">
+            <div></div>
+            <button class="btn-sm primary write-action" id="newGoalBtn">+ New Goal</button>
+          </div>
+          <div id="goalsList"></div>
+        </div>
+
+        <!-- IMPORT DATA -->
+        <div class="page" id="page-import">
+          <div class="page-title">Import Data</div>
+          <div class="page-desc">Upload a CSV file to bulk import/update assets</div>
+          <section class="import-card">
+            <form id="importForm" class="import-controls">
+              <div class="field">
+                <label>CSV Format</label>
+                <code
+                  style="display:block;background:#1a1f2e;padding:8px;border-radius:4px;color:#3fd0a3;font-size:12px;">symbol,name,type,coin,price,yield,payment_months</code>
+                <small style="display:block;margin-top:4px;color:var(--muted);">Use <strong>|</strong> to separate
+                  payment months (e.g., 3|6|9|12)</small>
+              </div>
+              <label class="upload-box" for="csvFile">
+                <span class="upload-icon">📄</span>
+                <span><strong>Select a CSV file</strong><small id="csvFileName">No file selected</small></span>
+                <input type="file" id="csvFile" accept=".csv">
+              </label>
+              <button class="btn-sm primary import-run" type="submit">Run Import</button>
+            </form>
+          </section>
+          <div style="margin-top:18px;">
+            <div class="page-desc" style="margin-bottom:8px;">Import log</div>
+            <div class="import-log" id="importLog">Waiting for import...</div>
+          </div>
+        </div>
+
+        <!-- EXPORT DATA -->
+        <div class="page" id="page-export">
+          <div class="page-title">Export Data</div>
+          <div class="page-desc">Download a CSV file of your assets in import-ready format</div>
+          <section class="import-card">
+            <div class="import-controls">
+              <div>
+                <p class="page-desc" style="margin-bottom:12px;">symbol,name,type,coin,price,yield,payment_months</p>
+                <button class="btn-sm primary" id="exportAssetsBtn">📈 Export Assets</button>
+              </div>
+            </div>
+          </section>
+          <div style="margin-top:18px;">
+            <div class="page-desc" style="margin-bottom:8px;">Export log</div>
+            <div class="import-log" id="exportLog">Ready to export...</div>
+          </div>
+        </div>
+
+        <!-- USERS -->
+        <div class="page" id="page-users">
+          <div class="page-title">User Management</div>
+          <div class="page-desc">Create and manage platform accounts</div>
+          <div class="toolbar">
+            <div></div>
+            <button class="btn-sm primary write-action admin-action" id="newUserBtn" style="display:none;">+ New
+              User</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th>Last Login</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Asset (Create / Edit) -->
+  <div class="modal-overlay" id="assetModalOverlay">
+    <div class="modal">
+      <h3 id="assetModalTitle">New Asset</h3>
+      <form id="assetForm">
+        <input type="hidden" id="assetEditId" name="asset_id">
+        <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required
+            placeholder="e.g. Apple Inc."></div>
+        <div class="field"><label>Symbol</label><input type="text" id="assetSymbol" name="symbol" required
+            placeholder="e.g. AAPL"></div>
+        <div class="field"><label>Type</label>
+          <select id="assetType" name="type" style="width:100%;" required>
+            <option value="stock">Stock</option>
+            <option value="etf">ETF</option>
+            <option value="bond">Bond</option>
+            <option value="cfd">CFD</option>
+            <option value="commodity">Commodity</option>
+          </select>
+        </div>
+        <div class="field"><label>Currency</label>
+          <select id="assetCoin" name="coin" style="width:100%;" required>
+            <option value="">Select currency...</option>
+          </select>
+        </div>
+        <div class="field"><label>Latest Price</label><input type="number" step="0.01" min="0" id="assetPrice"
+            name="price" placeholder="179.62"></div>
+        <div class="field"><label>Dividend Yield (%)</label><input type="number" step="0.01" min="0" id="assetYield"
+            name="dividend_yield" placeholder="0.52"></div>
+        <div class="field"><label>Payment Months <span style="font-weight:normal;color:var(--muted);">(e.g.
+              3,6,9,12)</span></label><input type="text" id="assetMonths" name="payment_months" placeholder="3,6,9,12">
+        </div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeAssetModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Save Asset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Provider (Create / Edit) -->
+  <div class="modal-overlay" id="providerModalOverlay">
+    <div class="modal">
+      <h3 id="providerModalTitle">New Provider</h3>
+      <form id="providerForm">
+        <input type="hidden" id="providerEditId" name="provider_id">
+        <div class="field"><label>Provider Name</label><input type="text" id="providerName" name="name" required
+            placeholder="e.g. Revolut, Trading 212, Chase"></div>
+        <div class="field"><label>Type</label>
+          <select id="providerType" name="type" style="width:100%;">
+            <option value="bank">Bank</option>
+            <option value="broker">Broker</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeProviderModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Account (Create / Edit) -->
+  <div class="modal-overlay" id="accountModalOverlay">
+    <div class="modal">
+      <h3 id="accountModalTitle">New Account</h3>
+      <form id="accountForm">
+        <input type="hidden" id="accountEditId" name="account_id">
+        <div class="field"><label>Provider</label>
+          <select id="accountProvider" name="provider_id" style="width:100%;" required></select>
+        </div>
+        <div class="field"><label>Account Name</label><input type="text" id="accountName" name="name" required
+            placeholder="e.g. Main Checking, Investment ISA"></div>
+        <div class="field"><label>Type</label>
+          <select id="accountTypeSelect" name="type" style="width:100%;">
+            <option value="bank_account">Bank Account (current/checking)</option>
+            <option value="interest_account">Interest Account (savings)</option>
+            <option value="loan">Loan (debt)</option>
+            <option value="asset_account">Asset Account (brokerage/investments)</option>
+          </select>
+        </div>
+        <div class="field"><label>Currency</label>
+          <select id="accountCoin" name="coin" style="width:100%;" required>
+            <option value="">Select currency...</option>
+          </select>
+        </div>
+        <div id="balanceField" class="field"><label>Balance</label><input type="number" step="0.01"
+            id="accountBalanceInput" name="balance" placeholder="5000.00"></div>
+        <div id="rateField" class="field" style="display:none;"><label>Interest Rate (% annual)</label><input
+            type="number" step="0.01" min="0" max="100" id="accountRateInput" name="interest_rate" placeholder="2.80">
+        </div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeAccountModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Holding (Create / Edit) -->
+  <div class="modal-overlay" id="holdingModalOverlay">
+    <div class="modal">
+      <h3 id="holdingModalTitle">Add Holding</h3>
+      <form id="holdingForm">
+        <input type="hidden" id="holdingEditId" name="holding_id">
+        <div class="field"><label>Asset Account</label>
+          <select id="holdingAccount" name="account_id" style="width:100%;" required></select>
+        </div>
+        <div class="field"><label>Filter by Asset Type</label>
+          <select id="holdingAssetTypeFilter" style="width:100%;">
+            <option value="">All types</option>
+            <option value="stock">Stock</option>
+            <option value="etf">ETF</option>
+            <option value="bond">Bond</option>
+            <option value="cfd">CFD</option>
+            <option value="commodity">Commodity</option>
+          </select>
+        </div>
+        <div class="field"><label>Asset</label>
+          <select id="holdingAsset" name="asset_id" style="width:100%;" required></select>
+        </div>
+        <div class="field"><label>Quantity</label><input type="number" step="any" min="0.00000001" id="holdingQty"
+            name="quantity" required value="1"></div>
+        <div class="field"><label>Average Purchase Price ($)</label><input type="number" step="0.01" min="0"
+            id="holdingPurchasePrice" name="purchase_price" placeholder="170.00"></div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeHoldingModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Save Holding</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Goal (Create / Edit) -->
+  <div class="modal-overlay" id="goalModalOverlay">
+    <div class="modal" style="max-width:480px;">
+      <h3 id="goalModalTitle">New Goal</h3>
+      <form id="goalForm">
+        <input type="hidden" id="goalEditId" name="goal_id">
+        <div class="field"><label>Goal Name</label><input type="text" id="goalName" name="goal_name" required
+            placeholder="e.g. Emergency Fund, Down Payment"></div>
+        <div class="field"><label>Target Value</label><input type="number" step="0.01" min="0" id="goalValue"
+            name="value" required placeholder="20000.00"></div>
+        <div class="field"><label>Currency</label>
+          <select id="goalCoin" name="coin" style="width:100%;" required>
+            <option value="">Select currency...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Linked Accounts</label>
+          <div id="goalAccountsList" class="goal-accounts-list"></div>
+          <div class="goal-add-account">
+            <select id="goalProviderSelect" style="flex:1;"></select>
+            <select id="goalAccountSelect" style="flex:1.4;"></select>
+            <button class="btn-sm primary" type="button" id="addGoalAccountBtn">+ Add</button>
+          </div>
+        </div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeGoalModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Save Goal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Goal Simulator -->
+  <div class="modal-overlay" id="goalSimModalOverlay">
+    <div class="modal" style="max-width:560px;">
+      <h3 id="goalSimTitle">Goal Simulator</h3>
+      <form id="goalSimForm">
+        <input type="hidden" id="goalSimId" name="goal_id">
+        <div class="field"><label>Monthly Contribution</label><input type="number" step="0.01" min="0"
+            id="goalSimMonthly" name="monthly" required placeholder="e.g. 500.00"></div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeGoalSimBtn">Close</button>
+          <button class="btn-sm primary" type="submit">Simulate</button>
+        </div>
+      </form>
+      <div id="goalSimResult" style="margin-top:18px;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Goal Details -->
+  <div class="modal-overlay" id="goalDetailsModalOverlay">
+    <div class="modal" style="max-width:560px;">
+      <h3 id="goalDetailsTitle">Goal Details</h3>
+      <div class="goal-details-summary" id="goalDetailsSummary"></div>
+      <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
+      <div class="goal-details-callout" id="goalDetailsCallout"></div>
+      <div style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart"></canvas>
+        </div>
+        <div class="chart-legend" id="goalDetailsLegend" style="flex:1;"></div>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-sm" type="button" id="closeGoalDetailsBtn">Close</button>
+        <button class="btn-sm primary" type="button" id="goalDetailsSimulateBtn">Simulate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: User (Create) -->
+  <div class="modal-overlay" id="userModalOverlay">
+    <div class="modal">
+      <h3>Create New User</h3>
+      <form id="userForm">
+        <div class="field"><label>Username</label><input type="text" name="username" required placeholder="jane_doe">
+        </div>
+        <div class="field"><label>Role</label>
+          <select name="role" style="width:100%;">
+            <option value="guest">Guest</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8"
+            placeholder="At least 8 characters" autocomplete="new-password"></div>
+        <div class="field"><label>Confirm Password</label><input type="password" name="confirm_password" required
+            minlength="8" placeholder="Repeat password" autocomplete="new-password"></div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeUserModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Reset Password -->
+  <div class="modal-overlay" id="resetPasswordModalOverlay">
+    <div class="modal">
+      <h3>Reset Password</h3>
+      <p class="modal-copy">Set a new password for <strong id="resetPasswordUsername"></strong>.</p>
+      <form id="resetPasswordForm">
+        <input type="hidden" id="resetPasswordUserId" name="user_id">
+        <div class="field"><label>New Password</label><input type="password" name="password" required minlength="8"
+            placeholder="At least 8 characters" autocomplete="new-password"></div>
+        <div class="field"><label>Confirm New Password</label><input type="password" name="confirm_password" required
+            minlength="8" placeholder="Repeat password" autocomplete="new-password"></div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" id="closeResetPasswordModalBtn">Cancel</button>
+          <button class="btn-sm primary" type="submit">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="js/portfolio.js"></script>
+</body>
+
+</html>
