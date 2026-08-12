@@ -671,7 +671,7 @@ function render() {
   });
   const debitCreditValue = $('#debitCreditValue');
   if (debitCreditValue) {
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}</span> / <span class="neg">${moneyEUR.format(credit)}</span>`;
+    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}</span><br><span class="neg">${moneyEUR.format(credit)}</span>`;
   }
 
   dashboardFilter = null;
