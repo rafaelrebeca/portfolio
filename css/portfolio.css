@@ -858,6 +858,8 @@ select {
 .import-run { white-space: nowrap; min-height: 42px; width: 100%; }
 .modal-copy { color: var(--muted); font-size: 13px; line-height: 1.5; margin: -6px 0 18px; }
 .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.progress { height: 8px; border-radius: 6px; background: var(--panel2); overflow: hidden; }
+.progress-bar { height: 100%; width: 0; border-radius: 6px; background: var(--accent2); transition: width .2s ease; }
 
 .error, .form-error { color: var(--danger); font-size: 12px; margin-top: 6px; }
 
