@@ -124,6 +124,14 @@ function gainLoss(h) {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
+function gainLossValue(h) {
+  if (h.purchase_price == null || Number(h.purchase_price) <= 0 || h.price == null) return '—';
+  const diff = (Number(h.price) - Number(h.purchase_price)) * Number(h.quantity || 0);
+  const formatted = `${diff >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(diff))}`;
+  const className = diff >= 0 ? 'pos' : 'neg';
+  return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
+}
+
 async function loadData() {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
@@ -932,6 +940,7 @@ function renderHoldings() {
       <td>${h.purchase_price == null ? '—' : formatCurrency(h.purchase_price, currency)}</td>
       <td>${formatCurrency(value, currency)}</td>
       <td>${gainLoss({ price, purchase_price: h.purchase_price })}</td>
+      <td>${gainLossValue({ price, purchase_price: h.purchase_price, quantity: h.quantity })}</td>
       <td>
         <div style="display:flex;gap:6px;">
           <button class="btn-sm" data-edit-holding="${h.id}">Edit</button>
@@ -939,7 +948,7 @@ function renderHoldings() {
         </div>
       </td>
     </tr>`;
-  }).join('') : emptyRow(7, 'No holdings yet. Add assets to your asset accounts.');
+  }).join('') : emptyRow(8, 'No holdings yet. Add assets to your asset accounts.');
 }
 
 function goalCurrentValue(goal) {
