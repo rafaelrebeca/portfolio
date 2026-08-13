@@ -407,6 +407,34 @@
     </div>
   </div>
 
+  <!-- MODAL: Update Asset Value -->
+  <div class="modal-overlay" id="updateAssetModalOverlay">
+    <div class="modal">
+      <h3>Update Asset Value</h3>
+      <p class="modal-copy">Fetching the latest price for <strong id="updateAssetName"></strong> from Massive.</p>
+      <div class="field" id="updateAssetProgressWrap">
+        <label>Fetching latest price…</label>
+        <div class="progress"><div class="progress-bar" id="updateAssetProgressBar"></div></div>
+      </div>
+      <form id="updateAssetForm" style="display:none;">
+        <input type="hidden" id="updateAssetId" name="asset_id">
+        <div class="field"><label>Latest Price</label><input type="number" step="0.01" min="0" id="updateAssetPrice"
+            name="price" placeholder="179.62"></div>
+        <div class="modal-actions">
+          <button class="btn-sm primary" type="submit">Commit</button>
+        </div>
+      </form>
+      <p class="form-error" id="updateAssetError"></p>
+      <details class="update-log" id="updateAssetLogWrap" style="display:none;">
+        <summary>API reply</summary>
+        <pre id="updateAssetLog"></pre>
+      </details>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" id="closeUpdateAssetModalBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Provider (Create / Edit) -->
   <div class="modal-overlay" id="providerModalOverlay">
     <div class="modal">

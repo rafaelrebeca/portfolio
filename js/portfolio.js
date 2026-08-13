@@ -725,6 +725,7 @@ function renderAssets() {
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${admin ? `<button class="btn-sm" data-update-asset="${a.id}">Update</button>` : ''}
             ${admin ? `<button class="btn-sm" data-edit-asset="${a.id}">Edit</button>` : ''}
             ${admin ? `<button class="btn-sm danger" data-delete-asset="${a.id}">Delete</button>` : ''}
             <button class="btn-sm" data-add-asset-to-account="${a.id}">+ Add to Account</button>
@@ -1193,6 +1194,66 @@ function openAssetModal(assetId = null) {
   openModal('assetModalOverlay');
 }
 
+function openUpdateAssetModal(assetId) {
+  const a = state.assets.find(item => item.id === assetId);
+  if (!a) return;
+  const form = $('#updateAssetForm');
+  const progressWrap = $('#updateAssetProgressWrap');
+  const err = $('#updateAssetError');
+  if (form) form.reset();
+  if (err) err.textContent = '';
+  $('#updateAssetId').value = a.id;
+  $('#updateAssetName').textContent = `${a.symbol || a.name} — ${a.name}`;
+  if (form) form.style.display = 'none';
+  if (progressWrap) progressWrap.style.display = '';
+  setUpdateProgress(0);
+  openModal('updateAssetModalOverlay');
+  fetchUpdateAssetPrice(a);
+}
+
+function setUpdateProgress(percent) {
+  const bar = $('#updateAssetProgressBar');
+  if (bar) bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+async function fetchUpdateAssetPrice(a) {
+  const err = $('#updateAssetError');
+  if (err) err.textContent = '';
+  setUpdateLog(null);
+  try {
+    setUpdateProgress(40);
+    const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+    setUpdateProgress(100);
+    setUpdateLog(data.raw);
+    const price = data.price;
+    if (price == null) {
+      if (err) err.textContent = data.error || 'No price returned for this asset.';
+      return;
+    }
+    $('#updateAssetPrice').value = price;
+    const form = $('#updateAssetForm');
+    const progressWrap = $('#updateAssetProgressWrap');
+    if (form) form.style.display = '';
+    if (progressWrap) progressWrap.style.display = 'none';
+  } catch (error) {
+    if (err) err.textContent = error.message;
+    setUpdateLog({ error: error.message });
+  }
+}
+
+function setUpdateLog(value) {
+  const wrap = $('#updateAssetLogWrap');
+  const pre = $('#updateAssetLog');
+  if (!wrap || !pre) return;
+  if (value == null) {
+    wrap.style.display = 'none';
+    pre.textContent = '';
+    return;
+  }
+  wrap.style.display = '';
+  pre.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
 function openProviderModal(providerId = null) {
   const form = $('#providerForm');
   if (!form) return;
@@ -1630,6 +1691,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Modal close buttons
   $('#closeAssetModalBtn')?.addEventListener('click', () => closeModal('assetModalOverlay'));
+  $('#closeUpdateAssetModalBtn')?.addEventListener('click', () => closeModal('updateAssetModalOverlay'));
   $('#closeProviderModalBtn')?.addEventListener('click', () => closeModal('providerModalOverlay'));
   $('#closeAccountModalBtn')?.addEventListener('click', () => closeModal('accountModalOverlay'));
   $('#closeHoldingModalBtn')?.addEventListener('click', () => closeModal('holdingModalOverlay'));
@@ -1698,6 +1760,43 @@ document.addEventListener('DOMContentLoaded', async () => {
       if ($('#assetTypeFilter')) $('#assetTypeFilter').value = '';
       await loadData();
       toast(assetId ? 'Asset updated.' : 'New asset saved.');
+    } catch (error) {
+      if (err) err.textContent = error.message;
+    }
+  });
+
+  // Update Asset Value (Commit)
+  $('#updateAssetForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const err = $('#updateAssetError'); if (err) err.textContent = '';
+    const assetId = Number($('#updateAssetId')?.value);
+    const a = state.assets.find(item => item.id === assetId);
+    if (!a) return;
+    const price = $('#updateAssetPrice')?.value;
+
+    if (state.guest) {
+      a.price = numeric(price);
+      closeModal('updateAssetModalOverlay');
+      await loadData();
+      toast('Asset value updated.');
+      return;
+    }
+
+    try {
+      await request(`/assets/${assetId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: a.name,
+          symbol: a.symbol || '',
+          type: a.type,
+          coin: a.coin || 'USD',
+          price: price === '' ? null : Number(price),
+          payment_months: a.payment_months || []
+        })
+      });
+      closeModal('updateAssetModalOverlay');
+      await loadData();
+      toast('Asset value updated.');
     } catch (error) {
       if (err) err.textContent = error.message;
     }
@@ -2073,6 +2172,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (addAssetBtn) {
       const assetId = Number(addAssetBtn.dataset.addAssetToAccount);
       openHoldingModal(assetId);
+      return;
+    }
+
+    // Update Asset Value / Yield
+    const updateAssetBtn = event.target.closest('[data-update-asset]');
+    if (updateAssetBtn) {
+      openUpdateAssetModal(Number(updateAssetBtn.dataset.updateAsset));
       return;
     }
 

@@ -132,6 +132,29 @@ export async function onRequest(context) {
       ]);
       return json({ ok: true });
     }
+    if (method === 'POST' && /^assets\/\d+\/price$/.test(path)) {
+      await requireAdmin(request, env);
+      const id = Number(path.split('/')[1]);
+      const asset = await env.myd1db.prepare('SELECT id, symbol, coin FROM assets WHERE id = ?').bind(id).first();
+      if (!asset) return fail('Asset not found.', 404);
+      if (!asset.symbol) return fail('This asset has no symbol to look up.', 400);
+      const apiKey = env.STOCK_API_KEY;
+      if (!apiKey) return fail('STOCK_API_KEY not configured in environment variables.', 500);
+
+      const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(asset.symbol)}/prev?apiKey=${encodeURIComponent(apiKey)}`;
+      let response;
+      try {
+        response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      } catch (error) {
+        return fail('Massive API request timed out.', 504);
+      }
+      if (!response.ok) return fail(`Massive API returned ${response.status}.`, 502);
+      const data = await response.json();
+      const results = Array.isArray(data?.results) ? data.results[0] : data?.results;
+      const price = results?.c ?? null;
+      if (price == null) return fail('No price returned for this asset.', 404);
+      return json({ price, coin: asset.coin || 'USD', raw: data });
+    }
     if (method === 'GET' && path === 'dividends') { await requireMember(request, env); return json({ items: normalizeAssets((await assetsStatement(env.myd1db).all()).results).filter(item => item.dividend_yield !== null || item.payment_months.length) }); }
 
     if (method === 'GET' && path === 'providers') {
