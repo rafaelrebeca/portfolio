@@ -142,13 +142,18 @@ export async function onRequest(context) {
       if (!apiKey) return fail('STOCK_API_KEY not configured in environment variables.', 500);
 
       const url = `https://api.massive.com/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(asset.symbol)}?apiKey=${encodeURIComponent(apiKey)}`;
-      const response = await fetch(url);
+      let response;
+      try {
+        response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      } catch (error) {
+        return fail('Massive API request timed out.', 504);
+      }
       if (!response.ok) return fail(`Massive API returned ${response.status}.`, 502);
       const data = await response.json();
       const results = data?.results;
       const price = results?.day?.c ?? results?.lastTrade?.p ?? null;
       if (price == null) return fail('No price returned for this asset.', 404);
-      return json({ price, coin: asset.coin || 'USD' });
+      return json({ price, coin: asset.coin || 'USD', raw: data });
     }
     if (method === 'GET' && path === 'dividends') { await requireMember(request, env); return json({ items: normalizeAssets((await assetsStatement(env.myd1db).all()).results).filter(item => item.dividend_yield !== null || item.payment_months.length) }); }
 

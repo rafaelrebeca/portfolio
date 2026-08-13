@@ -1199,7 +1199,7 @@ function openUpdateAssetModal(assetId) {
   if (!a) return;
   const form = $('#updateAssetForm');
   const progressWrap = $('#updateAssetProgressWrap');
-  const err = form?.querySelector('.form-error');
+  const err = $('#updateAssetError');
   if (form) form.reset();
   if (err) err.textContent = '';
   $('#updateAssetId').value = a.id;
@@ -1217,12 +1217,14 @@ function setUpdateProgress(percent) {
 }
 
 async function fetchUpdateAssetPrice(a) {
-  const err = $('#updateAssetForm .form-error');
+  const err = $('#updateAssetError');
   if (err) err.textContent = '';
+  setUpdateLog(null);
   try {
     setUpdateProgress(40);
     const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
     setUpdateProgress(100);
+    setUpdateLog(data.raw);
     const price = data.price;
     if (price == null) {
       if (err) err.textContent = data.error || 'No price returned for this asset.';
@@ -1235,7 +1237,21 @@ async function fetchUpdateAssetPrice(a) {
     if (progressWrap) progressWrap.style.display = 'none';
   } catch (error) {
     if (err) err.textContent = error.message;
+    setUpdateLog({ error: error.message });
   }
+}
+
+function setUpdateLog(value) {
+  const wrap = $('#updateAssetLogWrap');
+  const pre = $('#updateAssetLog');
+  if (!wrap || !pre) return;
+  if (value == null) {
+    wrap.style.display = 'none';
+    pre.textContent = '';
+    return;
+  }
+  wrap.style.display = '';
+  pre.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
 function openProviderModal(providerId = null) {
@@ -1752,7 +1768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update Asset Value (Commit)
   $('#updateAssetForm')?.addEventListener('submit', async event => {
     event.preventDefault();
-    const err = $('#updateAssetForm .form-error'); if (err) err.textContent = '';
+    const err = $('#updateAssetError'); if (err) err.textContent = '';
     const assetId = Number($('#updateAssetId')?.value);
     const a = state.assets.find(item => item.id === assetId);
     if (!a) return;

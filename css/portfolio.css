@@ -860,6 +860,9 @@ select {
 .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .progress { height: 8px; border-radius: 6px; background: var(--panel2); overflow: hidden; }
 .progress-bar { height: 100%; width: 0; border-radius: 6px; background: var(--accent2); transition: width .2s ease; }
+.update-log { margin-top: 14px; }
+.update-log summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
+.update-log pre { margin: 8px 0 0; padding: 10px; max-height: 180px; overflow: auto; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 
 .error, .form-error { color: var(--danger); font-size: 12px; margin-top: 6px; }
 
