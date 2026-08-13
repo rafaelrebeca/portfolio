@@ -141,7 +141,7 @@ export async function onRequest(context) {
       const apiKey = env.STOCK_API_KEY;
       if (!apiKey) return fail('STOCK_API_KEY not configured in environment variables.', 500);
 
-      const url = `https://api.massive.com/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(asset.symbol)}?apiKey=${encodeURIComponent(apiKey)}`;
+      const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(asset.symbol)}/prev?apiKey=${encodeURIComponent(apiKey)}`;
       let response;
       try {
         response = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -150,8 +150,8 @@ export async function onRequest(context) {
       }
       if (!response.ok) return fail(`Massive API returned ${response.status}.`, 502);
       const data = await response.json();
-      const results = data?.results;
-      const price = results?.day?.c ?? results?.lastTrade?.p ?? null;
+      const results = Array.isArray(data?.results) ? data.results[0] : data?.results;
+      const price = results?.c ?? null;
       if (price == null) return fail('No price returned for this asset.', 404);
       return json({ price, coin: asset.coin || 'USD', raw: data });
     }
