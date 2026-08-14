@@ -259,9 +259,22 @@ export async function onRequest(context) {
       const sub1 = body.sub1 === null || body.sub1 === undefined || body.sub1 === '' ? null : Number(body.sub1);
       const sub2 = body.sub2 === null || body.sub2 === undefined || body.sub2 === '' ? null : Number(body.sub2);
       const sub3 = body.sub3 === null || body.sub3 === undefined || body.sub3 === '' ? null : Number(body.sub3);
-      if (sub1 !== null && (!Number.isFinite(sub1) || sub1 < 0)) return fail('Sub-goal 1 must be a non-negative number.');
-      if (sub2 !== null && (!Number.isFinite(sub2) || sub2 < 0)) return fail('Sub-goal 2 must be a non-negative number.');
-      if (sub3 !== null && (!Number.isFinite(sub3) || sub3 < 0)) return fail('Sub-goal 3 must be a non-negative number.');
+      const subs = [sub1, sub2, sub3];
+      for (const s of subs) {
+        if (s !== null && !Number.isFinite(s)) return fail('Sub-goals must be valid numbers.');
+      }
+      if (value === 0) {
+        // Debt goal: sub-goals must be negative.
+        if (subs.some(s => s !== null && s >= 0)) return fail('For a debt-clearing goal, sub-goals must be negative.');
+      } else {
+        // Positive goal: sub-goals must be positive, < target, and ascending.
+        let prev = 0;
+        for (const s of subs) {
+          if (s === null) continue;
+          if (s <= 0 || s >= value || s <= prev) return fail('Sub-goals must be positive, less than the target, and in ascending order.');
+          prev = s;
+        }
+      }
       if (sub2 !== null && sub1 === null) return fail('Sub-goal 2 requires Sub-goal 1 to be set.');
       if (sub3 !== null && sub2 === null) return fail('Sub-goal 3 requires Sub-goal 2 to be set.');
       let accountIds = Array.isArray(body.account_ids) ? body.account_ids.map(Number).filter(Number.isInteger) : [];

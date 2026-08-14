@@ -1444,7 +1444,34 @@ function updateGoalSubGating() {
   const sub1 = $('#goalSub1');
   const sub2 = $('#goalSub2');
   const sub3 = $('#goalSub3');
-  if (!sub1 || !sub2 || !sub3) return;
+  const valueInput = $('#goalValue');
+  if (!sub1 || !sub2 || !sub3 || !valueInput) return;
+  const rawValue = valueInput.value.trim();
+  const value = rawValue === '' ? NaN : Number(rawValue);
+  const isDebt = rawValue !== '' && value === 0;
+
+  // Validate sub-goals against the current goal value.
+  // Debt (0): sub-goals must be negative.
+  // Positive: sub-goals must be positive, < target, and ascending.
+  if (Number.isFinite(value)) {
+    const subs = [sub1, sub2, sub3];
+    let prev = 0;
+    subs.forEach(input => {
+      const raw = input.value.trim();
+      if (raw === '') return;
+      const num = Number(raw);
+      let valid;
+      if (isDebt) {
+        valid = Number.isFinite(num) && num < 0;
+      } else {
+        valid = Number.isFinite(num) && num > 0 && num < value && num > prev;
+      }
+      if (!valid) input.value = '';
+      else prev = num;
+    });
+  }
+
+  // Dependency gating: sub2 requires sub1, sub3 requires sub2.
   const has1 = sub1.value.trim() !== '';
   const has2 = sub2.value.trim() !== '';
   sub2.disabled = !has1;
@@ -1706,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#goalProviderSelect')?.addEventListener('change', fillGoalAccountSelects);
   $('#goalSub1')?.addEventListener('input', updateGoalSubGating);
   $('#goalSub2')?.addEventListener('input', updateGoalSubGating);
+  $('#goalValue')?.addEventListener('input', updateGoalSubGating);
   $('#addGoalAccountBtn')?.addEventListener('click', () => {
     const accountSelect = $('#goalAccountSelect');
     const accountId = Number(accountSelect?.value);
