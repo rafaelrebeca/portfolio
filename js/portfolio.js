@@ -1325,6 +1325,101 @@ function setUpdateLog(value) {
   pre.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
+// --- Bulk "Update All Prices" (admin) ---
+// Massive free tier allows 5 calls/minute; we cap at 4 to be safe.
+const BULK_UPDATE_RATE_LIMIT_MS = 15000; // 60s / 4 calls
+
+function bulkUpdateEligibleAssets() {
+  return state.assets.filter(a => a.type === 'stock' && (a.coin || 'USD') === 'USD');
+}
+
+function setBulkUpdateProgress(updated, total) {
+  const bar = $('#updateAllPricesProgressBar');
+  const label = $('#updateAllPricesLabel');
+  if (bar) bar.style.width = `${total ? Math.round((updated / total) * 100) : 0}%`;
+  if (label) label.textContent = `Updating ${updated} of ${total}...`;
+}
+
+function appendBulkUpdateLog(line) {
+  const wrap = $('#updateAllPricesLogWrap');
+  const pre = $('#updateAllPricesLog');
+  if (!wrap || !pre) return;
+  wrap.style.display = '';
+  pre.textContent += (pre.textContent ? '\n' : '') + line;
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function openBulkUpdateModal() {
+  const eligible = bulkUpdateEligibleAssets();
+  const err = $('#updateAllPricesError');
+  const logWrap = $('#updateAllPricesLogWrap');
+  const pre = $('#updateAllPricesLog');
+  if (err) err.textContent = '';
+  if (logWrap) logWrap.style.display = 'none';
+  if (pre) pre.textContent = '';
+  setBulkUpdateProgress(0, eligible.length);
+  openModal('updateAllPricesModalOverlay');
+  runBulkUpdate(eligible);
+}
+
+async function runBulkUpdate(eligible) {
+  const err = $('#updateAllPricesError');
+  const total = eligible.length;
+  let updated = 0;
+  let failed = 0;
+
+  if (total === 0) {
+    if (err) err.textContent = 'No USD stocks to update.';
+    appendBulkUpdateLog('No USD stocks found to update.');
+    setBulkUpdateProgress(0, 0);
+    return;
+  }
+
+  appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
+  appendBulkUpdateLog(`Rate limit: 4 Massive calls/minute (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls).`);
+
+  for (let i = 0; i < total; i++) {
+    const a = eligible[i];
+    try {
+      // Fetch latest price from Massive (respects the 4/min cap).
+      const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+      const price = data.price;
+      if (price == null) {
+        failed++;
+        appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: no price returned.`);
+      } else {
+        // Commit the fetched price.
+        await request(`/assets/${a.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: a.name,
+            symbol: a.symbol || '',
+            type: a.type,
+            coin: a.coin || 'USD',
+            price: Number(price),
+            payment_months: a.payment_months || []
+          })
+        });
+        updated++;
+        appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price}`);
+      }
+    } catch (error) {
+      failed++;
+      appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: ${error.message}`);
+    }
+    setBulkUpdateProgress(updated + failed, total);
+    // Wait between calls to respect the rate limit (skip after the last one).
+    if (i < total - 1) {
+      await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RATE_LIMIT_MS));
+    }
+  }
+
+  appendBulkUpdateLog(`Done. Updated ${updated}, failed ${failed}.`);
+  if (err) err.textContent = failed ? `${failed} asset(s) failed. See console log.` : '';
+  await loadData();
+  toast(`Bulk update finished: ${updated} updated, ${failed} failed.`);
+}
+
 function openProviderModal(providerId = null) {
   const form = $('#providerForm');
   if (!form) return;
@@ -1781,6 +1876,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Modal open triggers
   $('#newAssetBtn')?.addEventListener('click', () => openAssetModal());
+  $('#updateAllPricesBtn')?.addEventListener('click', () => openBulkUpdateModal());
   $('#newProviderBtn')?.addEventListener('click', () => openProviderModal());
   $('#newAccountBtn')?.addEventListener('click', () => openAccountModal());
   $('#newHoldingBtn')?.addEventListener('click', () => openHoldingModal());
@@ -1792,6 +1888,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Modal close buttons
   $('#closeAssetModalBtn')?.addEventListener('click', () => closeModal('assetModalOverlay'));
   $('#closeUpdateAssetModalBtn')?.addEventListener('click', () => closeModal('updateAssetModalOverlay'));
+  $('#closeUpdateAllPricesBtn')?.addEventListener('click', () => closeModal('updateAllPricesModalOverlay'));
   $('#closeProviderModalBtn')?.addEventListener('click', () => closeModal('providerModalOverlay'));
   $('#closeAccountModalBtn')?.addEventListener('click', () => closeModal('accountModalOverlay'));
   $('#closeHoldingModalBtn')?.addEventListener('click', () => closeModal('holdingModalOverlay'));

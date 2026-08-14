@@ -7,3 +7,4 @@ wrangler.toml
 
 # Local project documentation (not for upload)
 PROJECT.md
+refresh-local-db.sh
