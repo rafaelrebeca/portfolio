@@ -1054,7 +1054,7 @@ function goalProgressHTML(g, current, target, currency) {
     activeIdx = milestones.length - 1;
     activePct = 100;
   }
-  const activeName = activeIdx < subs.length ? `Sub-goal ${activeIdx + 1}` : 'Target';
+  const activeName = activeIdx < subs.length ? `Sub-goal ${activeIdx + 1}` : 'Sub-target';
   const activeLabel = `${activeName}: ${activePct.toFixed(1)}%`;
 
   return `
