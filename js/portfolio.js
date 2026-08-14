@@ -1055,14 +1055,14 @@ function goalProgressHTML(g, current, target, currency) {
     activePct = 100;
   }
   const activeName = activeIdx < subs.length ? `Sub-goal ${activeIdx + 1}` : 'Sub-target';
-  const activeLabel = `${activeName}: ${activePct.toFixed(1)}%`;
+  const activeLabel = activePct >= 100 ? '' : `${activeName}: ${activePct.toFixed(1)}%`;
 
   return `
     <div class="goal-progress">
       <div class="goal-progress-bar goal-progress-bar-seg">${segments}</div>
       <span class="goal-progress-label">${label}</span>
     </div>
-    <div class="goal-sub-label">${esc(activeLabel)}</div>`;
+    ${activeLabel ? `<div class="goal-sub-label">${esc(activeLabel)}</div>` : ''}`;
 }
 
 function renderGoals() {
