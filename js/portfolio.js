@@ -1034,11 +1034,33 @@ function goalProgressHTML(g, current, target, currency) {
     prev = end;
     return seg;
   }).join('');
+
+  // Active sub-goal: the next milestone not yet reached. Show its progress %.
+  let activeIdx = -1;
+  let activePct = 0;
+  prev = 0;
+  for (let i = 0; i < milestones.length; i++) {
+    const end = milestones[i];
+    if (current < end) {
+      activeIdx = i;
+      activePct = Math.min(100, Math.max(0, ((current - prev) / end) * 100));
+      break;
+    }
+    prev = end;
+  }
+  if (activeIdx === -1) {
+    activeIdx = milestones.length - 1;
+    activePct = 100;
+  }
+  const activeName = activeIdx < subs.length ? `Sub-goal ${activeIdx + 1}` : 'Target';
+  const activeLabel = `${activeName}: ${activePct.toFixed(1)}%`;
+
   return `
     <div class="goal-progress">
       <div class="goal-progress-bar goal-progress-bar-seg">${segments}</div>
       <span class="goal-progress-label">${label}</span>
-    </div>`;
+    </div>
+    <div class="goal-sub-label">${esc(activeLabel)}</div>`;
 }
 
 function renderGoals() {
