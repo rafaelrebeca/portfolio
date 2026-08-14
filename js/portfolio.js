@@ -996,9 +996,10 @@ function goalProgressHTML(g, current, target, currency) {
     }
 
     // Debt goal with sub-goals: single bar + tick marks at each sub-goal position.
+    // Marks count down from 100% (the goal/zero): a sub-goal of -5000 against 100000 debt sits at 95%.
     const marks = subs.map(v => {
-      const pos = Math.min(100, Math.max(0, (Math.abs(v) / absNeg) * 100));
-      return `<span class="goal-mark" style="left:${pos}%;" title="${esc(formatCurrency(v, currency))}"></span>`;
+      const pos = Math.min(100, Math.max(0, ((absNeg - Math.abs(v)) / absNeg) * 100));
+      return `<span class="goal-mark" style="left:${pos}%;" data-tip="${esc(formatCurrency(v, currency))}"></span>`;
     }).join('');
     return `
       <div class="goal-progress">

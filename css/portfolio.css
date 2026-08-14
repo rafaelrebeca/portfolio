@@ -954,13 +954,38 @@ select {
 
 .goal-mark {
   position: absolute;
-  top: 0;
-  width: 2px;
-  height: 100%;
+  top: -4px;
+  width: 8px;
+  height: 8px;
   background: var(--text);
-  opacity: 0.6;
-  transform: translateX(-1px);
+  border: 2px solid var(--panel2);
+  border-radius: 2px;
+  transform: translateX(-50%) rotate(45deg);
   cursor: help;
+  z-index: 2;
+}
+
+.goal-mark::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-45deg);
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+  z-index: 10;
+}
+
+.goal-mark:hover::after {
+  opacity: 1;
 }
 
 .goal-progress-label {
