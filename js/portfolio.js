@@ -997,7 +997,7 @@ function goalProgressHTML(g, current, target, currency) {
 
     // Debt goal with sub-goals: single bar + tick marks at each sub-goal position.
     const marks = subs.map(v => {
-      const pos = Math.min(100, Math.max(0, (v / absNeg) * 100));
+      const pos = Math.min(100, Math.max(0, (Math.abs(v) / absNeg) * 100));
       return `<span class="goal-mark" style="left:${pos}%;" title="${esc(formatCurrency(v, currency))}"></span>`;
     }).join('');
     return `
@@ -1028,7 +1028,7 @@ function goalProgressHTML(g, current, target, currency) {
   let prev = 0;
   const segments = milestones.map(end => {
     const width = ((end - prev) / target) * 100;
-    const segPct = Math.min(100, Math.max(0, ((current - prev) / end) * 100));
+    const segPct = Math.min(100, Math.max(0, ((current - prev) / (end - prev)) * 100));
     const segColor = `hsl(${segPct * 1.2}, 80%, 50%)`;
     const seg = `<div class="goal-seg" style="width:${width}%;"><div class="goal-seg-fill" style="width:${segPct}%;background:${segColor};"></div></div>`;
     prev = end;
@@ -1043,7 +1043,7 @@ function goalProgressHTML(g, current, target, currency) {
     const end = milestones[i];
     if (current < end) {
       activeIdx = i;
-      activePct = Math.min(100, Math.max(0, ((current - prev) / end) * 100));
+      activePct = Math.min(100, Math.max(0, ((current - prev) / (end - prev)) * 100));
       break;
     }
     prev = end;
@@ -1462,44 +1462,51 @@ function openGoalModal(goalId = null) {
   openModal('goalModalOverlay');
 }
 
-function updateGoalSubGating() {
-  const sub1 = $('#goalSub1');
-  const sub2 = $('#goalSub2');
-  const sub3 = $('#goalSub3');
-  const valueInput = $('#goalValue');
-  if (!sub1 || !sub2 || !sub3 || !valueInput) return;
-  const rawValue = valueInput.value.trim();
-  const value = rawValue === '' ? NaN : Number(rawValue);
-  const isDebt = rawValue !== '' && value === 0;
+// Filter sub-goal input to only allow digits and a leading minus sign.
+function filterSubInput(input) {
+  if (!input) return;
+  let v = input.value;
+  v = v.replace(/[^0-9.-]/g, '');
+  v = v.replace(/(?!^)-/g, '');
+  v = v.replace(/(\..*)\./g, '$1');
+  if (v !== input.value) input.value = v;
+}
 
-  // Validate sub-goals against the current goal value.
-  // Debt (0): sub-goals must be negative.
-  // Positive: sub-goals must be positive, < target, and ascending.
-  if (Number.isFinite(value)) {
-    const subs = [sub1, sub2, sub3];
-    let prev = 0;
-    subs.forEach(input => {
-      const raw = input.value.trim();
-      if (raw === '') return;
-      const num = Number(raw);
-      let valid;
-      if (isDebt) {
-        valid = Number.isFinite(num) && num < 0;
-      } else {
-        valid = Number.isFinite(num) && num > 0 && num < value && num > prev;
-      }
-      if (!valid) input.value = '';
-      else prev = num;
-    });
+function updateGoalSubGating() {
+  // No live restrictions while typing; only filter characters.
+  filterSubInput($('#goalSub1'));
+  filterSubInput($('#goalSub2'));
+  filterSubInput($('#goalSub3'));
+}
+
+// Validate sub-goals before saving. Returns an error message or null.
+function validateGoalSubs(value, sub1, sub2, sub3) {
+  const subs = [sub1, sub2, sub3];
+  const has = subs.map(s => s !== null && s !== undefined && s !== '');
+  if (!has[0] && !has[1] && !has[2]) return null;
+
+  // Dependency chain: sub2 requires sub1, sub3 requires sub2.
+  if (has[1] && !has[0]) return 'Sub-goal 2 requires Sub-goal 1 to be set.';
+  if (has[2] && !has[1]) return 'Sub-goal 3 requires Sub-goal 2 to be set.';
+
+  const nums = subs.map(s => (s === null || s === undefined || s === '' ? null : Number(s)));
+  for (const n of nums) {
+    if (n !== null && !Number.isFinite(n)) return 'Sub-goals must be valid numbers.';
   }
 
-  // Dependency gating: sub2 requires sub1, sub3 requires sub2.
-  const has1 = sub1.value.trim() !== '';
-  const has2 = sub2.value.trim() !== '';
-  sub2.disabled = !has1;
-  sub3.disabled = !has2;
-  if (!has1) sub2.value = '';
-  if (!has2) sub3.value = '';
+  if (value === 0) {
+    // Debt goal: sub-goals must be negative.
+    if (nums.some(n => n !== null && n >= 0)) return 'For a debt-clearing goal, sub-goals must be negative.';
+  } else {
+    // Positive goal: sub-goals must be positive, < target, and ascending (goal > sub3 > sub2 > sub1).
+    let prev = 0;
+    for (const n of nums) {
+      if (n === null) continue;
+      if (n <= 0 || n >= value || n <= prev) return 'Sub-goals must be positive, less than the target, and in ascending order (target > sub3 > sub2 > sub1).';
+      prev = n;
+    }
+  }
+  return null;
 }
 
 /* ================= GOAL DETAILS ================= */
@@ -1755,7 +1762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#goalProviderSelect')?.addEventListener('change', fillGoalAccountSelects);
   $('#goalSub1')?.addEventListener('input', updateGoalSubGating);
   $('#goalSub2')?.addEventListener('input', updateGoalSubGating);
-  $('#goalValue')?.addEventListener('input', updateGoalSubGating);
+  $('#goalSub3')?.addEventListener('input', updateGoalSubGating);
   $('#addGoalAccountBtn')?.addEventListener('click', () => {
     const accountSelect = $('#goalAccountSelect');
     const accountId = Number(accountSelect?.value);
@@ -2019,6 +2026,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     values.sub3 = numeric(values.sub3);
     values.account_ids = goalSelectedAccounts.slice();
     const goalId = values.goal_id ? Number(values.goal_id) : null;
+
+    const subError = validateGoalSubs(values.value, values.sub1, values.sub2, values.sub3);
+    if (subError) {
+      if (err) err.textContent = subError;
+      return;
+    }
 
     if (state.guest) {
       if (goalId) {
