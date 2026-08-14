@@ -32,8 +32,8 @@ const guestData = {
     { coin: 'JPY', value: 149.50 }
   ],
   goals: [
-    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', account_ids: [1, 2] },
-    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', account_ids: [3] }
+    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', sub1: 10000, sub2: 15000, sub3: null, account_ids: [1, 2] },
+    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', sub1: null, sub2: null, sub3: null, account_ids: [3] }
   ],
   users: [
     { id: 1, username: 'admin_user', role: 'admin', created_at: '2026-01-12', last_login: '2026-08-09' },
@@ -963,6 +963,84 @@ function goalCurrentValue(goal) {
   return total;
 }
 
+// Build the progress bar HTML for a goal. Handles three cases:
+// 1. No sub-goals -> single bar (unchanged behavior).
+// 2. Normal goal (value > 0) with sub-goals -> segmented bar + global % label.
+// 3. Debt goal (value = 0) with sub-goals -> single bar with sub-goal tick marks + tooltips.
+function goalProgressHTML(g, current, target, currency) {
+  const subs = [g.sub1, g.sub2, g.sub3].filter(v => v !== null && v !== undefined && v !== '');
+  const hasSubs = subs.length > 0;
+
+  // Debt clearing goal (target === 0)
+  if (target === 0) {
+    const linked = state.accounts.filter(a => (g.account_ids || []).includes(a.id));
+    let posSum = 0, negSum = 0;
+    linked.forEach(acc => {
+      const val = accountValue(acc, false);
+      const rate = getExchangeRate(acc.coin || 'USD', currency);
+      const converted = rate ? val * rate : val;
+      if (converted > 0) posSum += converted; else negSum += converted;
+    });
+    const absNeg = Math.abs(negSum);
+    if (absNeg <= 0) return '';
+    const pct = Math.min(100, Math.max(0, (posSum / absNeg) * 100));
+    const barColor = `hsl(${pct * 1.2}, 80%, 50%)`;
+    const label = `${pct.toFixed(1)}% of debt cleared`;
+
+    if (!hasSubs) {
+      return `
+        <div class="goal-progress">
+          <div class="goal-progress-bar"><div class="goal-progress-fill" style="width:${pct}%;background:${barColor};"></div></div>
+          <span class="goal-progress-label">${label}</span>
+        </div>`;
+    }
+
+    // Debt goal with sub-goals: single bar + tick marks at each sub-goal position.
+    const marks = subs.map(v => {
+      const pos = Math.min(100, Math.max(0, (v / absNeg) * 100));
+      return `<span class="goal-mark" style="left:${pos}%;" title="${esc(formatCurrency(v, currency))}"></span>`;
+    }).join('');
+    return `
+      <div class="goal-progress">
+        <div class="goal-progress-bar goal-progress-bar-marks">
+          <div class="goal-progress-fill" style="width:${pct}%;background:${barColor};"></div>
+          ${marks}
+        </div>
+        <span class="goal-progress-label">${label}</span>
+      </div>`;
+  }
+
+  // Normal goal (target > 0)
+  const pct = Math.min(100, Math.max(0, (current / target) * 100));
+  const label = `${pct.toFixed(1)}% of target`;
+
+  if (!hasSubs) {
+    const barColor = `hsl(${pct * 1.2}, 80%, 50%)`;
+    return `
+      <div class="goal-progress">
+        <div class="goal-progress-bar"><div class="goal-progress-fill" style="width:${pct}%;background:${barColor};"></div></div>
+        <span class="goal-progress-label">${label}</span>
+      </div>`;
+  }
+
+  // Normal goal with sub-goals: segmented bar. Segments run 0->sub1->sub2->sub3->target.
+  const milestones = subs.concat(target);
+  let prev = 0;
+  const segments = milestones.map(end => {
+    const width = ((end - prev) / target) * 100;
+    const segPct = Math.min(100, Math.max(0, ((current - prev) / end) * 100));
+    const segColor = `hsl(${segPct * 1.2}, 80%, 50%)`;
+    const seg = `<div class="goal-seg" style="width:${width}%;"><div class="goal-seg-fill" style="width:${segPct}%;background:${segColor};"></div></div>`;
+    prev = end;
+    return seg;
+  }).join('');
+  return `
+    <div class="goal-progress">
+      <div class="goal-progress-bar goal-progress-bar-seg">${segments}</div>
+      <span class="goal-progress-label">${label}</span>
+    </div>`;
+}
+
 function renderGoals() {
   if (!$('#goalsList')) return;
   $('#goalsList').innerHTML = state.goals.length ? state.goals.map(g => {
@@ -971,34 +1049,7 @@ function renderGoals() {
     const diff = current - target;
     const linked = state.accounts.filter(a => (g.account_ids || []).includes(a.id));
     const linkedNames = linked.map(a => `${esc(a.name)} (${esc(a.provider_name || providerName(a.provider_id))})`).join(', ') || 'No linked accounts';
-
-    // For a goal of 0, progress = sum of positive values / |sum of negative values|
-    let showProgress = target > 0;
-    let pct = 0;
-    let progressLabel = '';
-    if (target === 0) {
-      let posSum = 0;
-      let negSum = 0;
-      linked.forEach(acc => {
-        const val = accountValue(acc, false);
-        const rate = getExchangeRate(acc.coin || 'USD', g.coin || 'USD');
-        const converted = rate ? val * rate : val;
-        if (converted > 0) posSum += converted;
-        else negSum += converted;
-      });
-      const absNeg = Math.abs(negSum);
-      if (absNeg > 0) {
-        showProgress = true;
-        pct = (posSum / absNeg) * 100;
-        progressLabel = `${pct.toFixed(1)}% of debt cleared`;
-      }
-    } else if (showProgress) {
-      pct = (current / target) * 100;
-      progressLabel = `${pct.toFixed(1)}% of target`;
-    }
-    if (pct < 0) showProgress = false;
-    const clampedPct = Math.min(100, Math.max(0, pct));
-    const barColor = `hsl(${clampedPct * 1.2}, 80%, 50%)`;
+    const progressHTML = goalProgressHTML(g, current, target, g.coin || 'USD');
     return `
       <div class="goal-card">
         <div class="goal-card-head">
@@ -1016,11 +1067,7 @@ function renderGoals() {
           <div><div class="dlabel">Current</div><div class="dvalue ${current < 0 ? 'neg' : 'pos'}">${formatCurrency(current, g.coin || 'USD')}</div></div>
           <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), g.coin || 'USD')}</div></div>
         </div>
-        ${showProgress ? `
-        <div class="goal-progress">
-          <div class="goal-progress-bar"><div class="goal-progress-fill" style="width:${clampedPct}%;background:${barColor};"></div></div>
-          <span class="goal-progress-label">${progressLabel}</span>
-        </div>` : ''}
+        ${progressHTML}
         <div class="goal-linked">Linked: ${linkedNames}</div>
       </div>`;
   }).join('') : '<div class="page-desc">No goals yet. Create one to start tracking your targets.</div>';
@@ -1377,6 +1424,9 @@ function openGoalModal(goalId = null) {
     $('#goalEditId').value = g.id;
     $('#goalName').value = g.goal_name;
     $('#goalValue').value = g.value;
+    $('#goalSub1').value = g.sub1 ?? '';
+    $('#goalSub2').value = g.sub2 ?? '';
+    $('#goalSub3').value = g.sub3 ?? '';
     $('#goalCoin').value = g.coin || 'USD';
     goalSelectedAccounts = (g.account_ids || []).slice();
   } else {
@@ -1384,9 +1434,23 @@ function openGoalModal(goalId = null) {
     $('#goalEditId').value = '';
     $('#goalCoin').value = 'USD';
   }
+  updateGoalSubGating();
   renderGoalAccountsList();
   fillGoalAccountSelects();
   openModal('goalModalOverlay');
+}
+
+function updateGoalSubGating() {
+  const sub1 = $('#goalSub1');
+  const sub2 = $('#goalSub2');
+  const sub3 = $('#goalSub3');
+  if (!sub1 || !sub2 || !sub3) return;
+  const has1 = sub1.value.trim() !== '';
+  const has2 = sub2.value.trim() !== '';
+  sub2.disabled = !has1;
+  sub3.disabled = !has2;
+  if (!has1) sub2.value = '';
+  if (!has2) sub3.value = '';
 }
 
 /* ================= GOAL DETAILS ================= */
@@ -1414,40 +1478,10 @@ function openGoalDetailsModal(goalId) {
     `;
   }
 
-  // Progress bar (same logic as the goal card)
-  let showProgress = target > 0;
-  let pct = 0;
-  let progressLabel = '';
-  if (target === 0) {
-    let posSum = 0;
-    let negSum = 0;
-    linked.forEach(acc => {
-      const val = accountValue(acc, false);
-      const rate = getExchangeRate(acc.coin || 'USD', currency);
-      const converted = rate ? val * rate : val;
-      if (converted > 0) posSum += converted;
-      else negSum += converted;
-    });
-    const absNeg = Math.abs(negSum);
-    if (absNeg > 0) {
-      showProgress = true;
-      pct = (posSum / absNeg) * 100;
-      progressLabel = `${pct.toFixed(1)}% of debt cleared`;
-    }
-  } else if (showProgress) {
-    pct = (current / target) * 100;
-    progressLabel = `${pct.toFixed(1)}% of target`;
-  }
-  if (pct < 0) showProgress = false;
-  const clampedPct = Math.min(100, Math.max(0, pct));
-  const barColor = `hsl(${clampedPct * 1.2}, 80%, 50%)`;
-
+  // Progress bar (same logic as the goal card, including sub-goal display)
   const progressEl = $('#goalDetailsProgress');
   if (progressEl) {
-    progressEl.innerHTML = showProgress ? `
-      <div class="goal-progress-bar"><div class="goal-progress-fill" style="width:${clampedPct}%;background:${barColor};"></div></div>
-      <span class="goal-progress-label">${progressLabel}</span>
-    ` : '';
+    progressEl.innerHTML = goalProgressHTML(g, current, target, currency);
   }
 
   // Per-account values, converted to goal currency, sorted descending
@@ -1670,6 +1704,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#dividendPeriodValue')?.addEventListener('change', renderDividends);
   $('#accountTypeSelect')?.addEventListener('change', toggleAccountFields);
   $('#goalProviderSelect')?.addEventListener('change', fillGoalAccountSelects);
+  $('#goalSub1')?.addEventListener('input', updateGoalSubGating);
+  $('#goalSub2')?.addEventListener('input', updateGoalSubGating);
   $('#addGoalAccountBtn')?.addEventListener('click', () => {
     const accountSelect = $('#goalAccountSelect');
     const accountId = Number(accountSelect?.value);
@@ -1928,6 +1964,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
     values.value = numeric(values.value);
+    values.sub1 = numeric(values.sub1);
+    values.sub2 = numeric(values.sub2);
+    values.sub3 = numeric(values.sub3);
     values.account_ids = goalSelectedAccounts.slice();
     const goalId = values.goal_id ? Number(values.goal_id) : null;
 
@@ -1938,11 +1977,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           g.goal_name = values.goal_name;
           g.value = values.value;
           g.coin = values.coin || 'USD';
+          g.sub1 = values.sub1;
+          g.sub2 = values.sub2;
+          g.sub3 = values.sub3;
           g.account_ids = values.account_ids;
         }
       } else {
         const newId = Math.max(...guestData.goals.map(g => g.id), 0) + 1;
-        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', account_ids: values.account_ids });
+        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, account_ids: values.account_ids });
       }
       closeModal('goalModalOverlay');
       await loadData();
@@ -2329,13 +2371,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!g) return;
       if (state.guest) {
         const newId = Math.max(...guestData.goals.map(x => x.id), 0) + 1;
-        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', account_ids: (g.account_ids || []).slice() });
+        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice() });
         await loadData();
         toast('Goal duplicated.');
         return;
       }
       try {
-        await request('/goals', { method: 'POST', body: JSON.stringify({ goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', account_ids: (g.account_ids || []).slice() }) });
+        await request('/goals', { method: 'POST', body: JSON.stringify({ goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice() }) });
         await loadData();
         toast('Goal duplicated.');
       } catch (err) {

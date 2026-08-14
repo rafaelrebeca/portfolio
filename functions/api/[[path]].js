@@ -243,7 +243,7 @@ export async function onRequest(context) {
 
     if (method === 'GET' && path === 'goals') {
       const user = await requireMember(request, env);
-      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin FROM goals WHERE user_id = ? ORDER BY id').bind(user.id).all();
+      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3 FROM goals WHERE user_id = ? ORDER BY id').bind(user.id).all();
       const items = [];
       for (const g of results) {
         const links = await env.myd1db.prepare('SELECT account_id FROM goal_link WHERE goal_id = ?').bind(g.id).all();
@@ -256,6 +256,14 @@ export async function onRequest(context) {
       const goalId = body.goal_id ? Number(body.goal_id) : null;
       const goalName = clean(body.goal_name), value = Number(body.value), coin = clean(body.coin) || 'USD';
       if (!goalName || goalName.length > 200 || !Number.isFinite(value) || value < 0) return fail('Provide a valid goal name and value.');
+      const sub1 = body.sub1 === null || body.sub1 === undefined || body.sub1 === '' ? null : Number(body.sub1);
+      const sub2 = body.sub2 === null || body.sub2 === undefined || body.sub2 === '' ? null : Number(body.sub2);
+      const sub3 = body.sub3 === null || body.sub3 === undefined || body.sub3 === '' ? null : Number(body.sub3);
+      if (sub1 !== null && (!Number.isFinite(sub1) || sub1 < 0)) return fail('Sub-goal 1 must be a non-negative number.');
+      if (sub2 !== null && (!Number.isFinite(sub2) || sub2 < 0)) return fail('Sub-goal 2 must be a non-negative number.');
+      if (sub3 !== null && (!Number.isFinite(sub3) || sub3 < 0)) return fail('Sub-goal 3 must be a non-negative number.');
+      if (sub2 !== null && sub1 === null) return fail('Sub-goal 2 requires Sub-goal 1 to be set.');
+      if (sub3 !== null && sub2 === null) return fail('Sub-goal 3 requires Sub-goal 2 to be set.');
       let accountIds = Array.isArray(body.account_ids) ? body.account_ids.map(Number).filter(Number.isInteger) : [];
       if (accountIds.length) {
         const placeholders = accountIds.map(() => '?').join(',');
@@ -265,14 +273,14 @@ export async function onRequest(context) {
       if (goalId && Number.isInteger(goalId)) {
         const existing = await env.myd1db.prepare('SELECT id FROM goals WHERE id = ? AND user_id = ?').bind(goalId, user.id).first();
         if (!existing) return fail('Goal not found.', 404);
-        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ? WHERE id = ?').bind(goalName, value, coin, goalId).run();
+        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, goalId).run();
         await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(goalId).run();
         for (const aid of accountIds) {
           await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(goalId, aid).run();
         }
         return json({ id: goalId, ok: true });
       }
-      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin) VALUES (?, ?, ?, ?)').bind(user.id, goalName, value, coin).run();
+      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3).run();
       const newId = result.meta.last_row_id;
       for (const aid of accountIds) {
         await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(newId, aid).run();
