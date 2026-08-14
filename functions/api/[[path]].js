@@ -32,7 +32,7 @@ function normalizeAssets(items) { return items.map(item => ({ ...item, payment_m
 
 export async function onRequest(context) {
   const { request, env } = context;
-  if (!env.myd1db) return fail('D1 binding "DB" is not configured.', 500);
+  if (!env.myd1db) return fail('D1 binding "myd1db" is not configured.', 500);
   const path = new URL(request.url).pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
   const method = request.method;
   try {
