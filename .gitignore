@@ -1,6 +1,9 @@
 node_modules/
 .DS_Store
 .wrangler/
+remote-dump.sql
+schema.sql
+wrangler.toml
 
 # Local project documentation (not for upload)
 PROJECT.md
