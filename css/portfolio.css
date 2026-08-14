@@ -621,6 +621,8 @@ tbody tr:last-child td {
   padding: 26px;
   width: 100%;
   max-width: 420px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .modal h3 {

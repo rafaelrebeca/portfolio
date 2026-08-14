@@ -95,6 +95,7 @@ function formatCurrency(amount, currency = 'USD') {
 
 function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('show'); }
 function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('show'); }
+function closeAllModals() { document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show')); }
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
@@ -1753,6 +1754,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#loginForm')?.addEventListener('submit', signIn);
   $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); });
   $('#logoutButton')?.addEventListener('click', logout);
+
+  // Pressing Escape closes any open modal without saving.
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeAllModals();
+  });
 
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => showPage(button.dataset.page)));
   $('#assetSearch')?.addEventListener('input', renderAssets);
