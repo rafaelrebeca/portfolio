@@ -957,22 +957,20 @@ select {
 
 .goal-mark {
   position: absolute;
-  top: -6px;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 8px solid var(--text);
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--text);
   transform: translateX(-50%);
   cursor: pointer;
   z-index: 2;
-  filter: drop-shadow(0 0 1px var(--border));
+  box-shadow: 0 0 0 1px var(--panel2);
 }
 
 .goal-mark::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: 10px;
+  bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   background: var(--panel2);
