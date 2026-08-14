@@ -950,27 +950,29 @@ select {
 
 .goal-progress-bar-marks {
   position: relative;
+  overflow: visible;
 }
 
 .goal-mark {
   position: absolute;
-  top: -4px;
-  width: 8px;
-  height: 8px;
-  background: var(--text);
-  border: 2px solid var(--panel2);
-  border-radius: 2px;
-  transform: translateX(-50%) rotate(45deg);
-  cursor: help;
+  top: -6px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--text);
+  transform: translateX(-50%);
+  cursor: pointer;
   z-index: 2;
+  filter: drop-shadow(0 0 1px var(--border));
 }
 
 .goal-mark::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: 12px;
+  bottom: 10px;
   left: 50%;
-  transform: translateX(-50%) rotate(-45deg);
+  transform: translateX(-50%);
   background: var(--panel2);
   color: var(--text);
   border: 1px solid var(--border);
