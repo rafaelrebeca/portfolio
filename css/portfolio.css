@@ -552,6 +552,18 @@ tbody tr:last-child td {
   background: #3d78e6;
 }
 
+.btn-sm.success {
+  background: var(--accent2);
+  border-color: var(--accent2);
+  color: #0f1420;
+}
+
+.btn-sm.success:hover {
+  background: #35b28c;
+  border-color: #35b28c;
+  color: #0f1420;
+}
+
 .btn-sm:hover {
   border-color: var(--accent);
 }
@@ -990,6 +1002,8 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
 }
 

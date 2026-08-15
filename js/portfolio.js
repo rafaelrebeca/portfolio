@@ -1128,7 +1128,7 @@ function renderGoals() {
       <div class="goal-card">
         <div class="goal-card-head">
           <span class="goal-name">🎯 ${esc(g.goal_name)} <span class="tag goal">${esc(g.coin || 'USD')}</span></span>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
             <button class="btn-sm" data-goal-details="${g.id}">Details</button>
             <button class="btn-sm" data-simulate-goal="${g.id}">Simulate</button>
             <button class="btn-sm" data-duplicate-goal="${g.id}">Duplicate</button>
