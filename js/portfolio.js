@@ -803,8 +803,8 @@ function fillDividendPeriodValue() {
 
 function renderDividends() {
   if (!$('#dividendsTable')) return;
-  // Only assets with dividend data (a yield set)
-  const items = state.assets.filter(a => a.dividend_yield != null);
+  // Only assets with a real dividend yield (> 0)
+  const items = state.assets.filter(a => a.dividend_yield != null && Number(a.dividend_yield) > 0);
 
   const periodType = $('#dividendPeriodType')?.value || '';
   const periodValue = Number($('#dividendPeriodValue')?.value);
