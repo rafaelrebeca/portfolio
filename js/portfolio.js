@@ -203,6 +203,7 @@ let portfolioTypeChartInstance = null;
 let goalDetailsChartInstance = null;
 let goalDetailsGoalId = null;
 let accountDetailsChartInstance = null;
+let providerDetailsChartInstance = null;
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let dashboardAllocOthers = [];
@@ -674,7 +675,12 @@ function accountValue(acc, convertToEur = false) {
     value = Number(acc.balance || 0);
   }
   
-  return convertToEur ? convertToEUR(value, currency) : value;
+  if (convertToEur) return convertToEUR(value, currency);
+  // Convert to the account's display currency (acc.coin)
+  const target = acc.coin || 'USD';
+  if (currency === target) return value;
+  const rate = getExchangeRate(currency, target);
+  return rate ? value * rate : value;
 }
 
 function totalPortfolioValue() {
@@ -879,25 +885,29 @@ function renderAccounts() {
       const val = accountValue(acc, false);
       const currency = acc.coin || 'USD';
       const label = typeLabel(acc.type);
+      // EUR conversion shown in () when the account's currency is not EUR
+      const eurVal = accountValue(acc, true);
+      const eurSuffix = currency === 'EUR' ? '' : ` <span style="color:var(--muted);font-weight:400;font-size:12px;">(${formatCurrency(eurVal, 'EUR')})</span>`;
+      const valueHTML = `<span class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}${eurSuffix}</span>`;
       let details = '';
       let headActions = '';
       if (acc.type === 'asset_account') {
         const holdingCount = state.holdings.filter(h => h.account_id === acc.id).length;
         details = `<div class="account-detail-grid">
+          <div><div class="dlabel">Value</div>${valueHTML}</div>
           <div><div class="dlabel">Holdings</div><div class="dvalue">${holdingCount} assets</div></div>
-          <div><div class="dlabel">Value</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
         </div>`;
         if (holdingCount > 0) {
           headActions = `<button class="btn-sm" data-account-details="${acc.id}">Details</button>`;
         }
       } else if (acc.type === 'loan' || acc.type === 'interest_account') {
         details = `<div class="account-detail-grid">
-          <div><div class="dlabel">Balance</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
+          <div><div class="dlabel">Balance</div>${valueHTML}</div>
           <div><div class="dlabel">Interest Rate</div><div class="dvalue">${acc.interest_rate != null ? Number(acc.interest_rate).toFixed(2) : '0.00'}%</div></div>
         </div>`;
       } else {
         details = `<div class="account-detail-grid">
-          <div><div class="dlabel">Balance</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
+          <div><div class="dlabel">Balance</div>${valueHTML}</div>
         </div>`;
       }
 
@@ -916,6 +926,7 @@ function renderAccounts() {
 
     const accCount = g.accounts.length;
     const collapsed = collapsedProviders.has(g.provider.id);
+    const providerTotalEur = providerValue(g.provider);
     return `<div class="provider-card${collapsed ? ' collapsed' : ''}">
       <div class="provider-card-head">
         <div class="provider-card-title">
@@ -924,8 +935,10 @@ function renderAccounts() {
           <span class="provider-name">${esc(g.provider.name)}</span>
           <span class="tag ${g.provider.type}">${esc(g.provider.type)}</span>
           <span class="provider-count">${accCount} account${accCount === 1 ? '' : 's'}</span>
+          <span class="provider-total">${formatCurrency(providerTotalEur, 'EUR')}</span>
         </div>
         <div style="display:flex;gap:6px;">
+          <button class="btn-sm" data-provider-details="${g.provider.id}">Details</button>
           <button class="btn-sm" data-add-account-provider="${g.provider.id}">+ Add Account</button>
           <button class="btn-sm" data-edit-provider="${g.provider.id}">Edit</button>
           <button class="btn-sm danger" data-delete-provider="${g.provider.id}">Delete</button>
@@ -1094,6 +1107,90 @@ function openAccountDetailsModal(accountId) {
   }
 
   openModal('accountDetailsModalOverlay');
+}
+
+function openProviderDetailsModal(providerId) {
+  const provider = state.providers.find(p => p.id === providerId);
+  if (!provider) return;
+  const currency = 'EUR';
+  const accounts = state.accounts.filter(a => a.provider_id === providerId);
+  $('#providerDetailsTitle').textContent = `Details: ${provider.name}`;
+
+  // Summary
+  const summary = $('#providerDetailsSummary');
+  if (summary) {
+    const total = providerValue(provider);
+    summary.innerHTML = `
+      <div><div class="dlabel">Accounts</div><div class="dvalue">${accounts.length}</div></div>
+      <div><div class="dlabel">Value</div><div class="dvalue ${total < 0 ? 'neg' : 'pos'}">${formatCurrency(total, currency)}</div></div>
+    `;
+  }
+
+  // Per-account value, converted to EUR, sorted descending
+  const accountMap = {};
+  accounts.forEach(acc => {
+    const val = accountValue(acc, true);
+    const label = `${acc.name} (${acc.provider_name || providerName(acc.provider_id)})`;
+    accountMap[label] = (accountMap[label] || 0) + val;
+  });
+
+  const accountTop = topNWithOthers(accountMap, 9);
+  const labels = accountTop.labels;
+  const data = accountTop.data;
+  const dataAbs = data.map(v => Math.abs(v));
+  const colors = CHART_COLORS;
+
+  // Donut chart (top 9 + Others, ordered descending)
+  if (typeof Chart !== 'undefined') {
+    if (providerDetailsChartInstance) providerDetailsChartInstance.destroy();
+    const ctx = document.getElementById('providerDetailsChart')?.getContext('2d');
+    if (ctx) {
+      providerDetailsChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels.length ? labels : ['No Data'],
+          datasets: [{
+            data: dataAbs.length ? dataAbs : [1],
+            backgroundColor: dataAbs.length ? colors : ['#2a3550'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  }
+
+  // Legend (reuse renderLegend which handles negatives + absolute values)
+  renderLegend('providerDetailsLegend', labels, data, colors);
+
+  // "Others" table: individual account, value and % for accounts grouped into Others
+  const othersWrap = $('#providerDetailsOthersWrap');
+  const othersTable = $('#providerDetailsOthersTable');
+  if (othersWrap && othersTable) {
+    const totalAbs = Object.values(accountMap).reduce((sum, v) => sum + Math.abs(v), 0);
+    const others = accountTop.others || [];
+    if (others.length) {
+      othersTable.innerHTML = others.map(label => {
+        const value = accountMap[label] || 0;
+        const pct = totalAbs ? ((Math.abs(value) / totalAbs) * 100).toFixed(1) : '0.0';
+        return `<tr>
+          <td><strong>${esc(label)}</strong></td>
+          <td>${formatCurrency(value, currency)}</td>
+          <td>${pct}%</td>
+        </tr>`;
+      }).join('');
+      othersWrap.style.display = '';
+    } else {
+      othersTable.innerHTML = '';
+      othersWrap.style.display = 'none';
+    }
+  }
+
+  openModal('providerDetailsModalOverlay');
 }
 
 function goalCurrentValue(goal) {
@@ -2072,6 +2169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#goalSimForm')?.addEventListener('submit', event => { event.preventDefault(); runGoalSimulation(); });
   $('#closeGoalDetailsBtn')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
   $('#closeAccountDetailsBtn')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
+  $('#closeProviderDetailsBtn')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');
@@ -2230,12 +2328,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           acc.provider_id = values.provider_id;
           acc.name = values.name;
           acc.type = values.type;
+          acc.coin = values.coin || 'USD';
           acc.balance = values.balance;
           acc.interest_rate = values.interest_rate;
         }
       } else {
         const newId = Math.max(...guestData.accounts.map(a => a.id), 0) + 1;
-        guestData.accounts.push({ id: newId, provider_id: values.provider_id, name: values.name, type: values.type, balance: values.balance, interest_rate: values.interest_rate });
+        guestData.accounts.push({ id: newId, provider_id: values.provider_id, name: values.name, type: values.type, coin: values.coin || 'USD', balance: values.balance, interest_rate: values.interest_rate });
       }
       closeModal('accountModalOverlay');
       await loadData();
@@ -2603,6 +2702,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       else collapsedProviders.add(id);
       renderAccounts();
       updateToggleAllLabel();
+      return;
+    }
+
+    // Provider Details (account breakdown)
+    const providerDetailsBtn = event.target.closest('[data-provider-details]');
+    if (providerDetailsBtn) {
+      openProviderDetailsModal(Number(providerDetailsBtn.dataset.providerDetails));
       return;
     }
 
