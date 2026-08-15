@@ -927,6 +927,7 @@ function renderAccounts() {
     const accCount = g.accounts.length;
     const collapsed = collapsedProviders.has(g.provider.id);
     const providerTotalEur = providerValue(g.provider);
+    const providerTotalClass = providerTotalEur > 0 ? 'pos' : (providerTotalEur < 0 ? 'neg' : '');
     return `<div class="provider-card${collapsed ? ' collapsed' : ''}">
       <div class="provider-card-head">
         <div class="provider-card-title">
@@ -935,7 +936,7 @@ function renderAccounts() {
           <span class="provider-name">${esc(g.provider.name)}</span>
           <span class="tag ${g.provider.type}">${esc(g.provider.type)}</span>
           <span class="provider-count">${accCount} account${accCount === 1 ? '' : 's'}</span>
-          <span class="provider-total">${formatCurrency(providerTotalEur, 'EUR')}</span>
+          <span class="provider-total ${providerTotalClass}">${formatCurrency(providerTotalEur, 'EUR')}</span>
         </div>
         <div style="display:flex;gap:6px;">
           <button class="btn-sm" data-provider-details="${g.provider.id}">Details</button>
