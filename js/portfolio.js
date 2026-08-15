@@ -696,6 +696,25 @@ function providerValue(provider) {
   return providerAccounts.reduce((sum, acc) => sum + accountValue(acc, true), 0);
 }
 
+function maybeShowWelcomeModal() {
+  // Guests are always greeted with the demo guide (cached or not).
+  if (state.guest) {
+    showWelcomeModal(true);
+    return;
+  }
+  // Regular users: first-run guide only when they have no provider yet.
+  if (state.providers.length > 0) return;
+  showWelcomeModal(false);
+}
+
+function showWelcomeModal(isGuest) {
+  const guestBody = document.getElementById('welcomeGuestBody');
+  const userBody = document.getElementById('welcomeBody');
+  if (guestBody) guestBody.style.display = isGuest ? 'block' : 'none';
+  if (userBody) userBody.style.display = isGuest ? 'none' : 'block';
+  openModal('welcomeModalOverlay');
+}
+
 function updateNavVisibility() {
   const hasAssetAccounts = state.accounts.some(a => a.type === 'asset_account');
   const hasAnyAccounts = state.accounts.length > 0;
@@ -1463,6 +1482,7 @@ async function signIn(event) {
     showApp();
     await loadData();
     toast(`Signed in as ${state.user.username}`);
+    maybeShowWelcomeModal();
     
     // Update currency rates if admin
     if (state.user.role === 'admin') {
@@ -2114,8 +2134,9 @@ function runGoalSimulation() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('#loginForm')?.addEventListener('submit', signIn);
-  $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); });
+  $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); maybeShowWelcomeModal(); });
   $('#logoutButton')?.addEventListener('click', logout);
+  $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
 
   // Pressing Escape closes any open modal without saving.
   document.addEventListener('keydown', event => {
@@ -2161,6 +2182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#holdingAccount')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
   $('#newUserBtn')?.addEventListener('click', () => openModal('userModalOverlay'));
+  $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
 
   // Modal close buttons
   $('#closeAssetModalBtn')?.addEventListener('click', () => closeModal('assetModalOverlay'));

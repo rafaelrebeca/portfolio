@@ -231,7 +231,7 @@ The frontend calls this endpoint automatically on **admin login** and on the **a
 - **Data loading:** `loadData()` fetches all collections in parallel via `Promise.all`, then calls `render()`.
 - **Rendering:** `render()` dispatches to per-page renderers: `renderDashboardAccounts`, `renderCharts`, `renderPortfolioCards`, `renderPortfolioCharts`, `renderAssets`, `renderDividends`, `renderAccounts`, `renderHoldings`, `renderGoals`, `renderUsers`, plus `fillDividendPeriodValue()`, `updateToggleAllLabel()`, and `fillSelects()`.
 - **Charts:** Chart.js instances are cached in module-level variables (`allocationChartInstance`, `goalSimChartInstance`, etc.) and destroyed/recreated on re-render.
-- **Modals:** `openAssetModal`, `openUpdateAssetModal`, `openBulkUpdateModal`, `openProviderModal`, `openAccountModal`, `openHoldingModal`, `openGoalModal`, `openGoalDetailsModal`, `openGoalSimModal`, `openAccountDetailsModal`, `openProviderDetailsModal`. Modals are capped at `calc(100vh - 48px)` with `overflow-y: auto` so tall content (e.g. many linked accounts) scrolls instead of overflowing the screen. Pressing **Escape** closes any open modal without saving (`closeAllModals`). While any modal is open, background scrolling is locked: `openModal`/`closeModal`/`closeAllModals` call `syncBodyScrollLock()`, which toggles a `modal-open` class on `<body>` (`body.modal-open { overflow: hidden }`). The modal's own content still scrolls independently.
+- **Modals:** `openAssetModal`, `openUpdateAssetModal`, `openBulkUpdateModal`, `openProviderModal`, `openAccountModal`, `openHoldingModal`, `openGoalModal`, `openGoalDetailsModal`, `openGoalSimModal`, `openAccountDetailsModal`, `openProviderDetailsModal`, plus the first-run **welcome modal** (`#welcomeModalOverlay`, see the "First-run welcome / usage guide modal" subsection below). Modals are capped at `calc(100vh - 48px)` with `overflow-y: auto` so tall content (e.g. many linked accounts) scrolls instead of overflowing the screen. Pressing **Escape** closes any open modal without saving (`closeAllModals`). While any modal is open, background scrolling is locked: `openModal`/`closeModal`/`closeAllModals` call `syncBodyScrollLock()`, which toggles a `modal-open` class on `<body>` (`body.modal-open { overflow: hidden }`). The modal's own content still scrolls independently.
 - **Goal sub-goals:** `goalProgressHTML` (segmented/marked progress bar), `updateGoalSubGating` + `filterSubInput` (character filtering while typing), `validateGoalSubs` (save-time validation).
 - **Goal simulator:** `openGoalSimModal`, `goalSimData`, `runGoalSimulation` — a modal (`#goalSimModalOverlay`) that projects goal progress over time given a monthly contribution, rendered as a Chart.js line chart (`#goalSimChart`).
 - **Bulk price update:** `bulkUpdateEligibleAssets`, `openBulkUpdateModal`, `runBulkUpdate`, `setBulkUpdateProgress`, `appendBulkUpdateLog` (see §7a).
@@ -258,6 +258,24 @@ Dashboard, Goals, My Portfolio, Assets, Dividends, My Accounts, plus admin-only:
 - **My Portfolio**, **Assets**, **Dividends** — shown only if the current user has at least one `asset_account`.
 - **Goals** — shown only if the current user has any accounts (any type).
 - **My Accounts** and **Dashboard** are always shown.
+
+### First-run welcome / usage guide modal (new-user UX)
+
+On **login**, a welcome modal (`#welcomeModalOverlay`) is shown automatically to guide the user through the app. It is triggered by `maybeShowWelcomeModal()` in `js/portfolio.js`, called from `signIn()` right after `loadData()` (and from the guest login handler). The modal has **two content variants**, toggled by `showWelcomeModal(isGuest)`:
+
+- **Guests** (`state.guest === true`) are **always** greeted with a **demo guide** (`#welcomeGuestBody`) on every guest login — cached or not — explaining what the sample data contains and how it's connected. The guest guide covers: sample **Assets** (AAPL, VYM, TLT, MSFT…), sample **Providers** & **Accounts** (Revolut, Trading 212), how **Holdings** live inside an **asset account** and reference **Assets**, how **Goals** link to **Accounts**, and that everything is **editable** but **local only / not saved**.
+- **Regular users** are shown the **first-run guide** (`#welcomeBody`) only when they have **no providers** yet; it is skipped once they have at least one provider.
+
+The modal presents a numbered 4-step usage guide:
+
+1. **Add a Provider** — go to the **My Accounts** menu and create a provider (bank / broker / other).
+2. **Add an Account** — inside that provider, create an account (e.g. an **asset account** to hold investments).
+3. **Unlock Goals** — **Goals** are unlocked once at least **1 account** is created.
+4. **Unlock My Portfolio, Assets & Dividends** — once an **asset account** is created, the **My Portfolio**, **Assets** and **Dividends** menus unlock, allowing the user to add **Holdings / Assets** to their portfolio on any existing asset account.
+
+**Styling** (`.welcome-modal` in `css/portfolio.css`): the modal uses a step layout with numbered circular badges (`.welcome-num`), a title (`.welcome-title`) and body text (`.welcome-text`). Key terms are emphasized with color + bold + underline via the `.kw` classes (`.kw-provider`, `.kw-account`, `.kw-asset`, `.kw-goal`, `.kw-portfolio`, `.kw-assets`, `.kw-dividends`, `.kw-holding`, `.kw-guest`), and menu names use the `.menu` class (accent-colored, bold, underlined). The modal is dismissed with the **"Got it, let's start"** button (`#welcomeModalOk`), which calls `closeModal('welcomeModalOverlay')`.
+
+**Help button:** a **❓ Help** button (`#helpButton`) sits in the topbar, left of the **Log out** button. Clicking it reopens the welcome/usage-guide modal at any time via `showWelcomeModal(state.guest)`, so users can revisit the guide after dismissing it — showing the correct variant (guest demo guide vs. regular first-run guide). It uses the same `.logout-btn` styling as the Log out button.
 
 ### Admin-only UI
 Admin-only elements are gated by `isAdminUser()` and/or the `admin-action` CSS class. The admin nav section (`#adminSectionLabel`, `#navImport`, `#navExport`, `#navUsers`) is shown only for admins.

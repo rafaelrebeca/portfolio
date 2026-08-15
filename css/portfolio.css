@@ -995,6 +995,36 @@ select {
 .upload-icon { font-size: 20px; }
 .import-run { white-space: nowrap; min-height: 42px; width: 100%; }
 .modal-copy { color: var(--muted); font-size: 13px; line-height: 1.5; margin: -6px 0 18px; }
+
+/* ===== Welcome / first-run usage guide modal ===== */
+.welcome-modal { max-width: 480px; }
+.welcome-modal h3 { font-size: 18px; }
+.welcome-body { display: flex; flex-direction: column; gap: 16px; }
+.welcome-intro { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 4px; }
+.welcome-step { display: flex; gap: 12px; align-items: flex-start; }
+.welcome-num {
+  flex: 0 0 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-top: 2px;
+}
+.welcome-title { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--text); }
+.welcome-text { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.welcome-text strong { color: var(--text); font-weight: 700; text-decoration: underline; }
+.welcome-text em { color: var(--text); font-style: italic; }
+.welcome-text .menu {
+  color: var(--accent2); font-weight: 700; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.kw { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.kw-provider { color: var(--accent); }
+.kw-account { color: var(--accent2); }
+.kw-asset { color: #ffb454; }
+.kw-goal { color: #c792ea; }
+.kw-portfolio { color: var(--accent); }
+.kw-assets { color: var(--accent2); }
+.kw-dividends { color: #ff5c72; }
+.kw-holding { color: #ffb454; }
+.kw-guest { color: #7fd1ff; }
 .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .progress { height: 8px; border-radius: 6px; background: var(--panel2); overflow: hidden; }
 .progress-bar { height: 100%; width: 0; border-radius: 6px; background: var(--accent2); transition: width .2s ease; }
