@@ -54,12 +54,11 @@
     <div class="layout">
       <div class="sidebar" aria-label="Main navigation">
         <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
-        <div class="nav-item" data-page="assets">📈 Assets</div>
-        <div class="nav-item" data-page="dividends">💰 Dividends</div>
-        <div class="nav-item" data-page="providers">🏢 My Providers</div>
-        <div class="nav-item" data-page="accounts">🏦 My Accounts</div>
-        <div class="nav-item" data-page="portfolio">💼 My Portfolio</div>
-        <div class="nav-item" data-page="goals">🎯 Goals</div>
+        <div class="nav-item" id="navGoals" data-page="goals">🎯 Goals</div>
+        <div class="nav-item" id="navPortfolio" data-page="portfolio">💼 My Portfolio</div>
+        <div class="nav-item" id="navAssets" data-page="assets">📈 Assets</div>
+        <div class="nav-item" id="navDividends" data-page="dividends">💰 Dividends</div>
+        <div class="nav-item" id="navAccounts" data-page="accounts">🏦 My Accounts</div>
 
         <div class="nav-section-label" id="adminSectionLabel" style="display:none;">Admin</div>
         <div class="nav-item" id="navImport" style="display:none;" data-page="import">📥 Import Data</div>
@@ -188,35 +187,19 @@
           </table>
         </div>
 
-        <!-- PROVIDERS -->
-        <div class="page" id="page-providers">
-          <div class="page-title">My Providers</div>
-          <div class="page-desc">Financial institutions (banks, brokers) — visible only to you</div>
-          <div class="toolbar">
-            <div></div>
-            <button class="btn-sm primary write-action" id="newProviderBtn">+ New Provider</button>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Accounts</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="providersTable"></tbody>
-          </table>
-        </div>
-
         <!-- ACCOUNTS -->
         <div class="page" id="page-accounts">
           <div class="page-title">My Accounts</div>
-          <div class="page-desc">Accounts under your providers: loans (debt), interest accounts, bank accounts, and
-            asset accounts</div>
+          <div class="page-desc">Your providers and the accounts under them: loans (debt), interest accounts, bank
+            accounts, and asset accounts</div>
           <div class="toolbar">
-            <div></div>
-            <button class="btn-sm primary write-action" id="newAccountBtn">+ New Account</button>
+            <div>
+              <button class="btn-sm" id="toggleAllProvidersBtn">Collapse All</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn-sm primary write-action" id="newProviderBtn">+ New Provider</button>
+              <button class="btn-sm primary write-action" id="newAccountBtn">+ New Account</button>
+            </div>
           </div>
           <div id="accountsList"></div>
         </div>
@@ -677,6 +660,18 @@
           <button class="btn-sm primary" type="submit">Reset Password</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Confirm (Delete / destructive actions) -->
+  <div class="modal-overlay" id="confirmModalOverlay">
+    <div class="modal">
+      <h3 id="confirmModalTitle">Are you sure?</h3>
+      <p class="modal-copy" id="confirmModalMessage"></p>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" id="confirmModalCancel">Cancel</button>
+        <button class="btn-sm danger" type="button" id="confirmModalOk">Delete</button>
+      </div>
     </div>
   </div>
 

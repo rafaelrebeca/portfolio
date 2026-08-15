@@ -97,6 +97,33 @@ function openModal(id) { const el = document.getElementById(id); if (el) el.clas
 function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('show'); }
 function closeAllModals() { document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show')); }
 
+function confirmDialog(message, okLabel = 'Delete') {
+  return new Promise(resolve => {
+    const overlay = $('#confirmModalOverlay');
+    if (!overlay) { resolve(true); return; }
+    $('#confirmModalMessage').textContent = message;
+    $('#confirmModalOk').textContent = okLabel;
+    const okBtn = $('#confirmModalOk');
+    const cancelBtn = $('#confirmModalCancel');
+    const cleanup = () => {
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onOverlay);
+      document.removeEventListener('keydown', onKey);
+      closeModal('confirmModalOverlay');
+    };
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onOverlay = e => { if (e.target === overlay) onCancel(); };
+    const onKey = e => { if (e.key === 'Escape') onCancel(); };
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onOverlay);
+    document.addEventListener('keydown', onKey);
+    openModal('confirmModalOverlay');
+  });
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
   const data = await response.json().catch(() => ({}));
@@ -181,6 +208,7 @@ let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
+let collapsedProviders = new Set();
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -657,6 +685,22 @@ function providerValue(provider) {
   return providerAccounts.reduce((sum, acc) => sum + accountValue(acc, true), 0);
 }
 
+function updateNavVisibility() {
+  const hasAssetAccounts = state.accounts.some(a => a.type === 'asset_account');
+  const hasAnyAccounts = state.accounts.length > 0;
+  const hasProviders = state.providers.length > 0;
+  const set = (id, show) => { const el = $(id); if (el) el.style.display = show ? 'flex' : 'none'; };
+  set('#navPortfolio', hasAssetAccounts);
+  set('#navAssets', hasAssetAccounts);
+  set('#navDividends', hasAssetAccounts);
+  set('#navGoals', hasAnyAccounts);
+  const newAccountBtn = $('#newAccountBtn');
+  if (newAccountBtn) {
+    newAccountBtn.disabled = !hasProviders;
+    newAccountBtn.title = hasProviders ? '' : 'Create a provider first.';
+  }
+}
+
 function render() {
   const totalVal = totalPortfolioValue();
   
@@ -690,8 +734,8 @@ function render() {
   renderAssets();
   fillDividendPeriodValue();
   renderDividends();
-  renderProviders();
   renderAccounts();
+  updateToggleAllLabel();
   renderHoldings();
   renderGoals();
   renderUsers();
@@ -708,6 +752,7 @@ function render() {
   if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
   if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
   if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
+  updateNavVisibility();
 }
 
 function renderAssets() {
@@ -811,23 +856,11 @@ function renderDividends() {
   }).join('') : emptyRow(4, 'No dividend data.');
 }
 
-function renderProviders() {
-  if (!$('#providersTable')) return;
-  $('#providersTable').innerHTML = state.providers.length ? state.providers.map(p => {
-    const val = providerValue(p);
-    const accCount = state.accounts.filter(a => a.provider_id === p.id).length;
-    return `<tr>
-      <td><strong>${esc(p.name)}</strong></td>
-      <td><span class="tag ${p.type}">${esc(p.type)}</span></td>
-      <td>${p.account_count ?? accCount}</td>
-      <td>
-        <div style="display:flex;gap:6px;">
-          <button class="btn-sm" data-edit-provider="${p.id}">Edit</button>
-          <button class="btn-sm danger" data-delete-provider="${p.id}">Delete</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('') : emptyRow(4, 'No providers yet. Create one to get started.');
+function updateToggleAllLabel() {
+  const btn = $('#toggleAllProvidersBtn');
+  if (!btn) return;
+  const allCollapsed = state.providers.length > 0 && state.providers.every(p => collapsedProviders.has(p.id));
+  btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
 }
 
 function renderAccounts() {
@@ -875,9 +908,26 @@ function renderAccounts() {
       </div>`;
     }).join('') || '<div class="page-desc" style="margin:10px 0;">No accounts under this provider yet.</div>';
 
-    return `<div style="margin-bottom:24px;">
-      <div class="page-title" style="font-size:16px;margin-bottom:12px;">🏢 ${esc(g.provider.name)} <span class="tag ${g.provider.type}" style="margin-left:8px;">${esc(g.provider.type)}</span></div>
-      ${accountsHTML}
+    const accCount = g.accounts.length;
+    const collapsed = collapsedProviders.has(g.provider.id);
+    return `<div class="provider-card${collapsed ? ' collapsed' : ''}">
+      <div class="provider-card-head">
+        <div class="provider-card-title">
+          <button class="provider-toggle" data-toggle-provider="${g.provider.id}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
+          <span class="provider-icon">🏢</span>
+          <span class="provider-name">${esc(g.provider.name)}</span>
+          <span class="tag ${g.provider.type}">${esc(g.provider.type)}</span>
+          <span class="provider-count">${accCount} account${accCount === 1 ? '' : 's'}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-sm" data-add-account-provider="${g.provider.id}">+ Add Account</button>
+          <button class="btn-sm" data-edit-provider="${g.provider.id}">Edit</button>
+          <button class="btn-sm danger" data-delete-provider="${g.provider.id}">Delete</button>
+        </div>
+      </div>
+      <div class="provider-card-body">
+        ${accountsHTML}
+      </div>
     </div>`;
   }).join('') || '<div class="page-desc">No providers created yet. Create a provider first.</div>';
 
@@ -1439,13 +1489,14 @@ function openProviderModal(providerId = null) {
   openModal('providerModalOverlay');
 }
 
-function openAccountModal(accountId = null) {
+function openAccountModal(accountId = null, providerId = null) {
   if (!state.providers.length) return toast('Create a provider first.');
   fillSelects();
   const form = $('#accountForm');
   if (!form) return;
   form.reset();
   const err = form.querySelector('.form-error'); if (err) err.textContent = '';
+  const providerField = $('#accountProvider')?.closest('.field');
   if (accountId) {
     const acc = state.accounts.find(a => a.id === accountId);
     if (!acc) return;
@@ -1457,10 +1508,17 @@ function openAccountModal(accountId = null) {
     $('#accountCoin').value = acc.coin || 'USD';
     $('#accountBalanceInput').value = acc.balance ?? '';
     $('#accountRateInput').value = acc.interest_rate ?? '';
+    if (providerField) providerField.style.display = '';
   } else {
     $('#accountModalTitle').textContent = 'New Account';
     $('#accountEditId').value = '';
     $('#accountCoin').value = 'USD';
+    if (providerId) {
+      $('#accountProvider').value = providerId;
+      if (providerField) providerField.style.display = 'none';
+    } else {
+      if (providerField) providerField.style.display = '';
+    }
   }
   toggleAccountFields();
   openModal('accountModalOverlay');
@@ -1879,6 +1937,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#updateAllPricesBtn')?.addEventListener('click', () => openBulkUpdateModal());
   $('#newProviderBtn')?.addEventListener('click', () => openProviderModal());
   $('#newAccountBtn')?.addEventListener('click', () => openAccountModal());
+  $('#toggleAllProvidersBtn')?.addEventListener('click', () => {
+    const allCollapsed = state.providers.length > 0 && state.providers.every(p => collapsedProviders.has(p.id));
+    if (allCollapsed) {
+      collapsedProviders.clear();
+    } else {
+      state.providers.forEach(p => collapsedProviders.add(p.id));
+    }
+    renderAccounts();
+    updateToggleAllLabel();
+  });
   $('#newHoldingBtn')?.addEventListener('click', () => openHoldingModal());
   $('#holdingAssetTypeFilter')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#holdingAccount')?.addEventListener('change', () => fillHoldingAssetSelect());
@@ -2402,7 +2470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteAssetBtn = event.target.closest('[data-delete-asset]');
     if (deleteAssetBtn) {
       const assetId = Number(deleteAssetBtn.dataset.deleteAsset);
-      if (!confirm('Delete this asset? This will also remove any holdings using it.')) return;
+      if (!await confirmDialog('Delete this asset? This will also remove any holdings using it.')) return;
       if (state.guest) {
         guestData.assets = guestData.assets.filter(a => a.id !== assetId);
         await loadData();
@@ -2419,6 +2487,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // Toggle Provider collapse
+    const toggleProviderBtn = event.target.closest('[data-toggle-provider]');
+    if (toggleProviderBtn) {
+      const id = Number(toggleProviderBtn.dataset.toggleProvider);
+      if (collapsedProviders.has(id)) collapsedProviders.delete(id);
+      else collapsedProviders.add(id);
+      renderAccounts();
+      updateToggleAllLabel();
+      return;
+    }
+
+    // Add Account for a specific provider
+    const addAccountProviderBtn = event.target.closest('[data-add-account-provider]');
+    if (addAccountProviderBtn) {
+      openAccountModal(null, Number(addAccountProviderBtn.dataset.addAccountProvider));
+      return;
+    }
+
     // Edit Provider
     const editProviderBtn = event.target.closest('[data-edit-provider]');
     if (editProviderBtn) {
@@ -2430,7 +2516,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteProviderBtn = event.target.closest('[data-delete-provider]');
     if (deleteProviderBtn) {
       const id = Number(deleteProviderBtn.dataset.deleteProvider);
-      if (!confirm('Delete this provider? All its accounts will also be deleted.')) return;
+      if (!await confirmDialog('Delete this provider? All its accounts will also be deleted.')) return;
+      collapsedProviders.delete(id);
       if (state.guest) {
         const accountsToDelete = guestData.accounts.filter(a => a.provider_id === id).map(a => a.id);
         guestData.holdings = guestData.holdings.filter(h => !accountsToDelete.includes(h.account_id));
@@ -2461,7 +2548,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteAccountBtn = event.target.closest('[data-delete-account]');
     if (deleteAccountBtn) {
       const id = Number(deleteAccountBtn.dataset.deleteAccount);
-      if (!confirm('Delete this account? Associated holdings will also be deleted.')) return;
+      if (!await confirmDialog('Delete this account? Associated holdings will also be deleted.')) return;
       if (state.guest) {
         guestData.holdings = guestData.holdings.filter(h => h.account_id !== id);
         guestData.accounts = guestData.accounts.filter(a => a.id !== id);
@@ -2490,7 +2577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteHoldingBtn = event.target.closest('[data-delete-holding]');
     if (deleteHoldingBtn) {
       const id = Number(deleteHoldingBtn.dataset.deleteHolding);
-      if (!confirm('Delete this holding?')) return;
+      if (!await confirmDialog('Delete this holding?')) return;
       if (state.guest) {
         guestData.holdings = guestData.holdings.filter(h => h.id !== id);
         await loadData();
@@ -2564,7 +2651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteGoalBtn = event.target.closest('[data-delete-goal]');
     if (deleteGoalBtn) {
       const id = Number(deleteGoalBtn.dataset.deleteGoal);
-      if (!confirm('Delete this goal?')) return;
+      if (!await confirmDialog('Delete this goal?')) return;
       if (state.guest) {
         guestData.goals = guestData.goals.filter(g => g.id !== id);
         await loadData();
@@ -2594,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteUserBtn = event.target.closest('[data-delete-user]');
     if (deleteUserBtn) {
       const id = Number(deleteUserBtn.dataset.deleteUser);
-      if (!confirm('Delete this user?')) return;
+      if (!await confirmDialog('Delete this user?')) return;
       if (state.guest) {
         guestData.users = guestData.users.filter(u => u.id !== id);
         await loadData();
