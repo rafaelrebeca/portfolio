@@ -202,6 +202,7 @@ let portfolioAssetChartInstance = null;
 let portfolioTypeChartInstance = null;
 let goalDetailsChartInstance = null;
 let goalDetailsGoalId = null;
+let accountDetailsChartInstance = null;
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let dashboardAllocOthers = [];
@@ -879,12 +880,16 @@ function renderAccounts() {
       const currency = acc.coin || 'USD';
       const label = typeLabel(acc.type);
       let details = '';
+      let headActions = '';
       if (acc.type === 'asset_account') {
         const holdingCount = state.holdings.filter(h => h.account_id === acc.id).length;
         details = `<div class="account-detail-grid">
           <div><div class="dlabel">Holdings</div><div class="dvalue">${holdingCount} assets</div></div>
           <div><div class="dlabel">Value</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
         </div>`;
+        if (holdingCount > 0) {
+          headActions = `<button class="btn-sm" data-account-details="${acc.id}">Details</button>`;
+        }
       } else if (acc.type === 'loan' || acc.type === 'interest_account') {
         details = `<div class="account-detail-grid">
           <div><div class="dlabel">Balance</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
@@ -900,6 +905,7 @@ function renderAccounts() {
         <div class="account-card-head">
           <span class="aname">${esc(acc.name)} <span class="tag ${acc.type}">${esc(label)}</span></span>
           <div style="display:flex;gap:6px;">
+            ${headActions}
             <button class="btn-sm" data-edit-account="${acc.id}">Edit</button>
             <button class="btn-sm danger" data-delete-account="${acc.id}">Delete</button>
           </div>
@@ -1001,6 +1007,93 @@ function renderHoldings() {
       </td>
     </tr>`;
   }).join('') : emptyRow(8, 'No holdings yet. Add assets to your asset accounts.');
+}
+
+function openAccountDetailsModal(accountId) {
+  const acc = state.accounts.find(a => a.id === accountId);
+  if (!acc) return;
+  const currency = 'EUR';
+  $('#accountDetailsTitle').textContent = `Details: ${acc.name}`;
+
+  // Summary
+  const summary = $('#accountDetailsSummary');
+  if (summary) {
+    const val = accountValue(acc, true);
+    const holdingCount = state.holdings.filter(h => h.account_id === acc.id).length;
+    summary.innerHTML = `
+      <div><div class="dlabel">Holdings</div><div class="dvalue">${holdingCount} assets</div></div>
+      <div><div class="dlabel">Value</div><div class="dvalue ${val < 0 ? 'neg' : 'pos'}">${formatCurrency(val, currency)}</div></div>
+    `;
+  }
+
+  // Per-asset market value, converted to EUR, sorted descending
+  const assetMap = {};
+  state.holdings.filter(h => h.account_id === acc.id).forEach(h => {
+    const asset = state.assets.find(a => a.id === h.asset_id);
+    if (!asset) return;
+    const val = Number(asset.price || 0) * Number(h.quantity || 0);
+    const converted = convertToEUR(val, asset.coin || 'USD');
+    const label = h.symbol || asset.symbol || asset.name || 'Unknown';
+    assetMap[label] = (assetMap[label] || 0) + converted;
+  });
+
+  const assetTop = topNWithOthers(assetMap, 9);
+  const labels = assetTop.labels;
+  const data = assetTop.data;
+  const dataAbs = data.map(v => Math.abs(v));
+  const colors = CHART_COLORS;
+
+  // Donut chart (top 9 + Others, ordered descending)
+  if (typeof Chart !== 'undefined') {
+    if (accountDetailsChartInstance) accountDetailsChartInstance.destroy();
+    const ctx = document.getElementById('accountDetailsChart')?.getContext('2d');
+    if (ctx) {
+      accountDetailsChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels.length ? labels : ['No Data'],
+          datasets: [{
+            data: dataAbs.length ? dataAbs : [1],
+            backgroundColor: dataAbs.length ? colors : ['#2a3550'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  }
+
+  // Legend (reuse renderLegend which handles negatives + absolute values)
+  renderLegend('accountDetailsLegend', labels, data, colors);
+
+  // "Others" table: individual ticker, value and % for assets grouped into Others
+  const othersWrap = $('#accountDetailsOthersWrap');
+  const othersTable = $('#accountDetailsOthersTable');
+  if (othersWrap && othersTable) {
+    const totalAbs = Object.values(assetMap).reduce((sum, v) => sum + Math.abs(v), 0);
+    const others = assetTop.others || [];
+    if (others.length) {
+      othersTable.innerHTML = others.map(label => {
+        const value = assetMap[label] || 0;
+        const pct = totalAbs ? ((Math.abs(value) / totalAbs) * 100).toFixed(1) : '0.0';
+        return `<tr>
+          <td><strong>${esc(label)}</strong></td>
+          <td>${formatCurrency(value, currency)}</td>
+          <td>${pct}%</td>
+        </tr>`;
+      }).join('');
+      othersWrap.style.display = '';
+    } else {
+      othersTable.innerHTML = '';
+      othersWrap.style.display = 'none';
+    }
+  }
+
+  openModal('accountDetailsModalOverlay');
 }
 
 function goalCurrentValue(goal) {
@@ -1978,6 +2071,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeGoalSimBtn')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
   $('#goalSimForm')?.addEventListener('submit', event => { event.preventDefault(); runGoalSimulation(); });
   $('#closeGoalDetailsBtn')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
+  $('#closeAccountDetailsBtn')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');
@@ -2548,6 +2642,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (err) {
         toast(err.message);
       }
+      return;
+    }
+
+    // Account Details (asset breakdown)
+    const accountDetailsBtn = event.target.closest('[data-account-details]');
+    if (accountDetailsBtn) {
+      openAccountDetailsModal(Number(accountDetailsBtn.dataset.accountDetails));
       return;
     }
 

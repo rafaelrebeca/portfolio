@@ -616,6 +616,31 @@
     </div>
   </div>
 
+  <!-- MODAL: Account Details (asset breakdown) -->
+  <div class="modal-overlay" id="accountDetailsModalOverlay">
+    <div class="modal" style="max-width:560px;">
+      <h3 id="accountDetailsTitle">Account Details</h3>
+      <div class="goal-details-summary" id="accountDetailsSummary"></div>
+      <div style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="accountDetailsChart"></canvas>
+        </div>
+        <div class="chart-legend" id="accountDetailsLegend" style="flex:1;"></div>
+      </div>
+      <div id="accountDetailsOthersWrap" style="display:none;margin-top:16px;">
+        <div class="dlabel" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Others</div>
+        <table>
+          <thead>
+            <tr><th>Ticker</th><th>Value</th><th>%</th></tr>
+          </thead>
+          <tbody id="accountDetailsOthersTable"></tbody>
+        </table>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-sm" type="button" id="closeAccountDetailsBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: User (Create) -->
   <div class="modal-overlay" id="userModalOverlay">
     <div class="modal">
