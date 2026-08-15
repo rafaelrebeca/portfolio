@@ -21,6 +21,15 @@ async function requireMember(request, env) { const user = await requireUser(requ
 async function requireAdmin(request, env) { const user = await requireUser(request, env); if (user.role !== 'admin') throw Object.assign(new Error('Administrator access required.'), { status: 403 }); return user; }
 const changed = result => result.meta?.changes > 0;
 
+// Current UTC timestamp in YYYYMMDDHH24MISS format (e.g. 20260815103045)
+function nowStamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+// Date part (YYYYMMDD) of a YYYYMMDDHH24MISS stamp
+function stampDay(stamp) { return stamp ? String(stamp).slice(0, 8) : ''; }
+
 function assetsStatement(db) {
   return db.prepare(`SELECT a.id, a.name, a.symbol, a.type, a.price, a.coin,
     d.dividend_yield, GROUP_CONCAT(DISTINCT dpm.month_paid) AS payment_months
@@ -391,6 +400,14 @@ export async function onRequest(context) {
       const apiKey = env.API_KEY;
       if (!apiKey) return fail('API_KEY not configured in environment variables.', 500);
 
+      // Skip the external API call if currency was already updated today (the API only
+      // exposes previous-day end-of-day values, so there is no new data within the same day).
+      const story = await env.myd1db.prepare('SELECT "when" FROM update_story WHERE what = ?').bind('CURRENCY').first();
+      const today = stampDay(nowStamp());
+      if (story && stampDay(story.when) === today) {
+        return json({ count: 0, ok: true, skipped: true, message: 'Currency rates already updated today; skipping external API call.' });
+      }
+
       try {
         const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/USD`);
         if (!response.ok) return fail('Failed to fetch exchange rates from external API.', 500);
@@ -407,6 +424,11 @@ export async function onRequest(context) {
           ).bind(coin, value).run();
           count++;
         }
+
+        // Record that currency was updated now (what = 'CURRENCY', when = YYYYMMDDHH24MISS).
+        await env.myd1db.prepare(
+          'INSERT INTO update_story (what, "when") VALUES (?, ?) ON CONFLICT(what) DO UPDATE SET "when" = excluded."when"'
+        ).bind('CURRENCY', nowStamp()).run();
 
         return json({ count, ok: true, message: `Updated ${count} currency exchange rates.` });
       } catch (error) {

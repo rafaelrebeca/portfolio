@@ -4,7 +4,4 @@ node_modules/
 remote-dump.sql
 schema.sql
 wrangler.toml
-
-# Local project documentation (not for upload)
-PROJECT.md
 refresh-local-db.sh
