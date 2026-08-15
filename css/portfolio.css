@@ -1280,9 +1280,13 @@ select {
 
 @media (max-width: 760px) {
   .layout { flex-direction: column; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; padding: 8px; }
-  .nav-item { white-space: nowrap; margin-bottom: 0; }
+  .topbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+  .topbar-right { margin-left: auto; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; overflow-x: visible; padding: 8px; }
+  .nav-item { white-space: nowrap; margin-bottom: 0; font-size: 13px; padding: 8px 10px; }
   .nav-section-label { display: none; }
   .main { padding: 18px; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .details-chart-row { flex-wrap: wrap; gap: 12px; }
 }
 

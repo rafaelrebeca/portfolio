@@ -144,19 +144,21 @@
                 Prices</button>
             </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Latest Price</th>
-                <th>Yield</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="assetsTable"></tbody>
-          </table>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Latest Price</th>
+                  <th>Yield</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="assetsTable"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- DIVIDENDS -->
@@ -175,17 +177,19 @@
             </div>
             <div></div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Asset</th>
-                <th>Yield</th>
-                <th>Payment Months</th>
-              </tr>
-            </thead>
-            <tbody id="dividendsTable"></tbody>
-          </table>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Asset</th>
+                  <th>Yield</th>
+                  <th>Payment Months</th>
+                </tr>
+              </thead>
+              <tbody id="dividendsTable"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- ACCOUNTS -->
@@ -255,21 +259,23 @@
             </div>
           </div>
           <div id="portfolioFilterBar"></div>
-          <table>
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Account</th>
-                <th>Quantity</th>
-                <th>Purchase Price</th>
-                <th>Market Value</th>
-                <th>Gain / Loss (%)</th>
-                <th>Gain / Loss (€)</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="holdingsTable"></tbody>
-          </table>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Account</th>
+                  <th>Quantity</th>
+                  <th>Purchase Price</th>
+                  <th>Market Value</th>
+                  <th>Gain / Loss (%)</th>
+                  <th>Gain / Loss (€)</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="holdingsTable"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- GOALS -->
@@ -605,7 +611,7 @@
       <div class="goal-details-summary" id="goalDetailsSummary"></div>
       <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
       <div class="goal-details-callout" id="goalDetailsCallout"></div>
-      <div style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="goalDetailsLegend" style="flex:1;"></div>
@@ -622,7 +628,7 @@
     <div class="modal" style="max-width:560px;">
       <h3 id="accountDetailsTitle">Account Details</h3>
       <div class="goal-details-summary" id="accountDetailsSummary"></div>
-      <div style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="accountDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="accountDetailsLegend" style="flex:1;"></div>
@@ -647,7 +653,7 @@
     <div class="modal" style="max-width:560px;">
       <h3 id="providerDetailsTitle">Provider Details</h3>
       <div class="goal-details-summary" id="providerDetailsSummary"></div>
-      <div style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="providerDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="providerDetailsLegend" style="flex:1;"></div>
