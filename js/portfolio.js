@@ -1417,6 +1417,9 @@ async function runBulkUpdate(eligible) {
   const total = eligible.length;
   let updated = 0;
   let failed = 0;
+  // Track portfolio impact (USD) of the updated assets' holdings.
+  let portfolioBefore = 0;
+  let portfolioAfter = 0;
 
   if (total === 0) {
     if (err) err.textContent = 'No USD stocks to update.';
@@ -1451,7 +1454,14 @@ async function runBulkUpdate(eligible) {
           })
         });
         updated++;
-        appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price}`);
+        const oldPrice = a.price;
+        const changePct = (oldPrice != null && oldPrice > 0) ? ((price - oldPrice) / oldPrice) * 100 : null;
+        const changeStr = changePct == null ? 'n/a' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
+        appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price} (${changeStr})`);
+        // Accumulate portfolio impact from this asset's holdings (USD).
+        const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
+        portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
+        portfolioAfter += qty * Number(price);
       }
     } catch (error) {
       failed++;
@@ -1464,7 +1474,11 @@ async function runBulkUpdate(eligible) {
     }
   }
 
+  const impactUsd = portfolioAfter - portfolioBefore;
+  const impactPct = portfolioBefore > 0 ? (impactUsd / portfolioBefore) * 100 : null;
+  const impactStr = impactPct == null ? 'n/a' : `${impactPct >= 0 ? '+' : ''}${impactPct.toFixed(2)}%`;
   appendBulkUpdateLog(`Done. Updated ${updated}, failed ${failed}.`);
+  appendBulkUpdateLog(`Portfolio impact: ${impactUsd >= 0 ? '+' : ''}${formatCurrency(impactUsd, 'USD')} (${impactStr})`);
   if (err) err.textContent = failed ? `${failed} asset(s) failed. See console log.` : '';
   await loadData();
   toast(`Bulk update finished: ${updated} updated, ${failed} failed.`);
