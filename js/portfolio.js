@@ -2267,6 +2267,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
   $('#newUserBtn')?.addEventListener('click', () => openModal('userModalOverlay'));
   $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
+  // Clickable menu/keyword references inside the welcome modal: close it and navigate to the page.
+  document.querySelectorAll('#welcomeModalOverlay [data-page]').forEach(el => {
+    el.addEventListener('click', () => {
+      closeModal('welcomeModalOverlay');
+      showPage(el.dataset.page);
+    });
+  });
 
   // Modal close buttons
   $('#closeAssetModalBtn')?.addEventListener('click', () => closeModal('assetModalOverlay'));

@@ -1053,6 +1053,8 @@ select {
   color: var(--accent2); font-weight: 700; text-decoration: underline;
   text-underline-offset: 2px;
 }
+.welcome-text [data-page] { cursor: pointer; }
+.welcome-text [data-page]:hover { color: var(--accent); }
 .kw { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .kw-provider { color: var(--accent); }
 .kw-account { color: var(--accent2); }

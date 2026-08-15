@@ -277,6 +277,8 @@ The modal presents a numbered 4-step usage guide:
 
 **Help button:** a **❓ Help** button (`#helpButton`) sits in the topbar, left of the **Log out** button. Clicking it reopens the welcome/usage-guide modal at any time via `showWelcomeModal(state.guest)`, so users can revisit the guide after dismissing it — showing the correct variant (guest demo guide vs. regular first-run guide). It uses the same `.logout-btn` styling as the Log out button.
 
+**Clickable menu & keyword references:** the menu names and page-referencing keywords inside the welcome modal (e.g. **My Accounts**, **My Portfolio**, **Assets**, **Dividends**, **Dashboard**, **Goals**, **Holdings**, **Providers**, **Accounts**, **asset account**) carry a `data-page` attribute. Clicking one closes the modal and navigates to that page via `showPage(el.dataset.page)`. The handler is wired in the `DOMContentLoaded` init (a listener over `#welcomeModalOverlay [data-page]`). Clickable references show a pointer cursor and a hover color change (`.welcome-text [data-page]`).
+
 ### Blur (privacy) feature
 
 A privacy toggle that blurs **monetary values only**, so a user can show their portfolio and its distributions (percentages, quantities, dates stay readable) without revealing any actual monetary value.
