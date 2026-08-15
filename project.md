@@ -293,7 +293,7 @@ For the bulk variant, see §7a (`openBulkUpdateModal`, `runBulkUpdate`, etc.).
 
 - `sw.js` — service worker for offline/caching. Caches the app shell (`/index.html`, `/css/portfolio.css`, `/js/portfolio.js`, Chart.js CDN). API GET requests are network-first with cache fallback (offline shows last data); non-GET API calls pass through.
 - `manifest.webmanifest` — app name "Portfolio Manager", standalone display, icons in `/icons/`.
-- `manifest.webmanifest` sets `start_url: "/portfolio.html"`, while the actual entry file is `index.html`.
+- `manifest.webmanifest` sets `start_url: "/index.html"` (the actual entry file).
 
 ---
 

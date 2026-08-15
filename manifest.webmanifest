@@ -2,7 +2,7 @@
   "name": "Portfolio Manager",
   "short_name": "Portfolio",
   "description": "Private portfolio management dashboard.",
-  "start_url": "/portfolio.html",
+  "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
