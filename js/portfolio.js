@@ -43,6 +43,8 @@ const guestData = {
 };
 
 const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [] };
+let blurMode = false;
+let currentPage = 'dashboard';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const numeric = value => value === null || value === undefined || value === '' ? null : Number(value);
@@ -1438,8 +1440,90 @@ function fillCurrencyOptions() {
 }
 
 function showPage(page) {
+  currentPage = page;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.id === `page-${page}`));
+  applyBlur();
+}
+
+// ---- Blur (privacy) feature ----
+// When enabled, any number that is not a percentage is blurred to hide monetary
+// values. The Assets page is excluded (it shows prices, not portfolio value).
+
+// Matches a currency amount: a currency symbol followed by a number (e.g. "€23,733.29", "$1,234.56").
+const BLUR_CURRENCY_RE = /([€$£¥₹₽₩₺₴₦฿₫₪₱₲₡₵₸₼₾₿¤])\s*(\d[\d.,]*)/g;
+
+function blurActive() {
+  return blurMode && currentPage !== 'assets';
+}
+
+function applyBlur() {
+  const active = blurActive();
+  document.body.classList.toggle('blur-mode', active);
+  const btn = $('#blurButton');
+  if (btn) btn.classList.toggle('active', blurMode);
+  if (active) {
+    blurNumbers(document.body);
+  } else {
+    unblurNumbers(document.body);
+  }
+}
+
+function toggleBlur() {
+  blurMode = !blurMode;
+  applyBlur();
+}
+
+function blurNumbers(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement && node.parentElement.closest('.blur-num')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    const text = node.nodeValue;
+    if (!BLUR_CURRENCY_RE.test(text)) return;
+    const frag = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match;
+    BLUR_CURRENCY_RE.lastIndex = 0;
+    while ((match = BLUR_CURRENCY_RE.exec(text)) !== null) {
+      if (match.index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      // Keep the currency symbol (and any whitespace) readable, blur only the amount.
+      const symbolPart = match[0].slice(0, match[0].length - match[2].length);
+      frag.appendChild(document.createTextNode(symbolPart));
+      const span = document.createElement('span');
+      span.className = 'blur-num';
+      span.textContent = match[2];
+      frag.appendChild(span);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+
+function unblurNumbers(root) {
+  root.querySelectorAll('.blur-num').forEach(span => {
+    const text = document.createTextNode(span.textContent);
+    span.parentNode.replaceChild(text, span);
+  });
+  // Merge adjacent text nodes so the currency symbol and amount are back in a
+  // single node (otherwise re-blurring can't see the symbol next to the number).
+  root.normalize();
+}
+
+let blurObserver = null;
+function initBlurObserver() {
+  if (blurObserver) return;
+  blurObserver = new MutationObserver(() => {
+    if (blurActive()) blurNumbers(document.body);
+  });
+  blurObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 function showApp() {
@@ -2997,6 +3081,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // Blur (privacy) feature: eye button + "H" keyboard shortcut.
+  const blurBtn = $('#blurButton');
+  if (blurBtn) blurBtn.addEventListener('click', toggleBlur);
+  document.addEventListener('keydown', event => {
+    if (event.key.toLowerCase() === 'h' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const target = event.target;
+      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (!typing) toggleBlur();
+    }
+  });
+  initBlurObserver();
+  applyBlur();
 
   // Register service worker for PWA support (progressive enhancement).
   if ('serviceWorker' in navigator) {

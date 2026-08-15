@@ -43,7 +43,10 @@
   <div id="app">
     <div class="topbar">
       <div class="brand"><span class="dot"></span> Portfolio Manager</div>
-      <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data">⟳</button>
+      <div class="topbar-actions">
+        <button class="blur-btn" id="blurButton" title="Toggle privacy blur (H)" aria-label="Toggle privacy blur (H)">🛡</button>
+        <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data">⟳</button>
+      </div>
       <div class="topbar-right">
         <span class="role-pill" id="rolePill">guest</span>
         <span id="usernameLabel" style="font-size:13px;color:var(--muted);"></span>

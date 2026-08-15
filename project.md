@@ -277,6 +277,17 @@ The modal presents a numbered 4-step usage guide:
 
 **Help button:** a **❓ Help** button (`#helpButton`) sits in the topbar, left of the **Log out** button. Clicking it reopens the welcome/usage-guide modal at any time via `showWelcomeModal(state.guest)`, so users can revisit the guide after dismissing it — showing the correct variant (guest demo guide vs. regular first-run guide). It uses the same `.logout-btn` styling as the Log out button.
 
+### Blur (privacy) feature
+
+A privacy toggle that blurs **monetary values only**, so a user can show their portfolio and its distributions (percentages, quantities, dates stay readable) without revealing any actual monetary value.
+
+- **Toggle:** a **🛡 privacy** button (`#blurButton`) sits in the topbar, **left of the refresh button**, grouped with it in a `.topbar-actions` flex container so the two always stay together. Clicking it toggles blur on/off. The **`H`** keyboard shortcut does the same (ignored while typing in an input/textarea/contentEditable, so it never interferes with data entry).
+- **State:** module-level `blurMode` (bool) + `currentPage` (string, updated in `showPage`). `blurActive()` returns `blurMode && currentPage !== 'assets'`.
+- **Assets page excluded:** blur never applies on the **Assets** page (it lists prices, not portfolio value). The privacy button still reflects the global toggle state, but no numbers are blurred there; navigating to any other page re-applies the blur.
+- **Mechanism:** `applyBlur()` toggles a `blur-mode` class on `<body>` and the `.active` class on the privacy button, then calls `blurNumbers()`/`unblurNumbers()`. `blurNumbers()` walks text nodes and wraps the numeric part of each currency amount in a `<span class="blur-num">` (CSS `filter: blur(5px)`), leaving the currency symbol readable. `unblurNumbers()` replaces each span with a text node and then calls `root.normalize()` to merge adjacent text nodes back into a single node — this is essential so the currency symbol and amount are adjacent again and re-blurring works (without it, the amount becomes a bare number with no symbol and won't be re-blurred). A `MutationObserver` (`initBlurObserver`) re-applies the blur automatically after any re-render (e.g. `loadData()`/refresh), so it stays correct across page changes and data updates.
+- **Currency-only detection:** the regex `BLUR_CURRENCY_RE = /([€$£¥₹₽₩₺₴₦฿₫₪₱₲₡₵₸₼₾₿¤])\s*(\d[\d.,]*)/g` matches a currency symbol followed by a number, and only the number is blurred. So `€23,733.29 · 24.4%` blurs only `23,733.29` (the `€` and `24.4%` stay readable), `$1,234.56` blurs `1,234.56`, while quantities (`10`), percentages (`+5.66%`), and other bare numbers are left untouched. Unblurring restores the exact original text (no `%` merge).
+- **Styling:** `.topbar-actions` (flex container holding the two buttons), `.blur-btn` (mirrors `.refresh-btn`), `.blur-btn.active` (accent-filled when on), and `.blur-num` (`filter: blur(5px)`, `user-select: none`) in `css/portfolio.css`.
+
 ### Admin-only UI
 Admin-only elements are gated by `isAdminUser()` and/or the `admin-action` CSS class. The admin nav section (`#adminSectionLabel`, `#navImport`, `#navExport`, `#navUsers`) is shown only for admins.
 

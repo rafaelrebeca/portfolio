@@ -170,6 +170,12 @@ a {
   gap: 14px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .role-pill {
   padding: 4px 12px;
   border-radius: 20px;
@@ -271,7 +277,6 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 12px;
   flex-shrink: 0;
 }
 
@@ -286,6 +291,39 @@ a {
 
 @keyframes refresh-spin {
   to { transform: rotate(360deg); }
+}
+
+.blur-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.blur-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.blur-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.blur-num {
+  filter: blur(5px);
+  user-select: none;
+  cursor: default;
 }
 
 .page {
