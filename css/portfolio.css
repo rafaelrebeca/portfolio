@@ -636,6 +636,10 @@ tbody tr:last-child td {
   color: var(--warn);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .modal-overlay {
   display: none;
   position: fixed;

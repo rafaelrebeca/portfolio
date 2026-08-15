@@ -93,9 +93,13 @@ function formatCurrency(amount, currency = 'USD') {
   }
 }
 
-function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('show'); }
-function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('show'); }
-function closeAllModals() { document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show')); }
+function syncBodyScrollLock() {
+  const anyOpen = document.querySelectorAll('.modal-overlay.show').length > 0;
+  document.body.classList.toggle('modal-open', anyOpen);
+}
+function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('show'); syncBodyScrollLock(); }
+function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('show'); syncBodyScrollLock(); }
+function closeAllModals() { document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show')); syncBodyScrollLock(); }
 
 function confirmDialog(message, okLabel = 'Delete') {
   return new Promise(resolve => {
