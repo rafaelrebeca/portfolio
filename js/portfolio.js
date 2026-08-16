@@ -199,7 +199,23 @@ async function loadData() {
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
   }
+  await loadTimeTravelList();
   render();
+}
+
+// Fetch the user's snapshot list (for the Time Travel arrows) without opening the modal.
+async function loadTimeTravelList() {
+  if (state.guest || !state.user) {
+    timeTravelList = [];
+    return;
+  }
+  try {
+    const { snapshots } = await request('/snapshots');
+    timeTravelList = snapshots || [];
+  } catch {
+    timeTravelList = [];
+  }
+  updateTimeTravelArrows();
 }
 
 let allocationChartInstance = null;
@@ -1000,19 +1016,22 @@ function renderTimeTravelBanner() {
 }
 
 // Enable/disable the prev/next arrows based on the current snapshot's position in the list.
+// timeTravelList is newest-first, so "previous" (older) is a higher index, "next" (newer) is a lower index.
 function updateTimeTravelArrows() {
   const prevBtn = $('#timeTravelPrevBtn');
   const nextBtn = $('#timeTravelNextBtn');
   if (!prevBtn || !nextBtn) return;
   if (!timeTravelActive()) {
-    prevBtn.disabled = true;
+    // Not viewing a snapshot: back is active if any snapshot exists (enters Time Travel), forward is disabled.
+    prevBtn.disabled = timeTravelList.length === 0;
     nextBtn.disabled = true;
     return;
   }
   const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
-  // timeTravelList is newest-first, so "previous" (older) is a higher index, "next" (newer) is a lower index.
+  // Back (older) is active when there is an older snapshot.
   prevBtn.disabled = idx < 0 || idx >= timeTravelList.length - 1;
-  nextBtn.disabled = idx <= 0;
+  // Forward (newer) is active when there is a newer snapshot; on the most recent snapshot it stays active to exit Time Travel.
+  nextBtn.disabled = idx < 0;
 }
 
 async function openTimeTravelModal() {
@@ -1075,18 +1094,27 @@ async function viewSnapshot(day) {
 }
 
 // Navigate to the previous (older) snapshot in the list.
+// When not viewing a snapshot, enters Time Travel at the most recent snapshot.
 async function goToPrevSnapshot() {
-  if (!timeTravelActive()) return;
+  if (!timeTravelActive()) {
+    if (timeTravelList.length === 0) return;
+    await viewSnapshot(timeTravelList[0].day);
+    return;
+  }
   const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
   if (idx < 0 || idx >= timeTravelList.length - 1) return;
   await viewSnapshot(timeTravelList[idx + 1].day);
 }
 
 // Navigate to the next (newer) snapshot in the list.
+// When on the most recent snapshot, exits Time Travel back to the live dashboard.
 async function goToNextSnapshot() {
   if (!timeTravelActive()) return;
   const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
-  if (idx <= 0) return;
+  if (idx <= 0) {
+    exitTimeTravel();
+    return;
+  }
   await viewSnapshot(timeTravelList[idx - 1].day);
 }
 
@@ -2619,17 +2647,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Modal close buttons
   $('#closeAssetModalBtn')?.addEventListener('click', () => closeModal('assetModalOverlay'));
-  $('#closeUpdateAssetModalBtn')?.addEventListener('click', () => closeModal('updateAssetModalOverlay'));
-  $('#closeUpdateAllPricesBtn')?.addEventListener('click', () => closeModal('updateAllPricesModalOverlay'));
   $('#closeProviderModalBtn')?.addEventListener('click', () => closeModal('providerModalOverlay'));
   $('#closeAccountModalBtn')?.addEventListener('click', () => closeModal('accountModalOverlay'));
   $('#closeHoldingModalBtn')?.addEventListener('click', () => closeModal('holdingModalOverlay'));
   $('#closeGoalModalBtn')?.addEventListener('click', () => closeModal('goalModalOverlay'));
-  $('#closeGoalSimBtn')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
   $('#goalSimForm')?.addEventListener('submit', event => { event.preventDefault(); runGoalSimulation(); });
-  $('#closeGoalDetailsBtn')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
-  $('#closeAccountDetailsBtn')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
-  $('#closeProviderDetailsBtn')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');
