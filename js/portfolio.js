@@ -1146,23 +1146,28 @@ function renderAssets() {
   const admin = isAdminUser();
 
   if ($('#assetsTable')) {
-    $('#assetsTable').innerHTML = items.length ? items.map(a => `
+    $('#assetsTable').innerHTML = items.length ? items.map(a => {
+      const personal = a.is_personal === 1;
+      const canManage = personal ? (admin || a.user_id === state.user?.id) : admin;
+      const displayName = personal ? `[${a.name}]` : a.name;
+      return `
       <tr>
         <td><strong>${esc(a.symbol || '—')}</strong></td>
-        <td>${esc(a.name)}</td>
+        <td>${esc(displayName)}</td>
         <td><span class="tag ${a.type}">${esc(a.type)}</span></td>
         <td>${a.price == null ? '—' : formatCurrency(a.price, a.coin || 'USD')}</td>
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${admin ? `<button class="btn-sm" data-update-asset="${a.id}">Update</button>` : ''}
-            ${admin ? `<button class="btn-sm" data-edit-asset="${a.id}">Edit</button>` : ''}
-            ${admin ? `<button class="btn-sm danger" data-delete-asset="${a.id}">Delete</button>` : ''}
+            ${!personal && admin ? `<button class="btn-sm" data-update-asset="${a.id}">Update</button>` : ''}
+            ${canManage ? `<button class="btn-sm" data-edit-asset="${a.id}">Edit</button>` : ''}
+            ${canManage ? `<button class="btn-sm danger" data-delete-asset="${a.id}">Delete</button>` : ''}
             <button class="btn-sm" data-add-asset-to-account="${a.id}">+ Add to Account</button>
           </div>
         </td>
       </tr>
-    `).join('') : emptyRow(6, 'No assets found.');
+    `;
+    }).join('') : emptyRow(6, 'No assets found.');
   }
 }
 
@@ -1379,11 +1384,13 @@ function renderHoldings() {
     const value = price * Number(h.quantity || 0);
     const currency = h.coin || asset?.coin || 'USD';
     const symbol = h.symbol || asset?.symbol || '—';
-    const name = h.asset_name || asset?.name || '—';
+    const isPersonalHolding = asset?.is_personal === 1 || h.asset_id < 0;
+    const name = (h.asset_name || asset?.name || '—');
+    const displayName = isPersonalHolding ? `[${name}]` : name;
     const accName = h.account_name || account?.name || '—';
 
     return `<tr>
-      <td><strong>${esc(symbol)}</strong> — ${esc(name)}</td>
+      <td><strong>${esc(symbol)}</strong> — ${esc(displayName)}</td>
       <td>${esc(accName)} <span style="color:var(--muted);font-size:11px;">(${esc(provider ? provider.name : '')})</span></td>
       <td>${h.quantity}</td>
       <td>${h.purchase_price == null ? '—' : formatCurrency(h.purchase_price, currency)}</td>
@@ -1424,8 +1431,10 @@ function openAccountDetailsModal(accountId) {
     if (!asset) return;
     const val = Number(asset.price || 0) * Number(h.quantity || 0);
     const converted = convertToEUR(val, asset.coin || 'USD');
-    const label = h.symbol || asset.symbol || asset.name || 'Unknown';
-    assetMap[label] = (assetMap[label] || 0) + converted;
+    const isPersonalHolding = asset.is_personal === 1 || h.asset_id < 0;
+    const label = (h.symbol || asset.symbol || asset.name || 'Unknown');
+    const displayLabel = isPersonalHolding ? `[${label}]` : label;
+    assetMap[displayLabel] = (assetMap[displayLabel] || 0) + converted;
   });
 
   const assetTop = topNWithOthers(assetMap, 9);
@@ -1755,7 +1764,7 @@ function fillHoldingAssetSelect(keepAssetId = null) {
   if (keepAssetId != null) existingAssetIds.delete(Number(keepAssetId));
   let assets = typeFilter ? state.assets.filter(a => a.type === typeFilter) : state.assets;
   assets = assets.filter(a => !existingAssetIds.has(a.id));
-  select.innerHTML = assets.length ? assets.map(a => `<option value="${a.id}">${esc(a.symbol || a.name)} — ${esc(a.name)}</option>`).join('') : '<option value="">No assets available</option>';
+  select.innerHTML = assets.length ? assets.map(a => `<option value="${a.id}">${esc(a.symbol || a.name)} — ${a.is_personal === 1 ? `[${esc(a.name)}]` : esc(a.name)}</option>`).join('') : '<option value="">No assets available</option>';
 }
 
 function fillSelects() {
@@ -1941,7 +1950,7 @@ async function logout() {
 
 /* ================= MODAL OPEN / EDIT HELPERS ================= */
 
-function openAssetModal(assetId = null) {
+function openAssetModal(assetId = null, isPersonal = false) {
   const form = $('#assetForm');
   if (!form) return;
   form.reset();
@@ -1949,7 +1958,8 @@ function openAssetModal(assetId = null) {
   if (assetId) {
     const a = state.assets.find(item => item.id === assetId);
     if (!a) return;
-    $('#assetModalTitle').textContent = 'Edit Asset';
+    isPersonal = a.is_personal === 1;
+    $('#assetModalTitle').textContent = isPersonal ? 'Edit Personal Asset' : 'Edit Asset';
     $('#assetEditId').value = a.id;
     $('#assetName').value = a.name;
     $('#assetSymbol').value = a.symbol || '';
@@ -1959,10 +1969,11 @@ function openAssetModal(assetId = null) {
     $('#assetYield').value = a.dividend_yield ?? '';
     $('#assetMonths').value = (a.payment_months || []).join(',');
   } else {
-    $('#assetModalTitle').textContent = 'New Asset';
+    $('#assetModalTitle').textContent = isPersonal ? 'New Personal Asset' : 'New Asset';
     $('#assetEditId').value = '';
     $('#assetCoin').value = 'USD';
   }
+  form.dataset.isPersonal = isPersonal ? '1' : '0';
   openModal('assetModalOverlay');
 }
 
@@ -2600,6 +2611,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Modal open triggers
   $('#newAssetBtn')?.addEventListener('click', () => openAssetModal());
+  $('#newPersonalAssetBtn')?.addEventListener('click', () => openAssetModal(null, true));
   $('#updateAllPricesBtn')?.addEventListener('click', () => openBulkUpdateModal());
   $('#newProviderBtn')?.addEventListener('click', () => openProviderModal());
   $('#newAccountBtn')?.addEventListener('click', () => openAccountModal());
@@ -2716,17 +2728,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const isPersonal = event.currentTarget.dataset.isPersonal === '1';
+    const realId = isPersonal ? Math.abs(assetId) : assetId;
     try {
       if (assetId) {
-        await request(`/assets/${assetId}`, { method: 'PUT', body: JSON.stringify(values) });
+        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${realId}`, { method: 'PUT', body: JSON.stringify(values) });
       } else {
-        await request('/assets', { method: 'POST', body: JSON.stringify(values) });
+        await request(isPersonal ? '/personal-assets' : '/assets', { method: 'POST', body: JSON.stringify(values) });
       }
       closeModal('assetModalOverlay');
       if ($('#assetSearch')) $('#assetSearch').value = '';
       if ($('#assetTypeFilter')) $('#assetTypeFilter').value = '';
       await loadData();
-      toast(assetId ? 'Asset updated.' : 'New asset saved.');
+      toast(assetId ? (isPersonal ? 'Personal asset updated.' : 'Asset updated.') : (isPersonal ? 'New personal asset saved.' : 'New asset saved.'));
     } catch (error) {
       if (err) err.textContent = error.message;
     }
@@ -3173,7 +3187,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteAssetBtn = event.target.closest('[data-delete-asset]');
     if (deleteAssetBtn) {
       const assetId = Number(deleteAssetBtn.dataset.deleteAsset);
-      if (!await confirmDialog('Delete this asset? This will also remove any holdings using it.')) return;
+      const asset = state.assets.find(a => a.id === assetId);
+      const isPersonal = asset?.is_personal === 1;
+      if (!await confirmDialog(isPersonal ? 'Delete this personal asset?' : 'Delete this asset? This will also remove any holdings using it.')) return;
       if (state.guest) {
         guestData.assets = guestData.assets.filter(a => a.id !== assetId);
         await loadData();
@@ -3181,9 +3197,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       try {
-        await request(`/assets/${assetId}`, { method: 'DELETE' });
+        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${isPersonal ? Math.abs(assetId) : assetId}`, { method: 'DELETE' });
         await loadData();
-        toast('Asset deleted.');
+        toast(isPersonal ? 'Personal asset deleted.' : 'Asset deleted.');
       } catch (err) {
         toast(err.message);
       }

@@ -137,7 +137,7 @@
         <!-- ASSETS -->
         <div class="page" id="page-assets">
           <div class="page-title">Assets</div>
-          <div class="page-desc">All tracked market securities on the platform</div>
+          <div class="page-desc">Platform assets and personal assets. Personal asset names are marked with [].</div>
           <div class="toolbar">
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
               <input id="assetSearch" class="search-input" placeholder="Search symbol or name...">
@@ -151,6 +151,8 @@
               </select>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="btn-sm primary write-action" id="newPersonalAssetBtn" style="display:none;">+ New
+                Personal Asset</button>
               <button class="btn-sm primary write-action admin-action" id="newAssetBtn" style="display:none;">+ New
                 Asset</button>
               <button class="btn-sm success admin-action" id="updateAllPricesBtn" style="display:none;">↻ Update All
@@ -783,7 +785,8 @@
             <p class="welcome-title">Sample <span class="kw kw-assets" data-page="assets">Assets</span></p>
             <p class="welcome-text">The demo ships with a few <span class="kw kw-assets" data-page="assets">assets</span>
               — like <em>AAPL</em>, <em>VYM</em>, <em>TLT</em> and <em>MSFT</em> — each with a price, type and dividend
-              yield.</p>
+              yield. You can also add your own <strong>personal assets</strong> (shown in <strong>[]</strong>) — these
+              are demo-only and not saved.</p>
           </div>
         </div>
 
@@ -867,6 +870,16 @@
                 data-page="assets">Assets</span> and <span class="menu" data-page="dividends">Dividends</span> menus
               unlock — letting you add <span class="kw kw-holding" data-page="portfolio">Holdings</span> / <span
                 class="kw kw-asset" data-page="assets">Assets</span> to your portfolio on any existing asset account.</p>
+          </div>
+        </div>
+
+        <div class="welcome-step">
+          <span class="welcome-num">5</span>
+          <div>
+            <p class="welcome-title">Track <span class="kw kw-assets" data-page="assets">Personal Assets</span></p>
+            <p class="welcome-text">On the <span class="menu" data-page="assets">Assets</span> page, click <strong>+ New
+                Personal Asset</strong> to track something that isn't a platform security (e.g. a private holding or a
+              custom item). Personal assets are private to your account and their names are shown in <strong>[]</strong>.</p>
           </div>
         </div>
       </div>

@@ -13,7 +13,7 @@ Private portfolio management dashboard. Tracks assets, dividends, providers, acc
 | Database | Cloudflare D1 (SQLite) — binding name `myd1db` |
 | Frontend | Vanilla HTML + CSS + JS (ES modules), no framework |
 | Charts | Chart.js (loaded from CDN) |
-| Auth | Session cookie (`portfolio_session`), bcrypt password hashing |
+| Auth | Session cookie (`portfolio_session`), bcrypt password hashing. Cookie is `HttpOnly; Secure; SameSite=Strict` (see §6 Auth) |
 | External APIs | Massive.com (stock prices), ExchangeRate-API (currency) |
 
 ---
@@ -100,6 +100,8 @@ Single catch-all worker. All routes are under `/api/...`. Auth helpers:
 | POST | `/api/auth/login` | public | Login, sets `portfolio_session` cookie |
 | POST | `/api/auth/logout` | user | Clears session |
 | GET | `/api/auth/me` | user | Current user info |
+
+**Session cookie security:** the `portfolio_session` cookie is set with `HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`. `HttpOnly` prevents JavaScript from reading the token (mitigates XSS token theft), `Secure` restricts it to HTTPS, and `SameSite=Strict` stops the browser from sending the cookie on cross-site requests — this is the CSRF defense, so a request from another origin arrives unauthenticated and fails `requireUser`. Note: `Secure` means the cookie is not set over plain `http://localhost` during local `npm run dev` (dev-only quirk, not a production issue).
 
 ### Assets
 | Method | Path | Access | Description |

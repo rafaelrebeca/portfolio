@@ -39,6 +39,16 @@ function assetsStatement(db) {
 }
 function normalizeAssets(items) { return items.map(item => ({ ...item, payment_months: item.payment_months ? item.payment_months.split(',').map(Number).sort((a, b) => a - b) : [] })); }
 
+// Personal assets are scoped to a user and flagged so the frontend can render
+// their display name in [] and apply the right permissions. Their id is
+// negated so it never collides with a platform asset id in the merged list
+// (both tables use independent auto-increment id spaces).
+function personalAssetsStatement(db, userId) {
+  return db.prepare(`SELECT -id AS id, name, symbol, type, price, coin, user_id,
+    NULL AS dividend_yield, NULL AS payment_months, 1 AS is_personal
+    FROM personal_assets WHERE user_id = ? ORDER BY COALESCE(symbol, name)`).bind(userId);
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (!env.myd1db) return fail('D1 binding "myd1db" is not configured.', 500);
@@ -63,7 +73,13 @@ export async function onRequest(context) {
     }
     if (method === 'GET' && path === 'auth/me') { const user = await requireUser(request, env); return json({ user }); }
 
-    if (method === 'GET' && path === 'assets') { await requireMember(request, env); return json({ items: normalizeAssets((await assetsStatement(env.myd1db).all()).results) }); }
+    if (method === 'GET' && path === 'assets') {
+      const user = await requireMember(request, env);
+      const platform = normalizeAssets((await assetsStatement(env.myd1db).all()).results);
+      const personal = normalizeAssets((await personalAssetsStatement(env.myd1db, user.id).all()).results);
+      const items = [...platform, ...personal].sort((a, b) => (a.symbol || a.name).localeCompare(b.symbol || b.name));
+      return json({ items });
+    }
     if (method === 'POST' && path === 'assets') {
       await requireAdmin(request, env);
       const body = await readBody(request);
@@ -139,6 +155,38 @@ export async function onRequest(context) {
         env.myd1db.prepare('DELETE FROM dividend_payment_months WHERE asset_id = ?').bind(id),
         env.myd1db.prepare('DELETE FROM assets WHERE id = ?').bind(id)
       ]);
+      return json({ ok: true });
+    }
+    // --- Personal assets (per-user, both admin and user can create) ---
+    if (method === 'POST' && path === 'personal-assets') {
+      const user = await requireMember(request, env);
+      const body = await readBody(request);
+      const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
+      const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
+      const coin = clean(body.coin) || 'USD';
+      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin).run();
+      return json({ id: result.meta.last_row_id, ok: true }, 201);
+    }
+    if ((method === 'PUT' || method === 'PATCH') && /^personal-assets\/\d+$/.test(path)) {
+      const user = await requireMember(request, env);
+      const id = Number(path.split('/')[1]);
+      const body = await readBody(request);
+      const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
+      const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
+      const coin = clean(body.coin) || 'USD';
+      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      const owner = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').first();
+      if (!owner) return fail('Personal asset not found.', 404);
+      const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, symbol, type, price, coin, id).run();
+      if (!changed(updateRes)) return fail('Failed to update personal asset.', 500);
+      return json({ ok: true });
+    }
+    if (method === 'DELETE' && /^personal-assets\/\d+$/.test(path)) {
+      const user = await requireMember(request, env);
+      const id = Number(path.split('/')[1]);
+      const result = await env.myd1db.prepare('DELETE FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').run();
+      if (!changed(result)) return fail('Personal asset not found.', 404);
       return json({ ok: true });
     }
     if (method === 'POST' && /^assets\/\d+\/price$/.test(path)) {
@@ -231,17 +279,41 @@ export async function onRequest(context) {
 
     if (method === 'GET' && path === 'holdings') {
       const user = await requireMember(request, env);
-      const { results } = await env.myd1db.prepare(`SELECT h.id, h.account_id, h.asset_id, h.quantity, h.purchase_price, a.name AS account_name, s.name AS asset_name, s.symbol, s.price, s.coin
-        FROM account_holdings h JOIN accounts a ON a.id = h.account_id JOIN providers p ON p.id = a.provider_id JOIN assets s ON s.id = h.asset_id WHERE p.user_id = ? ORDER BY a.name, s.name`).bind(user.id).all();
-      return json({ items: results });
+      const { results } = await env.myd1db.prepare(`SELECT h.id, h.account_id, h.asset_id, h.personal_asset_id, h.quantity, h.purchase_price, a.name AS account_name,
+        COALESCE(s.name, ps.name) AS asset_name, COALESCE(s.symbol, ps.symbol) AS symbol, COALESCE(s.price, ps.price) AS price, COALESCE(s.coin, ps.coin) AS coin
+        FROM account_holdings h JOIN accounts a ON a.id = h.account_id JOIN providers p ON p.id = a.provider_id
+        LEFT JOIN assets s ON s.id = h.asset_id
+        LEFT JOIN personal_assets ps ON ps.id = h.personal_asset_id
+        WHERE p.user_id = ? ORDER BY a.name, asset_name`).bind(user.id).all();
+      // Personal holdings are returned with a negated asset_id so the frontend
+      // can resolve them against state.assets (which holds personal assets with
+      // negated ids) using the same lookup as platform holdings.
+      const items = results.map(h => ({ ...h, asset_id: h.personal_asset_id != null ? -h.personal_asset_id : h.asset_id }));
+      return json({ items });
     }
     if (method === 'POST' && path === 'holdings') {
-      const user = await requireMember(request, env), body = await readBody(request), accountId = Number(body.account_id), assetId = Number(body.asset_id), quantity = Number(body.quantity), purchasePrice = body.purchase_price === null ? null : Number(body.purchase_price);
-      if (!Number.isInteger(accountId) || !Number.isInteger(assetId) || !Number.isFinite(quantity) || quantity <= 0 || (purchasePrice !== null && (!Number.isFinite(purchasePrice) || purchasePrice < 0))) return fail('Provide valid holding details.');
+      const user = await requireMember(request, env), body = await readBody(request), accountId = Number(body.account_id), quantity = Number(body.quantity), purchasePrice = body.purchase_price === null ? null : Number(body.purchase_price);
+      // A holding references either a platform asset (asset_id) or a personal
+      // asset (personal_asset_id). The frontend sends personal assets with a
+      // negated id, so a negative asset_id means a personal asset.
+      const rawAssetId = Number(body.asset_id);
+      const isPersonal = rawAssetId < 0;
+      const assetId = isPersonal ? null : rawAssetId;
+      const personalAssetId = isPersonal ? Math.abs(rawAssetId) : null;
+      if (!Number.isInteger(accountId) || !Number.isFinite(quantity) || quantity <= 0 || (purchasePrice !== null && (!Number.isFinite(purchasePrice) || purchasePrice < 0))) return fail('Provide valid holding details.');
       const account = await env.myd1db.prepare(`SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND a.type = 'asset_account' AND p.user_id = ?`).bind(accountId, user.id).first();
-      const asset = await env.myd1db.prepare('SELECT id FROM assets WHERE id = ?').bind(assetId).first(); if (!account || !asset) return fail('Asset account or asset not found.', 404);
-      await env.myd1db.prepare(`INSERT INTO account_holdings (account_id, asset_id, quantity, purchase_price) VALUES (?, ?, ?, ?)
-        ON CONFLICT(account_id, asset_id) DO UPDATE SET quantity = excluded.quantity, purchase_price = excluded.purchase_price`).bind(accountId, assetId, quantity, purchasePrice).run();
+      if (!account) return fail('Asset account not found.', 404);
+      if (isPersonal) {
+        const personal = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND user_id = ?').bind(personalAssetId, user.id).first();
+        if (!personal) return fail('Personal asset not found.', 404);
+        await env.myd1db.prepare(`INSERT INTO account_holdings (account_id, personal_asset_id, quantity, purchase_price) VALUES (?, ?, ?, ?)
+          ON CONFLICT(account_id, asset_id, personal_asset_id) DO UPDATE SET quantity = excluded.quantity, purchase_price = excluded.purchase_price`).bind(accountId, personalAssetId, quantity, purchasePrice).run();
+      } else {
+        const asset = await env.myd1db.prepare('SELECT id FROM assets WHERE id = ?').bind(assetId).first();
+        if (!asset) return fail('Asset not found.', 404);
+        await env.myd1db.prepare(`INSERT INTO account_holdings (account_id, asset_id, quantity, purchase_price) VALUES (?, ?, ?, ?)
+          ON CONFLICT(account_id, asset_id, personal_asset_id) DO UPDATE SET quantity = excluded.quantity, purchase_price = excluded.purchase_price`).bind(accountId, assetId, quantity, purchasePrice).run();
+      }
       return json({ ok: true }, 201);
     }
     if (method === 'DELETE' && /^holdings\/\d+$/.test(path)) {
