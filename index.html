@@ -74,8 +74,18 @@
 
         <!-- DASHBOARD -->
         <div class="page active" id="page-dashboard">
-          <div class="page-title">Dashboard</div>
-          <div class="page-desc">Portfolio overview and recent activity</div>
+          <div class="page-head">
+            <div>
+              <div class="page-title">Dashboard</div>
+              <div class="page-desc">Portfolio overview and recent activity</div>
+            </div>
+            <div class="time-travel-controls" style="display:none;">
+              <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" disabled>←</button>
+              <button class="btn-sm" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰 Time Travel</button>
+              <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
+            </div>
+          </div>
+          <div id="timeTravelBanner" class="banner" style="display:none;"></div>
           <div id="guestBanner" class="banner" style="display:none;">
             You are viewing demo/mock data as a Guest. Sign in to view and manage your own portfolio.
           </div>
@@ -367,7 +377,10 @@
   <!-- MODAL: Asset (Create / Edit) -->
   <div class="modal-overlay" id="assetModalOverlay">
     <div class="modal">
-      <h3 id="assetModalTitle">New Asset</h3>
+      <div class="modal-head">
+        <h3 id="assetModalTitle">New Asset</h3>
+        <button class="modal-close" type="button" id="closeAssetModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="assetForm">
         <input type="hidden" id="assetEditId" name="asset_id">
         <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required
@@ -407,7 +420,10 @@
   <!-- MODAL: Update Asset Value -->
   <div class="modal-overlay" id="updateAssetModalOverlay">
     <div class="modal">
-      <h3>Update Asset Value</h3>
+      <div class="modal-head">
+        <h3>Update Asset Value</h3>
+        <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <p class="modal-copy">Fetching the latest price for <strong id="updateAssetName"></strong> from Massive.</p>
       <div class="field" id="updateAssetProgressWrap">
         <label>Fetching latest price…</label>
@@ -435,7 +451,10 @@
   <!-- MODAL: Update All Prices (bulk) -->
   <div class="modal-overlay" id="updateAllPricesModalOverlay">
     <div class="modal">
-      <h3>Update All Prices</h3>
+      <div class="modal-head">
+        <h3>Update All Prices</h3>
+        <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close" aria-label="Close">✕</button>
+      </div>
       <p class="modal-copy">Updating prices for all <strong>USD stocks</strong> from Massive. Bonds, ETFs, CFDs,
         commodities and non-USD assets are skipped. Massive is limited to 4 calls/minute, so this may take a while.</p>
       <div class="field">
@@ -456,7 +475,10 @@
   <!-- MODAL: Provider (Create / Edit) -->
   <div class="modal-overlay" id="providerModalOverlay">
     <div class="modal">
-      <h3 id="providerModalTitle">New Provider</h3>
+      <div class="modal-head">
+        <h3 id="providerModalTitle">New Provider</h3>
+        <button class="modal-close" type="button" id="closeProviderModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="providerForm">
         <input type="hidden" id="providerEditId" name="provider_id">
         <div class="field"><label>Provider Name</label><input type="text" id="providerName" name="name" required
@@ -480,7 +502,10 @@
   <!-- MODAL: Account (Create / Edit) -->
   <div class="modal-overlay" id="accountModalOverlay">
     <div class="modal">
-      <h3 id="accountModalTitle">New Account</h3>
+      <div class="modal-head">
+        <h3 id="accountModalTitle">New Account</h3>
+        <button class="modal-close" type="button" id="closeAccountModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="accountForm">
         <input type="hidden" id="accountEditId" name="account_id">
         <div class="field"><label>Provider</label>
@@ -518,7 +543,10 @@
   <!-- MODAL: Holding (Create / Edit) -->
   <div class="modal-overlay" id="holdingModalOverlay">
     <div class="modal">
-      <h3 id="holdingModalTitle">Add Holding</h3>
+      <div class="modal-head">
+        <h3 id="holdingModalTitle">Add Holding</h3>
+        <button class="modal-close" type="button" id="closeHoldingModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="holdingForm">
         <input type="hidden" id="holdingEditId" name="holding_id">
         <div class="field"><label>Asset Account</label>
@@ -553,7 +581,10 @@
   <!-- MODAL: Goal (Create / Edit) -->
   <div class="modal-overlay" id="goalModalOverlay">
     <div class="modal" style="max-width:480px;">
-      <h3 id="goalModalTitle">New Goal</h3>
+      <div class="modal-head">
+        <h3 id="goalModalTitle">New Goal</h3>
+        <button class="modal-close" type="button" id="closeGoalModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="goalForm">
         <input type="hidden" id="goalEditId" name="goal_id">
         <div class="field"><label>Goal Name</label><input type="text" id="goalName" name="goal_name" required
@@ -592,7 +623,10 @@
   <!-- MODAL: Goal Simulator -->
   <div class="modal-overlay" id="goalSimModalOverlay">
     <div class="modal" style="max-width:560px;">
-      <h3 id="goalSimTitle">Goal Simulator</h3>
+      <div class="modal-head">
+        <h3 id="goalSimTitle">Goal Simulator</h3>
+        <button class="modal-close" type="button" id="closeGoalSimX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="goalSimForm">
         <input type="hidden" id="goalSimId" name="goal_id">
         <div class="field"><label>Monthly Contribution</label><input type="number" step="0.01" min="0"
@@ -610,7 +644,10 @@
   <!-- MODAL: Goal Details -->
   <div class="modal-overlay" id="goalDetailsModalOverlay">
     <div class="modal" style="max-width:560px;">
-      <h3 id="goalDetailsTitle">Goal Details</h3>
+      <div class="modal-head">
+        <h3 id="goalDetailsTitle">Goal Details</h3>
+        <button class="modal-close" type="button" id="closeGoalDetailsX" title="Close" aria-label="Close">✕</button>
+      </div>
       <div class="goal-details-summary" id="goalDetailsSummary"></div>
       <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
       <div class="goal-details-callout" id="goalDetailsCallout"></div>
@@ -629,7 +666,10 @@
   <!-- MODAL: Account Details (asset breakdown) -->
   <div class="modal-overlay" id="accountDetailsModalOverlay">
     <div class="modal" style="max-width:560px;">
-      <h3 id="accountDetailsTitle">Account Details</h3>
+      <div class="modal-head">
+        <h3 id="accountDetailsTitle">Account Details</h3>
+        <button class="modal-close" type="button" id="closeAccountDetailsX" title="Close" aria-label="Close">✕</button>
+      </div>
       <div class="goal-details-summary" id="accountDetailsSummary"></div>
       <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="accountDetailsChart"></canvas>
@@ -654,7 +694,10 @@
   <!-- MODAL: Provider Details (account breakdown) -->
   <div class="modal-overlay" id="providerDetailsModalOverlay">
     <div class="modal" style="max-width:560px;">
-      <h3 id="providerDetailsTitle">Provider Details</h3>
+      <div class="modal-head">
+        <h3 id="providerDetailsTitle">Provider Details</h3>
+        <button class="modal-close" type="button" id="closeProviderDetailsX" title="Close" aria-label="Close">✕</button>
+      </div>
       <div class="goal-details-summary" id="providerDetailsSummary"></div>
       <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="providerDetailsChart"></canvas>
@@ -679,7 +722,10 @@
   <!-- MODAL: User (Create) -->
   <div class="modal-overlay" id="userModalOverlay">
     <div class="modal">
-      <h3>Create New User</h3>
+      <div class="modal-head">
+        <h3>Create New User</h3>
+        <button class="modal-close" type="button" id="closeUserModalX" title="Close" aria-label="Close">✕</button>
+      </div>
       <form id="userForm">
         <div class="field"><label>Username</label><input type="text" name="username" required placeholder="jane_doe">
         </div>
@@ -706,7 +752,10 @@
   <!-- MODAL: Reset Password -->
   <div class="modal-overlay" id="resetPasswordModalOverlay">
     <div class="modal">
-      <h3>Reset Password</h3>
+      <div class="modal-head">
+        <h3>Reset Password</h3>
+        <button class="modal-close" type="button" id="closeResetPasswordX" title="Close" aria-label="Close">✕</button>
+      </div>
       <p class="modal-copy">Set a new password for <strong id="resetPasswordUsername"></strong>.</p>
       <form id="resetPasswordForm">
         <input type="hidden" id="resetPasswordUserId" name="user_id">
@@ -726,8 +775,17 @@
   <!-- MODAL: Welcome / First-run usage guide -->
   <div class="modal-overlay" id="welcomeModalOverlay">
     <div class="modal welcome-modal">
-      <h3 id="welcomeModalTitle">👋 Welcome to Portfolio Manager</h3>
+      <div class="modal-head">
+        <h3 id="welcomeModalTitle">👋 Welcome to Portfolio Manager</h3>
+        <button class="modal-close" type="button" id="closeWelcomeBtn" title="Close" aria-label="Close">✕</button>
+      </div>
 
+      <div class="welcome-tabs">
+        <button class="welcome-tab active" type="button" data-welcome-page="1">Getting Started</button>
+        <button class="welcome-tab" type="button" data-welcome-page="2">Privacy &amp; Time Travel</button>
+      </div>
+
+      <div class="welcome-page" data-welcome-page="1">
       <!-- Guest demo guide -->
       <div class="welcome-body" id="welcomeGuestBody" style="display:none;">
         <p class="welcome-intro">You're exploring the <span class="kw kw-guest">demo</span>. Here's what you're
@@ -826,10 +884,66 @@
           </div>
         </div>
       </div>
+      </div>
+
+      <div class="welcome-page" data-welcome-page="2" style="display:none;">
+        <div class="welcome-body">
+          <p class="welcome-intro">Your data is private to you, and you can look back at how your dashboard looked on any past day.</p>
+
+          <div class="welcome-step">
+            <span class="welcome-num">1</span>
+            <div>
+              <p class="welcome-title">Your data is <span class="kw kw-guest">private</span></p>
+              <p class="welcome-text">Everything you add — providers, accounts, holdings, assets and goals — is stored
+                only under <strong>your account</strong>. No other user can see it, and guests only ever see the
+                <strong>demo</strong> data. Press <strong>H</strong> to hide the values on screen from people nearby.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">2</span>
+            <div>
+              <p class="welcome-title"><span class="kw kw-goal">Time Travel</span> snapshots</p>
+              <p class="welcome-text">On the <span class="menu" data-page="dashboard">Dashboard</span>, the
+                <strong>🕰 Time Travel</strong> button lets you save a snapshot of today's dashboard and view how it
+                looked on any past day. Snapshots are <strong>private to you</strong>.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">3</span>
+            <div>
+              <p class="welcome-title">One snapshot per <span class="kw kw-guest">day</span></p>
+              <p class="welcome-text">You keep at most <strong>one snapshot per day</strong>. Saving again on the same
+                day <strong>replaces</strong> that day's snapshot. You can <strong>delete</strong> any snapshot you no
+                longer need.</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="modal-actions">
-        <button class="btn-sm primary" type="button" id="welcomeModalOk">Got it, let's start</button>
+        <button class="btn-sm" type="button" id="welcomeModalPrev" style="display:none;">← Back</button>
+        <button class="btn-sm primary" type="button" id="welcomeModalNext">Next →</button>
+        <button class="btn-sm primary" type="button" id="welcomeModalOk" style="display:none;">Got it, let's start</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Time Travel (dashboard snapshots) -->
+  <div class="modal-overlay" id="timeTravelModalOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>🕰 Time Travel</h3>
+        <button class="modal-close" type="button" id="closeTimeTravelBtn" title="Close" aria-label="Close">✕</button>
+      </div>
+      <p class="modal-copy">Save a snapshot of today's dashboard, or view how your dashboard looked on a past day.</p>
+      <div class="modal-actions" style="justify-content:flex-start;margin-bottom:14px;">
+        <button class="btn-sm primary" type="button" id="saveSnapshotBtn">💾 Save today's snapshot</button>
+      </div>
+      <p class="modal-copy" style="font-size:12px;color:var(--muted);margin-bottom:14px;">One snapshot per day — saving again today replaces today's snapshot.</p>
+      <div class="page-title" style="font-size:15px;margin-bottom:10px;">Your snapshots</div>
+      <div id="snapshotList" style="max-height:320px;overflow-y:auto;">Loading...</div>
     </div>
   </div>
 

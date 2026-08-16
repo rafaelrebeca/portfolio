@@ -436,6 +436,46 @@ export async function onRequest(context) {
         return fail('Failed to update currency rates: ' + error.message, 500);
       }
     }
+    // --- Time Travel: dashboard snapshots (one per user per day) ---
+    if (method === 'POST' && path === 'snapshots') {
+      const user = await requireUser(request, env);
+      const body = await readBody(request);
+      if (!body.data || typeof body.data !== 'object') return fail('Snapshot data is required.');
+      const day = stampDay(nowStamp());
+      const created = nowStamp();
+      const data = JSON.stringify(body.data);
+      await env.myd1db.prepare(
+        'INSERT INTO dashboard_snapshots (user_id, day, data, created_at) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(user_id, day) DO UPDATE SET data = excluded.data, created_at = excluded.created_at'
+      ).bind(user.id, day, data, created).run();
+      return json({ ok: true, snapshot: { user_id: user.id, day, data: body.data, created_at: created } }, 201);
+    }
+    if (method === 'GET' && path === 'snapshots') {
+      const user = await requireUser(request, env);
+      const { results } = await env.myd1db.prepare(
+        'SELECT day, data, created_at FROM dashboard_snapshots WHERE user_id = ? ORDER BY day DESC'
+      ).bind(user.id).all();
+      const snapshots = results.map(r => ({ day: r.day, created_at: r.created_at, data: JSON.parse(r.data) }));
+      return json({ snapshots });
+    }
+    if (method === 'GET' && /^snapshots\/\d{8}$/.test(path)) {
+      const user = await requireUser(request, env);
+      const day = path.split('/')[1];
+      const row = await env.myd1db.prepare(
+        'SELECT day, data, created_at FROM dashboard_snapshots WHERE user_id = ? AND day = ?'
+      ).bind(user.id, day).first();
+      if (!row) return fail('Snapshot not found.', 404);
+      return json({ snapshot: { day: row.day, created_at: row.created_at, data: JSON.parse(row.data) } });
+    }
+    if (method === 'DELETE' && /^snapshots\/\d{8}$/.test(path)) {
+      const user = await requireUser(request, env);
+      const day = path.split('/')[1];
+      const result = await env.myd1db.prepare(
+        'DELETE FROM dashboard_snapshots WHERE user_id = ? AND day = ?'
+      ).bind(user.id, day).run();
+      if (!changed(result)) return fail('Snapshot not found.', 404);
+      return json({ ok: true });
+    }
     return fail('Route not found.', 404);
   } catch (error) {
     const status = error.status || 500;

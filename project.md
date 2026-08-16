@@ -82,6 +82,7 @@ Tables referenced by the worker (schema is managed in the Cloudflare D1 console,
 - **goal_link** — `goal_id`, `account_id`
 - **currency** — `coin`, `value` (rate relative to USD)
 - **update_story** — `what` (PK), `when` — records the last time a data source was refreshed. `what` is a label (e.g. `CURRENCY`); `when` is a UTC timestamp in `YYYYMMDDHH24MISS` format (e.g. `20260815103045`). Used to avoid re-calling external APIs that only expose previous-day end-of-day data more than once per day.
+- **dashboard_snapshots** — `user_id`, `day` (PK with `user_id`), `data` (JSON), `created_at` — the **Time Travel** feature. One snapshot per user per day of the Dashboard page values. `day` is a UTC date in `YYYYMMDD` format; `data` is a JSON payload of the dashboard values (see §7d); `created_at` is a `YYYYMMDDHH24MISS` UTC timestamp. Writing a new snapshot for a day that already has one **replaces** it (upsert on `(user_id, day)`).
 
 ---
 
@@ -147,6 +148,14 @@ Single catch-all worker. All routes are under `/api/...`. Auth helpers:
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
 | GET | `/api/currency` | member | List stored exchange rates |
+
+### Time Travel (dashboard snapshots)
+| Method | Path | Access | Description |
+|--------|------|--------|-------------|
+| POST | `/api/snapshots` | user | Create/replace today's snapshot (upsert on `(user_id, day)`). Body: `{ data: {...} }`. Returns the saved snapshot. |
+| GET | `/api/snapshots` | user | List the current user's snapshots (`day`, `created_at`, `data`), newest first. |
+| GET | `/api/snapshots/{day}` | user | Fetch one snapshot for a specific `YYYYMMDD` day (404 if none). |
+| DELETE | `/api/snapshots/{day}` | user | Delete a specific day's snapshot (404 if none). |
 
 ---
 
@@ -222,16 +231,57 @@ The frontend calls this endpoint automatically on **admin login** and on the **a
 
 ---
 
+## 7d. Time Travel (dashboard snapshots)
+
+A feature that lets any logged-in user save a snapshot of the **Dashboard** page values and later view how the dashboard looked on a past day. One snapshot per user per day; saving a new snapshot for a day that already has one **replaces** it.
+
+**Table:** `dashboard_snapshots` (see §5) — `PRIMARY KEY (user_id, day)`. The upsert uses `ON CONFLICT(user_id, day) DO UPDATE`, so a new snapshot for the same day overwrites the existing row.
+
+**Snapshot payload (`data`, JSON):** all monetary values in EUR, matching how the dashboard displays them.
+
+```json
+{
+  "providerCount": 3,
+  "accountCount": 5,
+  "globalValue": 123456.78,
+  "debit": 150000.00,
+  "credit": -26543.22,
+  "byType": { "Stock": 80000.00, "Cash": 20000.00, "Loans": -26543.22 },
+  "byProvider": { "Revolut": 50000.00, "Trading 212": 73456.78 },
+  "accounts": [ { "id": 12, "name": "Main Broker", "type": "asset_account", "provider": "Trading 212", "valueEur": 73456.78 } ]
+}
+```
+
+- `providerCount` / `accountCount` — from `state.providers.length` / `state.accounts.length`.
+- `globalValue` — `totalPortfolioValue()` (the `#portfolioValue` card).
+- `debit` / `credit` — sum of positive / negative `accountValue(acc, true)` (the `#debitCreditValue` card).
+- `byType` — asset-type allocation in EUR (incl. Loans/Cash/Deposits), same as the **By Type** chart.
+- `byProvider` — per-provider value in EUR, same as the **By Provider** chart.
+- `accounts` — per-account EUR value + name/type/provider, same as the **Account Overview** grid.
+
+**Backend:** routes in `functions/api/[[path]].js` (see §6). All require a logged-in user (`requireUser`). `POST /api/snapshots` computes `day` from the current UTC date and upserts; `GET /api/snapshots` lists the user's snapshots newest-first; `GET/DELETE /api/snapshots/{day}` fetch/delete a specific day.
+
+**Frontend (`js/portfolio.js`):**
+- **Time Travel controls** on the Dashboard header (right of the page title): a **←** previous button (`#timeTravelPrevBtn`), the **🕰 Time Travel** button (`#timeTravelBtn`), and a **→** next button (`#timeTravelNextBtn`). Shown to logged-in users, hidden in guest mode. The **←**/**→** arrows let the user quickly move between snapshots while viewing one: **←** goes to the previous (older) snapshot, **→** to the next (newer) one. Each arrow is **disabled** when there is no snapshot in that direction (or when not viewing a snapshot). The cached snapshot list (`timeTravelList`, newest-first) drives the arrow states via `updateTimeTravelArrows()`; `goToPrevSnapshot()` / `goToNextSnapshot()` perform the navigation.
+- **Time Travel modal:** a **💾 Save today's snapshot** button (`#saveSnapshotBtn`) calls `POST /api/snapshots` with `collectDashboardSnapshot()` and refreshes the list; a note explains *"One snapshot per day — saving again today replaces today's snapshot."* The snapshot list (`#snapshotList`) shows each day with **View** and **Delete** buttons. **Delete** uses the existing `confirmDialog` and calls `DELETE /api/snapshots/{day}`; it is disabled for the snapshot currently being viewed. The modal has a header **✕** close button (`#closeTimeTravelBtn`).
+- **Viewing a past snapshot:** `viewSnapshot(day)` sets the module-level `timeTravelSnapshot` and re-renders. `render()` checks `timeTravelActive()`: when true, the dashboard is rendered from the snapshot via `renderDashboardFromSnapshot(data)` (cards, charts + legends, account overview) instead of live state, and a banner (`#timeTravelBanner`) shows *"Viewing snapshot from <day> — [Exit Time Travel]"*. **Exit Time Travel** (`exitTimeTravel()`) clears the snapshot and re-renders live. Other pages (Assets, Dividends, My Accounts, My Portfolio, Goals) still render live while a snapshot is being viewed.
+- **Snapshot collection:** `collectDashboardSnapshot()` mirrors the live dashboard computation (`render()`, `renderCharts()`, `renderDashboardAccounts()`) into the payload.
+- **Guest mode:** no snapshots for guests (no `user_id`); the Time Travel controls are hidden.
+
+**Styling (`css/portfolio.css`):** `.time-travel-controls` (flex row for the arrows + button), `#timeTravelBanner` (accent-tinted banner with the exit button), `.snapshot-row` (list rows with day, meta, and View/Delete actions).
+
+---
+
 ## 8. Frontend (`js/portfolio.js`)
 
-- **State:** `state` object holds `user`, `guest`, `assets`, `providers`, `accounts`, `holdings`, `users`, `currencies`, `goals`.
+- **State:** `state` object holds `user`, `guest`, `assets`, `providers`, `accounts`, `holdings`, `users`, `currencies`, `goals`. Module-level `timeTravelSnapshot` holds the active snapshot being viewed (null = live dashboard); see §7d.
 - **Guest mode:** `guestData` provides mock data; `state.guest` is true. Guest changes are local-only and not persisted.
 - **Helpers:** `$` (querySelector), `esc` (HTML escape), `numeric`, `request` (fetch wrapper that throws on non-OK), `toast`, `openModal`/`closeModal`/`closeAllModals`, `confirmDialog` (Promise-based custom confirm modal), `isWriteAllowed`, `isAdminUser`.
 - **Currency:** `getExchangeRate`, `convertToEUR`, `formatCurrency` — rates are relative to USD. `accountValue(acc, convertToEur)` returns an account's value: with `convertToEur=true` it converts to EUR; otherwise it converts to the **account's display currency** (`acc.coin`). For asset accounts the holdings value (in the asset's currency) is converted to `acc.coin`, so changing an account's currency correctly re-values it rather than just relabeling the symbol.
 - **Data loading:** `loadData()` fetches all collections in parallel via `Promise.all`, then calls `render()`.
 - **Rendering:** `render()` dispatches to per-page renderers: `renderDashboardAccounts`, `renderCharts`, `renderPortfolioCards`, `renderPortfolioCharts`, `renderAssets`, `renderDividends`, `renderAccounts`, `renderHoldings`, `renderGoals`, `renderUsers`, plus `fillDividendPeriodValue()`, `updateToggleAllLabel()`, and `fillSelects()`.
 - **Charts:** Chart.js instances are cached in module-level variables (`allocationChartInstance`, `goalSimChartInstance`, etc.) and destroyed/recreated on re-render.
-- **Modals:** `openAssetModal`, `openUpdateAssetModal`, `openBulkUpdateModal`, `openProviderModal`, `openAccountModal`, `openHoldingModal`, `openGoalModal`, `openGoalDetailsModal`, `openGoalSimModal`, `openAccountDetailsModal`, `openProviderDetailsModal`, plus the first-run **welcome modal** (`#welcomeModalOverlay`, see the "First-run welcome / usage guide modal" subsection below). Modals are capped at `calc(100vh - 48px)` with `overflow-y: auto` so tall content (e.g. many linked accounts) scrolls instead of overflowing the screen. Pressing **Escape** closes any open modal without saving (`closeAllModals`). While any modal is open, background scrolling is locked: `openModal`/`closeModal`/`closeAllModals` call `syncBodyScrollLock()`, which toggles a `modal-open` class on `<body>` (`body.modal-open { overflow: hidden }`). The modal's own content still scrolls independently.
+- **Modals:** `openAssetModal`, `openUpdateAssetModal`, `openBulkUpdateModal`, `openProviderModal`, `openAccountModal`, `openHoldingModal`, `openGoalModal`, `openGoalDetailsModal`, `openGoalSimModal`, `openAccountDetailsModal`, `openProviderDetailsModal`, plus the first-run **welcome modal** (`#welcomeModalOverlay`, see the "First-run welcome / usage guide modal" subsection below). Modals are capped at `calc(100vh - 48px)` with `overflow-y: auto` so tall content (e.g. many linked accounts) scrolls instead of overflowing the screen. Pressing **Escape** closes any open modal without saving (`closeAllModals`). While any modal is open, background scrolling is locked: `openModal`/`closeModal`/`closeAllModals` call `syncBodyScrollLock()`, which toggles a `modal-open` class on `<body>` (`body.modal-open { overflow: hidden }`). The modal's own content still scrolls independently. Every modal has a header **✕** close button (`.modal-head` + `.modal-close`, e.g. `#closeAssetModalX`, `#closeWelcomeBtn`, `#closeTimeTravelBtn`) in addition to any footer Cancel/Close action buttons.
 - **Goal sub-goals:** `goalProgressHTML` (segmented/marked progress bar), `updateGoalSubGating` + `filterSubInput` (character filtering while typing), `validateGoalSubs` (save-time validation).
 - **Goal simulator:** `openGoalSimModal`, `goalSimData`, `runGoalSimulation` — a modal (`#goalSimModalOverlay`) that projects goal progress over time given a monthly contribution, rendered as a Chart.js line chart (`#goalSimChart`).
 - **Bulk price update:** `bulkUpdateEligibleAssets`, `openBulkUpdateModal`, `runBulkUpdate`, `setBulkUpdateProgress`, `appendBulkUpdateLog` (see §7a).
@@ -266,14 +316,18 @@ On **login**, a welcome modal (`#welcomeModalOverlay`) is shown automatically to
 - **Guests** (`state.guest === true`) are **always** greeted with a **demo guide** (`#welcomeGuestBody`) on every guest login — cached or not — explaining what the sample data contains and how it's connected. The guest guide covers: sample **Assets** (AAPL, VYM, TLT, MSFT…), sample **Providers** & **Accounts** (Revolut, Trading 212), how **Holdings** live inside an **asset account** and reference **Assets**, how **Goals** link to **Accounts**, and that everything is **editable** but **local only / not saved**.
 - **Regular users** are shown the **first-run guide** (`#welcomeBody`) only when they have **no providers** yet; it is skipped once they have at least one provider.
 
-The modal presents a numbered 4-step usage guide:
+The modal is split into **two pages** via a tab bar (`.welcome-tabs`), switched by `setWelcomePage(page)`:
 
-1. **Add a Provider** — go to the **My Accounts** menu and create a provider (bank / broker / other).
-2. **Add an Account** — inside that provider, create an account (e.g. an **asset account** to hold investments).
-3. **Unlock Goals** — **Goals** are unlocked once at least **1 account** is created.
-4. **Unlock My Portfolio, Assets & Dividends** — once an **asset account** is created, the **My Portfolio**, **Assets** and **Dividends** menus unlock, allowing the user to add **Holdings / Assets** to their portfolio on any existing asset account.
+- **Page 1 — Getting Started:** the numbered 4-step usage guide:
+  1. **Add a Provider** — go to the **My Accounts** menu and create a provider (bank / broker / other).
+  2. **Add an Account** — inside that provider, create an account (e.g. an **asset account** to hold investments).
+  3. **Unlock Goals** — **Goals** are unlocked once at least **1 account** is created.
+  4. **Unlock My Portfolio, Assets & Dividends** — once an **asset account** is created, the **My Portfolio**, **Assets** and **Dividends** menus unlock, allowing the user to add **Holdings / Assets** to their portfolio on any existing asset account.
+- **Page 2 — Privacy & Time Travel:** describes that the user's data is **private** to their account (no other user can see it; guests only see demo data), that pressing **H** hides the values on screen from people nearby (the blur/privacy feature, see below), and the **Time Travel** snapshot feature (save a snapshot of today's dashboard, view past days, one snapshot per day, delete any snapshot).
 
-**Styling** (`.welcome-modal` in `css/portfolio.css`): the modal uses a step layout with numbered circular badges (`.welcome-num`), a title (`.welcome-title`) and body text (`.welcome-text`). Key terms are emphasized with color + bold + underline via the `.kw` classes (`.kw-provider`, `.kw-account`, `.kw-asset`, `.kw-goal`, `.kw-portfolio`, `.kw-assets`, `.kw-dividends`, `.kw-holding`, `.kw-guest`), and menu names use the `.menu` class (accent-colored, bold, underlined). The modal is dismissed with the **"Got it, let's start"** button (`#welcomeModalOk`), which calls `closeModal('welcomeModalOverlay')`.
+The footer has **← Back** (`#welcomeModalPrev`), **Next →** (`#welcomeModalNext`), and **Got it, let's start** (`#welcomeModalOk`) buttons; Back/Next switch pages and the OK button (shown on the last page) calls `closeModal('welcomeModalOverlay')`. The modal also has a header **✕** close button (`#closeWelcomeBtn`). `showWelcomeModal()` resets to page 1 on open.
+
+**Styling** (`.welcome-modal` in `css/portfolio.css`): the modal uses a step layout with numbered circular badges (`.welcome-num`), a title (`.welcome-title`) and body text (`.welcome-text`). Key terms are emphasized with color + bold + underline via the `.kw` classes (`.kw-provider`, `.kw-account`, `.kw-asset`, `.kw-goal`, `.kw-portfolio`, `.kw-assets`, `.kw-dividends`, `.kw-holding`, `.kw-guest`), and menu names use the `.menu` class (accent-colored, bold, underlined). The tab bar uses `.welcome-tabs` / `.welcome-tab` (active tab accent-highlighted).
 
 **Help button:** a **❓ Help** button (`#helpButton`) sits in the topbar, left of the **Log out** button. Clicking it reopens the welcome/usage-guide modal at any time via `showWelcomeModal(state.guest)`, so users can revisit the guide after dismissing it — showing the correct variant (guest demo guide vs. regular first-run guide). It uses the same `.logout-btn` styling as the Log out button.
 

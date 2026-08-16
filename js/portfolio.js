@@ -217,6 +217,8 @@ let dashboardProviderOthers = [];
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
+let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
+let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -714,7 +716,24 @@ function showWelcomeModal(isGuest) {
   const userBody = document.getElementById('welcomeBody');
   if (guestBody) guestBody.style.display = isGuest ? 'block' : 'none';
   if (userBody) userBody.style.display = isGuest ? 'none' : 'block';
+  setWelcomePage(1);
   openModal('welcomeModalOverlay');
+}
+
+// Switch the welcome/help modal between its pages (1 = getting started, 2 = privacy & time travel).
+function setWelcomePage(page) {
+  document.querySelectorAll('.welcome-page').forEach(el => {
+    el.style.display = Number(el.dataset.welcomePage) === page ? 'block' : 'none';
+  });
+  document.querySelectorAll('.welcome-tab').forEach(tab => {
+    tab.classList.toggle('active', Number(tab.dataset.welcomePage) === page);
+  });
+  const prev = $('#welcomeModalPrev');
+  const next = $('#welcomeModalNext');
+  const ok = $('#welcomeModalOk');
+  if (prev) prev.style.display = page === 1 ? 'none' : '';
+  if (next) next.style.display = page === 2 ? 'none' : '';
+  if (ok) ok.style.display = page === 2 ? '' : 'none';
 }
 
 function updateNavVisibility() {
@@ -734,6 +753,34 @@ function updateNavVisibility() {
 }
 
 function render() {
+  renderTimeTravelBanner();
+
+  if (timeTravelActive()) {
+    // In "past" mode the dashboard is rendered from the snapshot; other pages render live.
+    renderDashboardFromSnapshot(timeTravelSnapshot.data);
+    renderAssets();
+    fillDividendPeriodValue();
+    renderDividends();
+    renderAccounts();
+    updateToggleAllLabel();
+    renderHoldings();
+    renderGoals();
+    renderUsers();
+    fillSelects();
+    renderPortfolioCards();
+    renderPortfolioCharts();
+    const write = isWriteAllowed();
+    const admin = isAdminUser();
+    document.querySelectorAll('.write-action').forEach(el => el.style.display = write ? '' : 'none');
+    document.querySelectorAll('.admin-action').forEach(el => el.style.display = admin ? '' : 'none');
+    if ($('#adminSectionLabel')) $('#adminSectionLabel').style.display = admin ? 'block' : 'none';
+    if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
+    if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
+    if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
+    updateNavVisibility();
+    return;
+  }
+
   const totalVal = totalPortfolioValue();
   
   if ($('#providerCount')) $('#providerCount').textContent = state.providers.length;
@@ -785,6 +832,283 @@ function render() {
   if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
   if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
   updateNavVisibility();
+}
+
+/* ================= TIME TRAVEL (dashboard snapshots) ================= */
+
+function timeTravelActive() { return !!timeTravelSnapshot; }
+
+// Format a YYYYMMDD day into a readable date, e.g. "16 Aug 2026".
+function formatSnapshotDay(day) {
+  if (!day || !/^\d{8}$/.test(day)) return day || '—';
+  const y = Number(day.slice(0, 4));
+  const m = Number(day.slice(4, 6)) - 1;
+  const d = Number(day.slice(6, 8));
+  const date = new Date(Date.UTC(y, m, d));
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+// Collect the current dashboard values into a snapshot payload (see timetravel.md §2).
+function collectDashboardSnapshot() {
+  const byType = {};
+  state.holdings.forEach(h => {
+    const asset = state.assets.find(a => a.id === h.asset_id);
+    if (asset) {
+      const val = Number(asset.price || 0) * Number(h.quantity || 0);
+      const valInEur = convertToEUR(val, asset.coin || 'USD');
+      const type = asset.type || 'Other';
+      byType[type] = (byType[type] || 0) + valInEur;
+    }
+  });
+  const loansTotal = state.accounts.filter(a => a.type === 'loan').reduce((s, a) => s + convertToEUR(Number(a.balance || 0), a.coin || 'USD'), 0);
+  const cashTotal = state.accounts.filter(a => a.type === 'bank_account').reduce((s, a) => s + convertToEUR(Number(a.balance || 0), a.coin || 'USD'), 0);
+  const depositsTotal = state.accounts.filter(a => a.type === 'interest_account').reduce((s, a) => s + convertToEUR(Number(a.balance || 0), a.coin || 'USD'), 0);
+  if (loansTotal !== 0) byType['Loans'] = loansTotal;
+  if (cashTotal !== 0) byType['Cash'] = cashTotal;
+  if (depositsTotal !== 0) byType['Deposits'] = depositsTotal;
+
+  const byProvider = {};
+  state.providers.forEach(p => {
+    const val = providerValue(p);
+    if (val !== 0) byProvider[p.name] = val;
+  });
+
+  let debit = 0;
+  let credit = 0;
+  state.accounts.forEach(acc => {
+    const val = accountValue(acc, true);
+    if (val > 0) debit += val;
+    else credit += val;
+  });
+
+  const accounts = state.accounts.map(a => ({
+    id: a.id,
+    name: a.name,
+    type: a.type,
+    provider: a.provider_name || providerName(a.provider_id),
+    valueEur: accountValue(a, true)
+  }));
+
+  return {
+    providerCount: state.providers.length,
+    accountCount: state.accounts.length,
+    globalValue: totalPortfolioValue(),
+    debit,
+    credit,
+    byType,
+    byProvider,
+    accounts
+  };
+}
+
+// Render the dashboard cards, charts and account overview from a snapshot payload.
+function renderDashboardFromSnapshot(data) {
+  const d = data || {};
+  if ($('#providerCount')) $('#providerCount').textContent = d.providerCount ?? '—';
+  if ($('#accountCount')) $('#accountCount').textContent = d.accountCount ?? '—';
+  const portfolioValueEl = $('#portfolioValue');
+  if (portfolioValueEl) {
+    const v = Number(d.globalValue || 0);
+    portfolioValueEl.textContent = moneyEUR.format(v);
+    portfolioValueEl.className = 'value ' + (v < 0 ? 'neg' : (v > 0 ? 'pos' : ''));
+  }
+  const debitCreditValue = $('#debitCreditValue');
+  if (debitCreditValue) {
+    const debit = Number(d.debit || 0);
+    const credit = Number(d.credit || 0);
+    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}</span><br><span class="neg">${moneyEUR.format(credit)}</span>`;
+  }
+
+  // Charts (By Type / By Provider) + legends
+  if (typeof Chart !== 'undefined') {
+    const allocCtx = document.getElementById('allocationChart')?.getContext('2d');
+    const typeCtx = document.getElementById('accountTypeChart')?.getContext('2d');
+    if (allocationChartInstance) allocationChartInstance.destroy();
+    if (accountTypeChartInstance) accountTypeChartInstance.destroy();
+    allocationChartInstance = null;
+    accountTypeChartInstance = null;
+
+    const byType = d.byType || {};
+    const byProvider = d.byProvider || {};
+    const allocTop = topNWithOthers(byType, 9);
+    const providerTop = topNWithOthers(byProvider, 9);
+    const allocDataAbs = allocTop.data.map(v => Math.abs(v));
+    const providerDataAbs = providerTop.data.map(v => Math.abs(v));
+
+    if (allocCtx) {
+      allocationChartInstance = new Chart(allocCtx, {
+        type: 'doughnut',
+        data: {
+          labels: allocTop.labels.length ? allocTop.labels : ['No Data'],
+          datasets: [{ data: allocDataAbs.length ? allocDataAbs : [1], backgroundColor: allocDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    }
+    if (typeCtx) {
+      accountTypeChartInstance = new Chart(typeCtx, {
+        type: 'doughnut',
+        data: {
+          labels: providerTop.labels.length ? providerTop.labels : ['No Data'],
+          datasets: [{ data: providerDataAbs.length ? providerDataAbs : [1], backgroundColor: providerDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    }
+    renderLegend('allocationLegend', allocTop.labels, allocTop.data, CHART_COLORS, false);
+    renderLegend('providerLegend', providerTop.labels, providerTop.data, CHART_COLORS, false);
+  }
+
+  // Account overview
+  const container = $('#dashboardAccounts');
+  if (container) {
+    const accounts = d.accounts || [];
+    container.innerHTML = accounts.length ? `
+      <div class="dashboard-accounts-grid">
+        ${accounts.map(a => `
+          <div class="account-card">
+            <div class="account-card-head" style="margin-bottom:4px;">
+              <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
+              <strong class="${Number(a.valueEur) < 0 ? 'neg' : 'pos'}">${moneyEUR.format(Number(a.valueEur || 0))}</strong>
+            </div>
+            <div class="dlabel">${esc(a.provider || '—')}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<div class="page-desc">No accounts in this snapshot.</div>';
+  }
+}
+
+// Show/hide the "viewing snapshot" banner and the Time Travel controls (button + prev/next arrows).
+function renderTimeTravelBanner() {
+  const banner = $('#timeTravelBanner');
+  const controls = document.querySelector('.time-travel-controls');
+  const loggedIn = !state.guest && state.user;
+  if (controls) controls.style.display = loggedIn ? '' : 'none';
+  if (banner) {
+    if (timeTravelActive()) {
+      banner.style.display = 'block';
+      banner.innerHTML = `Viewing snapshot from <strong>${esc(formatSnapshotDay(timeTravelSnapshot.day))}</strong> — <button class="btn-sm" type="button" id="exitTimeTravelBtn">Exit Time Travel</button>`;
+      const exitBtn = $('#exitTimeTravelBtn');
+      if (exitBtn) exitBtn.addEventListener('click', exitTimeTravel);
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }
+  }
+  updateTimeTravelArrows();
+}
+
+// Enable/disable the prev/next arrows based on the current snapshot's position in the list.
+function updateTimeTravelArrows() {
+  const prevBtn = $('#timeTravelPrevBtn');
+  const nextBtn = $('#timeTravelNextBtn');
+  if (!prevBtn || !nextBtn) return;
+  if (!timeTravelActive()) {
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+  const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
+  // timeTravelList is newest-first, so "previous" (older) is a higher index, "next" (newer) is a lower index.
+  prevBtn.disabled = idx < 0 || idx >= timeTravelList.length - 1;
+  nextBtn.disabled = idx <= 0;
+}
+
+async function openTimeTravelModal() {
+  openModal('timeTravelModalOverlay');
+  await loadSnapshotList();
+}
+
+async function loadSnapshotList() {
+  const list = $('#snapshotList');
+  if (!list) return;
+  list.innerHTML = 'Loading...';
+  try {
+    const { snapshots } = await request('/snapshots');
+    timeTravelList = snapshots;
+    updateTimeTravelArrows();
+    if (!snapshots.length) {
+      list.innerHTML = '<div class="page-desc">No snapshots yet. Save today\'s snapshot to get started.</div>';
+      return;
+    }
+    list.innerHTML = snapshots.map(s => `
+      <div class="snapshot-row">
+        <span class="snapshot-day">${esc(formatSnapshotDay(s.day))}</span>
+        <span class="snapshot-meta">${esc(s.day)}</span>
+        <div class="snapshot-actions">
+          <button class="btn-sm" type="button" data-view-snapshot="${esc(s.day)}">View</button>
+          <button class="btn-sm danger" type="button" data-delete-snapshot="${esc(s.day)}" ${timeTravelActive() && timeTravelSnapshot.day === s.day ? 'disabled' : ''}>Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    list.innerHTML = `<div class="page-desc">${esc(error.message)}</div>`;
+  }
+}
+
+async function saveSnapshot() {
+  const btn = $('#saveSnapshotBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const data = collectDashboardSnapshot();
+    await request('/snapshots', { method: 'POST', body: JSON.stringify({ data }) });
+    toast('Today\'s snapshot saved.');
+    await loadSnapshotList();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function viewSnapshot(day) {
+  try {
+    const { snapshot } = await request(`/snapshots/${day}`);
+    timeTravelSnapshot = snapshot;
+    closeModal('timeTravelModalOverlay');
+    render();
+    toast(`Viewing snapshot from ${formatSnapshotDay(day)}.`);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+// Navigate to the previous (older) snapshot in the list.
+async function goToPrevSnapshot() {
+  if (!timeTravelActive()) return;
+  const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
+  if (idx < 0 || idx >= timeTravelList.length - 1) return;
+  await viewSnapshot(timeTravelList[idx + 1].day);
+}
+
+// Navigate to the next (newer) snapshot in the list.
+async function goToNextSnapshot() {
+  if (!timeTravelActive()) return;
+  const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
+  if (idx <= 0) return;
+  await viewSnapshot(timeTravelList[idx - 1].day);
+}
+
+async function deleteSnapshot(day) {
+  if (!await confirmDialog(`Delete the snapshot from ${formatSnapshotDay(day)}?`)) return;
+  try {
+    await request(`/snapshots/${day}`, { method: 'DELETE' });
+    if (timeTravelActive() && timeTravelSnapshot.day === day) {
+      timeTravelSnapshot = null;
+    }
+    toast('Snapshot deleted.');
+    await loadSnapshotList();
+    render();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function exitTimeTravel() {
+  timeTravelSnapshot = null;
+  render();
+  toast('Exited Time Travel.');
 }
 
 function renderAssets() {
@@ -2267,6 +2591,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
   $('#newUserBtn')?.addEventListener('click', () => openModal('userModalOverlay'));
   $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
+  $('#closeWelcomeBtn')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
+  $('#welcomeModalNext')?.addEventListener('click', () => setWelcomePage(2));
+  $('#welcomeModalPrev')?.addEventListener('click', () => setWelcomePage(1));
+  document.querySelectorAll('.welcome-tab').forEach(tab => {
+    tab.addEventListener('click', () => setWelcomePage(Number(tab.dataset.welcomePage)));
+  });
+  // Time Travel
+  $('#timeTravelBtn')?.addEventListener('click', openTimeTravelModal);
+  $('#timeTravelPrevBtn')?.addEventListener('click', goToPrevSnapshot);
+  $('#timeTravelNextBtn')?.addEventListener('click', goToNextSnapshot);
+  $('#closeTimeTravelBtn')?.addEventListener('click', () => closeModal('timeTravelModalOverlay'));
+  $('#saveSnapshotBtn')?.addEventListener('click', saveSnapshot);
+  $('#snapshotList')?.addEventListener('click', async event => {
+    const viewBtn = event.target.closest('[data-view-snapshot]');
+    if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }
+    const delBtn = event.target.closest('[data-delete-snapshot]');
+    if (delBtn) { await deleteSnapshot(delBtn.dataset.deleteSnapshot); return; }
+  });
   // Clickable menu/keyword references inside the welcome modal: close it and navigate to the page.
   document.querySelectorAll('#welcomeModalOverlay [data-page]').forEach(el => {
     el.addEventListener('click', () => {
@@ -2295,6 +2637,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   $('#closeUserModalBtn')?.addEventListener('click', () => closeModal('userModalOverlay'));
   $('#closeResetPasswordModalBtn')?.addEventListener('click', () => closeModal('resetPasswordModalOverlay'));
+  // Modal header X close buttons
+  $('#closeAssetModalX')?.addEventListener('click', () => closeModal('assetModalOverlay'));
+  $('#closeUpdateAssetModalX')?.addEventListener('click', () => closeModal('updateAssetModalOverlay'));
+  $('#closeUpdateAllPricesX')?.addEventListener('click', () => closeModal('updateAllPricesModalOverlay'));
+  $('#closeProviderModalX')?.addEventListener('click', () => closeModal('providerModalOverlay'));
+  $('#closeAccountModalX')?.addEventListener('click', () => closeModal('accountModalOverlay'));
+  $('#closeHoldingModalX')?.addEventListener('click', () => closeModal('holdingModalOverlay'));
+  $('#closeGoalModalX')?.addEventListener('click', () => closeModal('goalModalOverlay'));
+  $('#closeGoalSimX')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
+  $('#closeGoalDetailsX')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
+  $('#closeAccountDetailsX')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
+  $('#closeProviderDetailsX')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
+  $('#closeUserModalX')?.addEventListener('click', () => closeModal('userModalOverlay'));
+  $('#closeResetPasswordX')?.addEventListener('click', () => closeModal('resetPasswordModalOverlay'));
 
   // Save Asset (New / Edit)
   $('#assetForm')?.addEventListener('submit', async event => {
