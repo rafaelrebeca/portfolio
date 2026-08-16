@@ -679,31 +679,28 @@ function renderPortfolioCharts() {
 }
 
 function accountValue(acc, convertToEur = false) {
-  let value = 0;
-  let currency = acc.coin || 'USD';
+  const target = convertToEur ? 'EUR' : (acc.coin || 'USD');
   
   if (acc.type === 'asset_account') {
-    // For asset accounts, sum up holdings - all in same currency per account
-    value = state.holdings
+    // Sum each holding's value converted to the target currency individually,
+    // because holdings in one account can be in different coins.
+    return state.holdings
       .filter(h => h.account_id === acc.id)
       .reduce((sum, h) => {
         const asset = state.assets.find(a => a.id === h.asset_id);
-        if (asset) {
-          // Use asset's currency
-          currency = asset.coin || currency;
-          return sum + (Number(asset.price || 0) * Number(h.quantity || 0));
-        }
-        return sum;
+        if (!asset) return sum;
+        const raw = Number(asset.price || 0) * Number(h.quantity || 0);
+        const coin = asset.coin || 'USD';
+        if (coin === target) return sum + raw;
+        const rate = getExchangeRate(coin, target);
+        return sum + (rate ? raw * rate : raw);
       }, 0);
-  } else {
-    value = Number(acc.balance || 0);
   }
   
-  if (convertToEur) return convertToEUR(value, currency);
-  // Convert to the account's display currency (acc.coin)
-  const target = acc.coin || 'USD';
-  if (currency === target) return value;
-  const rate = getExchangeRate(currency, target);
+  const value = Number(acc.balance || 0);
+  const coin = acc.coin || 'USD';
+  if (coin === target) return value;
+  const rate = getExchangeRate(coin, target);
   return rate ? value * rate : value;
 }
 
