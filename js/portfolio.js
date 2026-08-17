@@ -1270,6 +1270,31 @@ function exitTimeTravel() {
   toast('Exited Time Travel.');
 }
 
+// Clean snapshots: keep only the most recent snapshot per month (mode 'months') or per year (mode 'years').
+// The current month / current year is never touched.
+async function cleanSnapshots(mode) {
+  const isMonths = mode === 'months';
+  const label = isMonths ? 'month' : 'year';
+  const ok = await confirmDialog(
+    `Keep only the most recent snapshot per ${label}? Snapshots from the current ${label} will be left untouched.`,
+    'Clean'
+  );
+  if (!ok) return;
+  const btn = $(isMonths ? '#cleanMonthsBtn' : '#cleanYearsBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const { deleted } = await request(`/snapshots/clean-${isMonths ? 'months' : 'years'}`, { method: 'POST' });
+    if (timeTravelActive()) timeTravelSnapshot = null;
+    toast(deleted > 0 ? `Cleaned ${deleted} snapshot${deleted === 1 ? '' : 's'}.` : 'Nothing to clean.');
+    await loadSnapshotList();
+    render();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /* ================= TIME TRAVEL HISTORY (line chart) ================= */
 
 // Open the history modal, show the loading spinner, and load all snapshot data.
@@ -2905,6 +2930,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#timeTravelHistoryBtn')?.addEventListener('click', openHistoryModal);
   $('#timeTravelCalendarBtn')?.addEventListener('click', openCalendarModal);
   $('#closeTimeTravelBtn')?.addEventListener('click', () => closeModal('timeTravelModalOverlay'));
+  $('#cleanMonthsBtn')?.addEventListener('click', () => cleanSnapshots('months'));
+  $('#cleanYearsBtn')?.addEventListener('click', () => cleanSnapshots('years'));
   $('#closeCalendarBtn')?.addEventListener('click', () => closeModal('calendarModalOverlay'));
   $('#maximizeHistoryBtn')?.addEventListener('click', toggleHistoryMaximize);
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);

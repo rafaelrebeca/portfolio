@@ -548,6 +548,55 @@ export async function onRequest(context) {
       if (!changed(result)) return fail('Snapshot not found.', 404);
       return json({ ok: true });
     }
+    // Clean snapshots: keep only the most recent snapshot per month (excluding the current month).
+    if (method === 'POST' && path === 'snapshots/clean-months') {
+      const user = await requireUser(request, env);
+      const now = new Date();
+      const curYear = now.getUTCFullYear();
+      const curMonth = now.getUTCMonth() + 1; // 1-12
+      const curMonthPrefix = `${curYear}${String(curMonth).padStart(2, '0')}`;
+      const { results } = await env.myd1db.prepare(
+        'SELECT day FROM dashboard_snapshots WHERE user_id = ? AND substr(day, 1, 6) != ? ORDER BY day DESC'
+      ).bind(user.id, curMonthPrefix).all();
+      // Keep the first (most recent) day per YYYYMM prefix; delete the rest.
+      const keep = new Set();
+      for (const r of results) {
+        const prefix = r.day.slice(0, 6);
+        if (!keep.has(prefix)) { keep.add(prefix); keep.add(r.day); }
+      }
+      const toDelete = results.filter(r => !keep.has(r.day)).map(r => r.day);
+      let deleted = 0;
+      for (const day of toDelete) {
+        const res = await env.myd1db.prepare(
+          'DELETE FROM dashboard_snapshots WHERE user_id = ? AND day = ?'
+        ).bind(user.id, day).run();
+        if (changed(res)) deleted++;
+      }
+      return json({ ok: true, deleted });
+    }
+    // Clean snapshots: keep only the most recent snapshot per year (excluding the current year).
+    if (method === 'POST' && path === 'snapshots/clean-years') {
+      const user = await requireUser(request, env);
+      const curYear = new Date().getUTCFullYear();
+      const { results } = await env.myd1db.prepare(
+        'SELECT day FROM dashboard_snapshots WHERE user_id = ? AND substr(day, 1, 4) != ? ORDER BY day DESC'
+      ).bind(user.id, String(curYear)).all();
+      // Keep the first (most recent) day per YYYY prefix; delete the rest.
+      const keep = new Set();
+      for (const r of results) {
+        const prefix = r.day.slice(0, 4);
+        if (!keep.has(prefix)) { keep.add(prefix); keep.add(r.day); }
+      }
+      const toDelete = results.filter(r => !keep.has(r.day)).map(r => r.day);
+      let deleted = 0;
+      for (const day of toDelete) {
+        const res = await env.myd1db.prepare(
+          'DELETE FROM dashboard_snapshots WHERE user_id = ? AND day = ?'
+        ).bind(user.id, day).run();
+        if (changed(res)) deleted++;
+      }
+      return json({ ok: true, deleted });
+    }
     return fail('Route not found.', 404);
   } catch (error) {
     const status = error.status || 500;
