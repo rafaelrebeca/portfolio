@@ -2092,6 +2092,24 @@ function showPage(page) {
   applyBlur();
 }
 
+// Toggle the mobile nav dropdown (hamburger menu).
+function toggleNavDropdown() {
+  const sidebar = document.querySelector('.sidebar');
+  const toggle = $('#navToggle');
+  if (!sidebar) return;
+  const open = sidebar.classList.toggle('open');
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+// Close the mobile nav dropdown (e.g. after selecting a page).
+function closeNavDropdown() {
+  const sidebar = document.querySelector('.sidebar');
+  const toggle = $('#navToggle');
+  if (!sidebar) return;
+  sidebar.classList.remove('open');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
 // ---- Blur (privacy) feature ----
 // When enabled, any number that is not a percentage is blurred to hide monetary
 // values. The Assets page is excluded (it shows prices, not portfolio value).
@@ -2875,7 +2893,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (event.key === 'Escape') closeAllModals();
   });
 
-  document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => showPage(button.dataset.page)));
+  document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
+    showPage(button.dataset.page);
+    closeNavDropdown();
+  }));
+  $('#navToggle')?.addEventListener('click', toggleNavDropdown);
   $('#assetSearch')?.addEventListener('input', renderAssets);
   $('#assetTypeFilter')?.addEventListener('change', renderAssets);
   $('#dividendPeriodType')?.addEventListener('change', () => { fillDividendPeriodValue(); renderDividends(); });
