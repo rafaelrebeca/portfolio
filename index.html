@@ -939,10 +939,47 @@
       <p class="modal-copy">Save a snapshot of today's dashboard, or view how your dashboard looked on a past day.</p>
       <div class="modal-actions" style="justify-content:flex-start;margin-bottom:14px;">
         <button class="btn-sm primary" type="button" id="saveSnapshotBtn">💾 Save today's snapshot</button>
+        <button class="btn-sm" type="button" id="historyBtn">📈 History</button>
       </div>
       <p class="modal-copy" style="font-size:12px;color:var(--muted);margin-bottom:14px;">One snapshot per day — saving again today replaces today's snapshot.</p>
       <div class="page-title" style="font-size:15px;margin-bottom:10px;">Your snapshots</div>
       <div id="snapshotList" style="max-height:320px;overflow-y:auto;">Loading...</div>
+    </div>
+  </div>
+
+  <!-- MODAL: Time Travel History (line chart of snapshots over time) -->
+  <div class="modal-overlay" id="historyModalOverlay">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-head">
+        <h3>📈 Snapshot History</h3>
+        <button class="modal-close" type="button" id="closeHistoryBtn" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div class="history-controls">
+        <div class="field">
+          <label>Chart type</label>
+          <select id="historyChartType" style="width:100%;">
+            <option value="global">Global</option>
+            <option value="byType">By Type</option>
+            <option value="byProvider">By Provider</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Zoom</label>
+          <select id="historyZoom" style="width:100%;">
+            <option value="all">All</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+      </div>
+      <div id="historyLoading" class="history-loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>Loading snapshots...</span>
+      </div>
+      <div id="historyChartWrap" style="position:relative;height:320px;margin-top:16px;">
+        <canvas id="historyChart"></canvas>
+      </div>
+      <div id="historyEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
     </div>
   </div>
 

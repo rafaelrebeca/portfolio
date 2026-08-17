@@ -1412,3 +1412,28 @@ select {
 .snapshot-row .snapshot-actions { margin-left: auto; display: flex; gap: 8px; }
 .snapshot-row .snapshot-actions .btn-sm:disabled { opacity: .5; cursor: not-allowed; }
 
+.history-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.history-controls .field { flex: 1; }
+.history-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 40px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+

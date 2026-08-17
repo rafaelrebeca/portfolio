@@ -235,6 +235,8 @@ let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
 let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
+let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
+let historyData = null; // full snapshot data loaded for the history chart (cleared on modal close)
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -1134,6 +1136,116 @@ function exitTimeTravel() {
   timeTravelSnapshot = null;
   render();
   toast('Exited Time Travel.');
+}
+
+/* ================= TIME TRAVEL HISTORY (line chart) ================= */
+
+// Open the history modal, show the loading spinner, and load all snapshot data.
+async function openHistoryModal() {
+  openModal('historyModalOverlay');
+  const loading = $('#historyLoading');
+  const chartWrap = $('#historyChartWrap');
+  const empty = $('#historyEmpty');
+  if (loading) loading.style.display = 'flex';
+  if (chartWrap) chartWrap.style.display = 'none';
+  if (empty) empty.style.display = 'none';
+  try {
+    await loadHistoryData();
+    renderHistoryChart();
+  } catch (error) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+// Load the full data of every snapshot (newest first) into historyData.
+async function loadHistoryData() {
+  const { snapshots } = await request('/snapshots');
+  historyData = snapshots || [];
+}
+
+// Close the history modal and clear the loaded data + chart.
+function closeHistoryModal() {
+  if (historyChartInstance) { historyChartInstance.destroy(); historyChartInstance = null; }
+  historyData = null;
+  closeModal('historyModalOverlay');
+}
+
+// Apply the zoom filter: keep the most recent snapshot per month or per year.
+function applyHistoryZoom(snapshots, zoom) {
+  if (zoom === 'all' || !snapshots.length) return snapshots;
+  const seen = new Set();
+  const result = [];
+  // snapshots are newest-first; keep the first (most recent) per month/year.
+  for (const s of snapshots) {
+    const key = zoom === 'monthly' ? s.day.slice(0, 6) : s.day.slice(0, 4);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(s);
+    }
+  }
+  return result;
+}
+
+// Draw the line chart from historyData based on the selected chart type and zoom.
+function renderHistoryChart() {
+  const chartType = $('#historyChartType')?.value || 'global';
+  const zoom = $('#historyZoom')?.value || 'all';
+  const empty = $('#historyEmpty');
+  const chartWrap = $('#historyChartWrap');
+  if (!historyData || !historyData.length) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  const points = applyHistoryZoom(historyData, zoom).slice().reverse(); // oldest -> newest for the x-axis
+  const labels = points.map(p => formatSnapshotDay(p.day));
+  const datasets = buildHistoryDatasets(points, chartType);
+  if (chartWrap) chartWrap.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+
+  const ctx = document.getElementById('historyChart')?.getContext('2d');
+  if (!ctx) return;
+  if (historyChartInstance) historyChartInstance.destroy();
+  historyChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { ticks: { color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+}
+
+// Build the datasets for the selected chart type.
+function buildHistoryDatasets(points, chartType) {
+  const colors = CHART_COLORS;
+  if (chartType === 'global') {
+    return [
+      { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false },
+      { label: 'Debit', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false },
+      { label: 'Credit', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false }
+    ];
+  }
+  const key = chartType === 'byType' ? 'byType' : 'byProvider';
+  // Collect all category names across snapshots.
+  const categories = [];
+  points.forEach(p => { Object.keys(p.data[key] || {}).forEach(c => { if (!categories.includes(c)) categories.push(c); }); });
+  return categories.map((cat, i) => ({
+    label: cat,
+    data: points.map(p => p.data[key]?.[cat] ?? 0),
+    borderColor: colors[i % colors.length],
+    backgroundColor: colors[i % colors.length],
+    tension: 0.3,
+    fill: false
+  }));
 }
 
 function renderAssets() {
@@ -2640,6 +2752,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#timeTravelNextBtn')?.addEventListener('click', goToNextSnapshot);
   $('#closeTimeTravelBtn')?.addEventListener('click', () => closeModal('timeTravelModalOverlay'));
   $('#saveSnapshotBtn')?.addEventListener('click', saveSnapshot);
+  $('#historyBtn')?.addEventListener('click', openHistoryModal);
+  $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
+  $('#historyChartType')?.addEventListener('change', renderHistoryChart);
+  $('#historyZoom')?.addEventListener('change', renderHistoryChart);
   $('#snapshotList')?.addEventListener('click', async event => {
     const viewBtn = event.target.closest('[data-view-snapshot]');
     if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }

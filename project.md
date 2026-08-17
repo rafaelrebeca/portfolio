@@ -73,11 +73,12 @@ Tables referenced by the worker (schema is managed in the Cloudflare D1 console,
 - **users** — `id`, `username`, `password_hash`, `role` (`guest`/`user`/`admin`), `created_at`, `last_login`
 - **sessions** — `token`, `user_id`, `expires_at` (7-day expiry)
 - **assets** — `id`, `name`, `symbol`, `type` (`stock`/`bond`/`etf`/`cfd`/`commodity`), `price`, `coin`
+- **personal_assets** — `id`, `user_id`, `name`, `symbol`, `type` (same enum as `assets`), `price`, `coin`, `created_at`, `updated_at`. Per-user private assets (created by any member on the Assets page). A `trg_p_assets_updated` trigger bumps `updated_at` on changes.
 - **dividends** — `asset_id` (PK), `dividend_yield` (percent, e.g. `0.52` = 0.52%)
 - **dividend_payment_months** — `asset_id`, `month_paid` (1–12)
 - **providers** — `id`, `user_id`, `name`, `type` (`bank`/`broker`/`other`), `created_at`
 - **accounts** — `id`, `provider_id`, `name`, `type` (`loan`/`interest_account`/`bank_account`/`asset_account`), `balance`, `interest_rate`, `coin`
-- **account_holdings** — `id`, `account_id`, `asset_id`, `quantity`, `purchase_price` (unique on `account_id`+`asset_id`)
+- **account_holdings** — `id`, `account_id`, `quantity`, `purchase_price`, `asset_id` (nullable, references `assets`), `personal_asset_id` (nullable, references `personal_assets`). A holding references **either** a platform asset (`asset_id`) **or** a personal asset (`personal_asset_id`), not both. Unique on `(account_id, asset_id, personal_asset_id)`.
 - **goals** — `id`, `user_id`, `goal_name`, `value`, `coin`, `sub1`, `sub2`, `sub3` (REAL, optional sub-goal milestones)
 - **goal_link** — `goal_id`, `account_id`
 - **currency** — `coin`, `value` (rate relative to USD)
@@ -106,11 +107,20 @@ Single catch-all worker. All routes are under `/api/...`. Auth helpers:
 ### Assets
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
-| GET | `/api/assets` | member | List all assets (with dividend yield + payment months) |
-| POST | `/api/assets` | admin | Create asset |
-| PUT/PATCH | `/api/assets/{id}` | admin | Update asset (name, symbol, type, price, coin, yield, months) |
-| DELETE | `/api/assets/{id}` | admin | Delete asset + related holdings/dividends |
+| GET | `/api/assets` | member | List all platform assets **plus** the current user's personal assets (with dividend yield + payment months). Personal assets are flagged `is_personal: 1` and their `id` is **negated** (e.g. `-1`) so they never collide with platform asset ids in the merged list. |
+| POST | `/api/assets` | admin | Create platform asset |
+| PUT/PATCH | `/api/assets/{id}` | admin | Update platform asset (name, symbol, type, price, coin, yield, months) |
+| DELETE | `/api/assets/{id}` | admin | Delete platform asset + related holdings/dividends |
 | POST | `/api/assets/{id}/price` | admin | **Fetch latest price from Massive.com** (see §7) |
+
+### Personal Assets
+| Method | Path | Access | Description |
+|--------|------|--------|-------------|
+| POST | `/api/personal-assets` | member | Create a personal asset (any logged-in user, incl. admin) |
+| PUT/PATCH | `/api/personal-assets/{id}` | owner or admin | Update a personal asset (name, symbol, type, price, coin) |
+| DELETE | `/api/personal-assets/{id}` | owner or admin | Delete a personal asset |
+
+Personal assets are **scoped to the user** who created them (each user sees only their own). They are displayed on the Assets page together with platform assets, with their name wrapped in `[]`. They have no dividend yield/payment months, so they never appear on the Dividends page.
 
 ### Dividends
 | Method | Path | Access | Description |
@@ -125,8 +135,10 @@ Single catch-all worker. All routes are under `/api/...`. Auth helpers:
 | GET/POST | `/api/accounts` | member | List / create-or-update accounts |
 | PUT/PATCH | `/api/accounts/{id}` | member | Update account |
 | DELETE | `/api/accounts/{id}` | member | Delete own account |
-| GET/POST | `/api/holdings` | member | List / upsert holdings |
+| GET/POST | `/api/holdings` | member | List / upsert holdings (platform **or** personal assets) |
 | DELETE | `/api/holdings/{id}` | member | Delete own holding |
+
+**Holdings with personal assets:** `POST /api/holdings` accepts a negative `asset_id` to mean a personal asset (e.g. `-1` = personal asset id 1); the backend validates it belongs to the current user and stores it in `personal_asset_id`. `GET /api/holdings` returns personal holdings with a **negated `asset_id`** (matching the negated id in `GET /api/assets`), so the frontend resolves them with the same lookup as platform holdings.
 
 ### Goals
 | Method | Path | Access | Description |
@@ -266,11 +278,14 @@ A feature that lets any logged-in user save a snapshot of the **Dashboard** page
 **Frontend (`js/portfolio.js`):**
 - **Time Travel controls** on the Dashboard header (right of the page title): a **←** previous button (`#timeTravelPrevBtn`), the **🕰 Time Travel** button (`#timeTravelBtn`), and a **→** next button (`#timeTravelNextBtn`). Shown to logged-in users, hidden in guest mode. The **←**/**→** arrows let the user quickly move between snapshots. **←** goes to the previous (older) snapshot; when not viewing a snapshot it **enters Time Travel** at the most recent snapshot (active whenever the user has at least one snapshot). **→** goes to the next (newer) snapshot; when on the most recent snapshot it stays **active** and clicking it **exits Time Travel** back to the live dashboard. Each arrow is **disabled** only when there is no snapshot in that direction (the **→** is disabled only when the current snapshot is not found in the list). The cached snapshot list (`timeTravelList`, newest-first) drives the arrow states via `updateTimeTravelArrows()`; `goToPrevSnapshot()` / `goToNextSnapshot()` perform the navigation. The list is loaded on app load via `loadTimeTravelList()` (called from `loadData()`) so the arrows are correct before the modal is ever opened.
 - **Time Travel modal:** a **💾 Save today's snapshot** button (`#saveSnapshotBtn`) calls `POST /api/snapshots` with `collectDashboardSnapshot()` and refreshes the list; a note explains *"One snapshot per day — saving again today replaces today's snapshot."* The snapshot list (`#snapshotList`) shows each day with **View** and **Delete** buttons. **Delete** uses the existing `confirmDialog` and calls `DELETE /api/snapshots/{day}`; it is disabled for the snapshot currently being viewed. The modal has a header **✕** close button (`#closeTimeTravelBtn`).
+- **History modal (line chart):** a **📈 History** button (`#historyBtn`) in the Time Travel modal opens the history modal (`#historyModalOverlay`). It has two combo boxes — **Chart type** (`#historyChartType`: Global / By Type / By Provider) and **Zoom** (`#historyZoom`: All / Monthly / Yearly) — and a Chart.js **line chart** (`#historyChart`). On open, a loading spinner (`#historyLoading`) is shown while all snapshot data is fetched (`loadHistoryData()` → `historyData`), then hidden once the chart renders. The full snapshot data is only loaded here (not elsewhere), and is cleared on close (`closeHistoryModal()` destroys the chart and nulls `historyData`).
+  - **Chart type:** **Global** plots three lines — `globalValue`, `debit`, `credit`. **By Type** plots one line per asset type from each snapshot's `byType`. **By Provider** plots one line per provider from each snapshot's `byProvider`.
+  - **Zoom:** **All** uses every snapshot. **Monthly** keeps only the most recent snapshot of each month. **Yearly** keeps only the most recent snapshot of each year. Applied by `applyHistoryZoom()` (snapshots are newest-first, so the first per month/year is kept). The chart x-axis is chronological (oldest → newest).
 - **Viewing a past snapshot:** `viewSnapshot(day)` sets the module-level `timeTravelSnapshot` and re-renders. `render()` checks `timeTravelActive()`: when true, the dashboard is rendered from the snapshot via `renderDashboardFromSnapshot(data)` (cards, charts + legends, account overview) instead of live state, and a banner (`#timeTravelBanner`) shows *"Viewing snapshot from <day> — [Exit Time Travel]"*. **Exit Time Travel** (`exitTimeTravel()`) clears the snapshot and re-renders live. Other pages (Assets, Dividends, My Accounts, My Portfolio, Goals) still render live while a snapshot is being viewed.
 - **Snapshot collection:** `collectDashboardSnapshot()` mirrors the live dashboard computation (`render()`, `renderCharts()`, `renderDashboardAccounts()`) into the payload.
 - **Guest mode:** no snapshots for guests (no `user_id`); the Time Travel controls are hidden.
 
-**Styling (`css/portfolio.css`):** `.time-travel-controls` (flex row for the arrows + button), `#timeTravelBanner` (accent-tinted banner with the exit button), `.snapshot-row` (list rows with day, meta, and View/Delete actions).
+**Styling (`css/portfolio.css`):** `.time-travel-controls` (flex row for the arrows + button), `#timeTravelBanner` (accent-tinted banner with the exit button), `.snapshot-row` (list rows with day, meta, and View/Delete actions), `.history-controls` (flex row for the two combo boxes), `.history-loading` + `.spinner` (loading animation).
 
 ---
 
@@ -279,7 +294,7 @@ A feature that lets any logged-in user save a snapshot of the **Dashboard** page
 - **State:** `state` object holds `user`, `guest`, `assets`, `providers`, `accounts`, `holdings`, `users`, `currencies`, `goals`. Module-level `timeTravelSnapshot` holds the active snapshot being viewed (null = live dashboard); see §7d.
 - **Guest mode:** `guestData` provides mock data; `state.guest` is true. Guest changes are local-only and not persisted.
 - **Helpers:** `$` (querySelector), `esc` (HTML escape), `numeric`, `request` (fetch wrapper that throws on non-OK), `toast`, `openModal`/`closeModal`/`closeAllModals`, `confirmDialog` (Promise-based custom confirm modal), `isWriteAllowed`, `isAdminUser`.
-- **Currency:** `getExchangeRate`, `convertToEUR`, `formatCurrency` — rates are relative to USD. `accountValue(acc, convertToEur)` returns an account's value: with `convertToEur=true` it converts to EUR; otherwise it converts to the **account's display currency** (`acc.coin`). For asset accounts the holdings value (in the asset's currency) is converted to `acc.coin`, so changing an account's currency correctly re-values it rather than just relabeling the symbol.
+- **Currency:** `getExchangeRate`, `convertToEUR`, `formatCurrency` — rates are relative to USD. `accountValue(acc, convertToEur)` returns an account's value: with `convertToEur=true` it converts to EUR; otherwise it converts to the **account's display currency** (`acc.coin`). For asset accounts, **each holding's value is converted to the target currency individually before summing** — so an account can hold assets in different coins (e.g. EUR + AED) and the total is still correct. For non-EUR/non-USD currencies the conversion goes through USD first (e.g. AED → USD → EUR).
 - **Data loading:** `loadData()` fetches all collections in parallel via `Promise.all`, then calls `render()`.
 - **Rendering:** `render()` dispatches to per-page renderers: `renderDashboardAccounts`, `renderCharts`, `renderPortfolioCards`, `renderPortfolioCharts`, `renderAssets`, `renderDividends`, `renderAccounts`, `renderHoldings`, `renderGoals`, `renderUsers`, plus `fillDividendPeriodValue()`, `updateToggleAllLabel()`, and `fillSelects()`.
 - **Charts:** Chart.js instances are cached in module-level variables (`allocationChartInstance`, `goalSimChartInstance`, etc.) and destroyed/recreated on re-render.
@@ -320,11 +335,12 @@ On **login**, a welcome modal (`#welcomeModalOverlay`) is shown automatically to
 
 The modal is split into **two pages** via a tab bar (`.welcome-tabs`), switched by `setWelcomePage(page)`:
 
-- **Page 1 — Getting Started:** the numbered 4-step usage guide:
+- **Page 1 — Getting Started:** the numbered 5-step usage guide:
   1. **Add a Provider** — go to the **My Accounts** menu and create a provider (bank / broker / other).
   2. **Add an Account** — inside that provider, create an account (e.g. an **asset account** to hold investments).
   3. **Unlock Goals** — **Goals** are unlocked once at least **1 account** is created.
   4. **Unlock My Portfolio, Assets & Dividends** — once an **asset account** is created, the **My Portfolio**, **Assets** and **Dividends** menus unlock, allowing the user to add **Holdings / Assets** to their portfolio on any existing asset account.
+  5. **Track Personal Assets** — on the **Assets** page, click **+ New Personal Asset** to track something that isn't a platform security. Personal assets are private to the user's account and their names are shown in `[]`.
 - **Page 2 — Privacy & Time Travel:** describes that the user's data is **private** to their account (no other user can see it; guests only see demo data), that pressing **H** hides the values on screen from people nearby (the blur/privacy feature, see below), and the **Time Travel** snapshot feature (save a snapshot of today's dashboard, view past days, one snapshot per day, delete any snapshot).
 
 The footer has **← Back** (`#welcomeModalPrev`), **Next →** (`#welcomeModalNext`), and **Got it, let's start** (`#welcomeModalOk`) buttons; Back/Next switch pages and the OK button (shown on the last page) calls `closeModal('welcomeModalOverlay')`. The modal also has a header **✕** close button (`#closeWelcomeBtn`). `showWelcomeModal()` resets to page 1 on open.
@@ -434,7 +450,7 @@ To overwrite the local D1 database with the current remote data:
 
 The script:
 1. Exports the remote `myd1db` to `remote-dump.sql` (`wrangler d1 export --remote`).
-2. Reorders the dump so the `assets` table is created before the tables that reference it (a known D1 export quirk where table creation order isn't dependency-sorted — without this, import fails with `no such table: main.assets`).
+2. Reorders the dump so the `assets`, `personal_assets` and `account_holdings` tables are created before the tables that reference them (a known D1 export quirk where table creation order isn't dependency-sorted — without this, import fails with `no such table: main.assets`). `personal_assets` is placed after `users` (which it references), and `account_holdings` after both `assets` and `personal_assets`.
 3. Clears the local D1 state (`.wrangler/state/v3/d1/`).
 4. Imports the reordered dump into the local database.
 
