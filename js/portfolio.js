@@ -237,6 +237,7 @@ let timeTravelSnapshot = null; // active snapshot being viewed (null = live dash
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart (cleared on modal close)
+let historyMaximized = false; // whether the history modal is maximized (fullscreen)
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -1169,7 +1170,26 @@ async function loadHistoryData() {
 function closeHistoryModal() {
   if (historyChartInstance) { historyChartInstance.destroy(); historyChartInstance = null; }
   historyData = null;
+  historyMaximized = false;
+  const overlay = $('#historyModalOverlay');
+  if (overlay) overlay.classList.remove('maximized');
   closeModal('historyModalOverlay');
+}
+
+// Toggle the history modal between normal and maximized (fullscreen) size.
+function toggleHistoryMaximize() {
+  const overlay = $('#historyModalOverlay');
+  if (!overlay) return;
+  historyMaximized = !historyMaximized;
+  overlay.classList.toggle('maximized', historyMaximized);
+  const btn = $('#maximizeHistoryBtn');
+  if (btn) {
+    btn.textContent = historyMaximized ? '🗗' : '⛶';
+    btn.title = historyMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', historyMaximized ? 'Restore' : 'Maximize');
+  }
+  // Re-render the chart so it resizes to the new container size.
+  if (historyChartInstance) historyChartInstance.resize();
 }
 
 // Apply the zoom filter: keep the most recent snapshot per month or per year.
@@ -2753,6 +2773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeTimeTravelBtn')?.addEventListener('click', () => closeModal('timeTravelModalOverlay'));
   $('#saveSnapshotBtn')?.addEventListener('click', saveSnapshot);
   $('#historyBtn')?.addEventListener('click', openHistoryModal);
+  $('#maximizeHistoryBtn')?.addEventListener('click', toggleHistoryMaximize);
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
   $('#historyZoom')?.addEventListener('change', renderHistoryChart);
