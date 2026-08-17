@@ -79,16 +79,18 @@
               <div class="page-title">Dashboard</div>
               <div class="page-desc">Portfolio overview and recent activity</div>
             </div>
-            <div class="time-travel-controls" style="display:none;">
-              <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" disabled>←</button>
-              <button class="btn-sm icon-btn" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰</button>
-              <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button" title="Save today's snapshot">💾</button>
-              <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button" title="Snapshot history">📈</button>
-              <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button" title="Snapshot calendar">📅</button>
-              <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
+            <div class="time-travel-group">
+              <div id="timeTravelBanner" class="time-travel-banner" style="display:none;"></div>
+              <div class="time-travel-controls" style="display:none;">
+                <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" disabled>←</button>
+                <button class="btn-sm icon-btn" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰</button>
+                <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button" title="Save today's snapshot">💾</button>
+                <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button" title="Snapshot history">📈</button>
+                <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button" title="Snapshot calendar">📅</button>
+                <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
+              </div>
             </div>
           </div>
-          <div id="timeTravelBanner" class="banner" style="display:none;"></div>
           <div id="guestBanner" class="banner" style="display:none;">
             You are viewing demo/mock data as a Guest. Sign in to view and manage your own portfolio.
           </div>

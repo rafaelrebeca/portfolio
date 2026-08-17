@@ -1007,8 +1007,8 @@ function renderTimeTravelBanner() {
   if (controls) controls.style.display = loggedIn ? '' : 'none';
   if (banner) {
     if (timeTravelActive()) {
-      banner.style.display = 'block';
-      banner.innerHTML = `Viewing snapshot from <strong>${esc(formatSnapshotDay(timeTravelSnapshot.day))}</strong> — <button class="btn-sm" type="button" id="exitTimeTravelBtn">Exit Time Travel</button>`;
+      banner.style.display = '';
+      banner.innerHTML = `<strong>${esc(formatSnapshotDay(timeTravelSnapshot.day))}</strong> <button class="btn-sm icon-btn" type="button" id="exitTimeTravelBtn" title="Exit Time Travel">✕</button>`;
       const exitBtn = $('#exitTimeTravelBtn');
       if (exitBtn) exitBtn.addEventListener('click', exitTimeTravel);
     } else {

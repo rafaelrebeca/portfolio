@@ -1391,17 +1391,25 @@ select {
 }
 .time-travel-controls .btn-sm:disabled { opacity: .5; cursor: not-allowed; }
 .time-travel-controls .icon-btn { padding: 4px 8px; font-size: 14px; line-height: 1; }
-#timeTravelBanner {
+.time-travel-group {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  border-color: var(--accent);
+  gap: 10px;
+}
+.time-travel-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
   background: rgba(99, 102, 241, .08);
   color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
 }
-#timeTravelBanner strong { color: var(--accent); }
-#timeTravelBanner .btn-sm { margin-left: auto; }
+.time-travel-banner strong { color: var(--accent); }
 
 .snapshot-row {
   display: flex;
