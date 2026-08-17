@@ -81,7 +81,10 @@
             </div>
             <div class="time-travel-controls" style="display:none;">
               <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" disabled>←</button>
-              <button class="btn-sm" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰 Time Travel</button>
+              <button class="btn-sm icon-btn" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰</button>
+              <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button" title="Save today's snapshot">💾</button>
+              <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button" title="Snapshot history">📈</button>
+              <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button" title="Snapshot calendar">📅</button>
               <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
             </div>
           </div>
@@ -936,14 +939,21 @@
         <h3>🕰 Time Travel</h3>
         <button class="modal-close" type="button" id="closeTimeTravelBtn" title="Close" aria-label="Close">✕</button>
       </div>
-      <p class="modal-copy">Save a snapshot of today's dashboard, or view how your dashboard looked on a past day.</p>
-      <div class="modal-actions" style="justify-content:flex-start;margin-bottom:14px;">
-        <button class="btn-sm primary" type="button" id="saveSnapshotBtn">💾 Save today's snapshot</button>
-        <button class="btn-sm" type="button" id="historyBtn">📈 History</button>
-      </div>
-      <p class="modal-copy" style="font-size:12px;color:var(--muted);margin-bottom:14px;">One snapshot per day — saving again today replaces today's snapshot.</p>
+      <p class="modal-copy">View how your dashboard looked on a past day.</p>
       <div class="page-title" style="font-size:15px;margin-bottom:10px;">Your snapshots</div>
       <div id="snapshotList" style="max-height:320px;overflow-y:auto;">Loading...</div>
+      <div id="snapshotPagination" class="snapshot-pagination" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Time Travel Calendar (standalone calendar, no snapshot list) -->
+  <div class="modal-overlay" id="calendarModalOverlay">
+    <div class="modal" style="max-width:360px;">
+      <div class="modal-head">
+        <h3>📅 Snapshot Calendar</h3>
+        <button class="modal-close" type="button" id="closeCalendarBtn" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div id="calendarModalBody" class="snapshot-calendar"></div>
     </div>
   </div>
 

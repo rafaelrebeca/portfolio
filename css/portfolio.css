@@ -1383,9 +1383,14 @@ select {
 .time-travel-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
 }
 .time-travel-controls .btn-sm:disabled { opacity: .5; cursor: not-allowed; }
+.time-travel-controls .icon-btn { padding: 4px 8px; font-size: 14px; line-height: 1; }
 #timeTravelBanner {
   display: flex;
   align-items: center;
@@ -1412,6 +1417,100 @@ select {
 .snapshot-row .snapshot-meta { font-size: 12px; color: var(--muted); }
 .snapshot-row .snapshot-actions { margin-left: auto; display: flex; gap: 8px; }
 .snapshot-row .snapshot-actions .btn-sm:disabled { opacity: .5; cursor: not-allowed; }
+
+.snapshot-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.snapshot-pagination .snapshot-page-indicator {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.snapshot-calendar {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.snapshot-calendar .cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.snapshot-calendar .cal-month-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.snapshot-calendar .cal-month-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.snapshot-calendar .cal-month-btn:hover { border-color: var(--accent); }
+.snapshot-calendar .cal-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.snapshot-calendar .cal-picker-month {
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.snapshot-calendar .cal-picker-month:hover { border-color: var(--accent); }
+.snapshot-calendar .cal-picker-month.cal-picker-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.snapshot-calendar .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.snapshot-calendar .cal-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.snapshot-calendar .cal-weekday {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.snapshot-calendar .cal-empty { background: transparent; }
+.snapshot-calendar .cal-day {
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  cursor: pointer;
+}
+.snapshot-calendar .cal-day:hover:not(:disabled) { border-color: var(--accent); }
+.snapshot-calendar .cal-day:disabled { opacity: .45; cursor: not-allowed; }
+.snapshot-calendar .cal-day.cal-has-snapshot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
 
 #historyModalOverlay.maximized {
   padding: 12px;

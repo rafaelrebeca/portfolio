@@ -235,6 +235,10 @@ let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
 let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
+const SNAPSHOTS_PER_PAGE = 5; // snapshots shown per page in the Time Travel modal
+let snapshotPage = 0; // current page index (0-based) of the snapshot list
+let calendarMonth = null; // { year, month } currently shown in the snapshot calendar (month is 0-based)
+let calendarPicker = false; // whether the calendar is showing the year/month picker instead of the day grid
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart (cleared on modal close)
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
@@ -1035,6 +1039,7 @@ function updateTimeTravelArrows() {
 }
 
 async function openTimeTravelModal() {
+  snapshotPage = 0;
   openModal('timeTravelModalOverlay');
   await loadSnapshotList();
 }
@@ -1049,25 +1054,151 @@ async function loadSnapshotList() {
     updateTimeTravelArrows();
     if (!snapshots.length) {
       list.innerHTML = '<div class="page-desc">No snapshots yet. Save today\'s snapshot to get started.</div>';
-      return;
+      const pagination = $('#snapshotPagination');
+      if (pagination) pagination.style.display = 'none';
+    } else {
+      renderSnapshotPage();
     }
-    list.innerHTML = snapshots.map(s => `
-      <div class="snapshot-row">
-        <span class="snapshot-day">${esc(formatSnapshotDay(s.day))}</span>
-        <span class="snapshot-meta">${esc(s.day)}</span>
-        <div class="snapshot-actions">
-          <button class="btn-sm" type="button" data-view-snapshot="${esc(s.day)}">View</button>
-          <button class="btn-sm danger" type="button" data-delete-snapshot="${esc(s.day)}" ${timeTravelActive() && timeTravelSnapshot.day === s.day ? 'disabled' : ''}>Delete</button>
-        </div>
-      </div>
-    `).join('');
   } catch (error) {
     list.innerHTML = `<div class="page-desc">${esc(error.message)}</div>`;
   }
 }
 
+// Render the current page of snapshots (SNAPSHOTS_PER_PAGE per page, newest first) plus pagination controls.
+function renderSnapshotPage() {
+  const list = $('#snapshotList');
+  if (!list) return;
+  const totalPages = Math.max(1, Math.ceil(timeTravelList.length / SNAPSHOTS_PER_PAGE));
+  if (snapshotPage >= totalPages) snapshotPage = totalPages - 1;
+  if (snapshotPage < 0) snapshotPage = 0;
+  const start = snapshotPage * SNAPSHOTS_PER_PAGE;
+  const pageSnapshots = timeTravelList.slice(start, start + SNAPSHOTS_PER_PAGE);
+  list.innerHTML = pageSnapshots.map(s => `
+    <div class="snapshot-row">
+      <span class="snapshot-day">${esc(formatSnapshotDay(s.day))}</span>
+      <span class="snapshot-meta">${esc(s.day)}</span>
+      <div class="snapshot-actions">
+        <button class="btn-sm" type="button" data-view-snapshot="${esc(s.day)}">View</button>
+        <button class="btn-sm danger" type="button" data-delete-snapshot="${esc(s.day)}" ${timeTravelActive() && timeTravelSnapshot.day === s.day ? 'disabled' : ''}>Delete</button>
+      </div>
+    </div>
+  `).join('');
+  renderSnapshotPagination(totalPages);
+}
+
+// Render the pagination controls (prev / page indicator / next) for the snapshot list.
+function renderSnapshotPagination(totalPages) {
+  const pagination = $('#snapshotPagination');
+  if (!pagination) return;
+  if (totalPages <= 1) {
+    pagination.style.display = 'none';
+    pagination.innerHTML = '';
+    return;
+  }
+  pagination.style.display = 'flex';
+  pagination.innerHTML = `
+    <button class="btn-sm" type="button" id="snapshotPagePrev" ${snapshotPage === 0 ? 'disabled' : ''}>←</button>
+    <span class="snapshot-page-indicator">Page ${snapshotPage + 1} of ${totalPages}</span>
+    <button class="btn-sm" type="button" id="snapshotPageNext" ${snapshotPage >= totalPages - 1 ? 'disabled' : ''}>→</button>
+  `;
+  $('#snapshotPagePrev')?.addEventListener('click', () => { snapshotPage--; renderSnapshotPage(); });
+  $('#snapshotPageNext')?.addEventListener('click', () => { snapshotPage++; renderSnapshotPage(); });
+}
+
+// Open the standalone calendar modal (calendar only, no snapshot list or other buttons).
+async function openCalendarModal() {
+  const now = new Date();
+  calendarMonth = { year: now.getUTCFullYear(), month: now.getUTCMonth() };
+  calendarPicker = false;
+  openModal('calendarModalOverlay');
+  const body = $('#calendarModalBody');
+  if (body) renderSnapshotCalendar(body);
+}
+
+// Render the calendar for the currently selected month. Days with a snapshot are highlighted in blue.
+// Clicking the month/year label toggles a year/month picker (calendarPicker).
+// Renders into the given container (the standalone calendar modal body).
+function renderSnapshotCalendar(container) {
+  const calendar = container;
+  if (!calendar || !calendarMonth) return;
+  const { year, month } = calendarMonth;
+  const snapshotDays = new Set(timeTravelList.map(s => s.day));
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const startWeekday = firstDay.getUTCDay(); // 0 = Sunday
+  const monthLabel = firstDay.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const weekdayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  if (calendarPicker) {
+    // Year/month picker: a year stepper plus a grid of the 12 months.
+    calendar.innerHTML = `
+      <div class="cal-head">
+        <button class="btn-sm" type="button" id="calPickerYearPrev" title="Previous years">←</button>
+        <span class="cal-month-label">${esc(String(year))}</span>
+        <button class="btn-sm" type="button" id="calPickerYearNext" title="Next years">→</button>
+      </div>
+      <div class="cal-picker-grid">
+        ${monthNames.map((name, i) => `
+          <button class="cal-picker-month ${i === month ? 'cal-picker-current' : ''}" type="button" data-pick-month="${i}">${name}</button>
+        `).join('')}
+      </div>
+    `;
+    $('#calPickerYearPrev')?.addEventListener('click', () => {
+      calendarMonth = { year: year - 1, month };
+      renderSnapshotCalendar(container);
+    });
+    $('#calPickerYearNext')?.addEventListener('click', () => {
+      calendarMonth = { year: year + 1, month };
+      renderSnapshotCalendar(container);
+    });
+    calendar.querySelectorAll('[data-pick-month]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        calendarMonth = { year, month: Number(btn.dataset.pickMonth) };
+        calendarPicker = false;
+        renderSnapshotCalendar(container);
+      });
+    });
+    return;
+  }
+
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) cells += '<div class="cal-cell cal-empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayStr = `${year}${String(month + 1).padStart(2, '0')}${String(d).padStart(2, '0')}`;
+    const hasSnapshot = snapshotDays.has(dayStr);
+    cells += `<button class="cal-cell cal-day ${hasSnapshot ? 'cal-has-snapshot' : ''}" type="button" data-cal-day="${dayStr}" ${hasSnapshot ? '' : 'disabled'}>${d}</button>`;
+  }
+  calendar.innerHTML = `
+    <div class="cal-head">
+      <button class="btn-sm" type="button" id="calPrevMonth" title="Previous month">←</button>
+      <button class="cal-month-label cal-month-btn" type="button" id="calMonthLabel" title="Select year and month">${esc(monthLabel)}</button>
+      <button class="btn-sm" type="button" id="calNextMonth" title="Next month">→</button>
+    </div>
+    <div class="cal-grid">
+      ${weekdayNames.map(w => `<div class="cal-cell cal-weekday">${w}</div>`).join('')}
+      ${cells}
+    </div>
+  `;
+  $('#calPrevMonth')?.addEventListener('click', () => {
+    calendarMonth = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
+    renderSnapshotCalendar(container);
+  });
+  $('#calNextMonth')?.addEventListener('click', () => {
+    calendarMonth = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 };
+    renderSnapshotCalendar(container);
+  });
+  $('#calMonthLabel')?.addEventListener('click', () => {
+    calendarPicker = true;
+    renderSnapshotCalendar(container);
+  });
+  calendar.querySelectorAll('[data-cal-day]').forEach(btn => {
+    btn.addEventListener('click', () => viewSnapshot(btn.dataset.calDay));
+  });
+}
+
 async function saveSnapshot() {
-  const btn = $('#saveSnapshotBtn');
+  const btn = $('#timeTravelSaveBtn');
   if (btn) btn.disabled = true;
   try {
     const data = collectDashboardSnapshot();
@@ -2770,9 +2901,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#timeTravelBtn')?.addEventListener('click', openTimeTravelModal);
   $('#timeTravelPrevBtn')?.addEventListener('click', goToPrevSnapshot);
   $('#timeTravelNextBtn')?.addEventListener('click', goToNextSnapshot);
+  $('#timeTravelSaveBtn')?.addEventListener('click', saveSnapshot);
+  $('#timeTravelHistoryBtn')?.addEventListener('click', openHistoryModal);
+  $('#timeTravelCalendarBtn')?.addEventListener('click', openCalendarModal);
   $('#closeTimeTravelBtn')?.addEventListener('click', () => closeModal('timeTravelModalOverlay'));
-  $('#saveSnapshotBtn')?.addEventListener('click', saveSnapshot);
-  $('#historyBtn')?.addEventListener('click', openHistoryModal);
+  $('#closeCalendarBtn')?.addEventListener('click', () => closeModal('calendarModalOverlay'));
   $('#maximizeHistoryBtn')?.addEventListener('click', toggleHistoryMaximize);
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
