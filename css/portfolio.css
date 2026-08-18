@@ -1635,6 +1635,23 @@ select {
   flex: 1;
   height: auto !important;
 }
+#goalHistoryModalOverlay.maximized {
+  padding: 12px;
+}
+#goalHistoryModalOverlay.maximized .modal {
+  position: absolute;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-width: none !important;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+#goalHistoryModalOverlay.maximized #goalHistoryChartWrap {
+  flex: 1;
+  height: auto !important;
+}
 .history-controls {
   display: flex;
   gap: 12px;
