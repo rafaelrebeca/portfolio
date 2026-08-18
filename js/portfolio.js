@@ -237,6 +237,8 @@ let timeTravelSnapshot = null; // active snapshot being viewed (null = live dash
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
 const SNAPSHOTS_PER_PAGE = 5; // snapshots shown per page in the Time Travel modal
 let snapshotPage = 0; // current page index (0-based) of the snapshot list
+const CURRENCIES_PER_PAGE = 20; // currencies shown per page in the Currency table
+let currencyPage = 0; // current page index (0-based) of the currency list
 let calendarMonth = null; // { year, month } currently shown in the snapshot calendar (month is 0-based)
 let calendarPicker = false; // whether the calendar is showing the year/month picker instead of the day grid
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
@@ -786,6 +788,8 @@ function render() {
     renderHoldings();
     renderGoals();
     renderUsers();
+    renderProfile();
+    renderCurrency();
     fillSelects();
     renderPortfolioCards();
     renderPortfolioCharts();
@@ -838,6 +842,8 @@ function render() {
   renderHoldings();
   renderGoals();
   renderUsers();
+  renderProfile();
+  renderCurrency();
   fillSelects();
   renderCharts();
   renderPortfolioCards();
@@ -2193,14 +2199,103 @@ function initBlurObserver() {
 function showApp() {
   $('#loginScreen').style.display = 'none';
   $('#app').style.display = 'block';
-  const role = state.guest ? 'guest' : (state.user?.role || 'user');
-  const pill = $('#rolePill');
-  if (pill) {
-    pill.textContent = role;
-    pill.className = `role-pill ${role}`;
-  }
-  if ($('#usernameLabel')) $('#usernameLabel').textContent = state.guest ? 'Guest' : (state.user?.username || '');
   if ($('#guestBanner')) $('#guestBanner').style.display = state.guest ? 'block' : 'none';
+  renderProfile();
+}
+
+// Populate the Profile page with the current user's details.
+function renderProfile() {
+  const username = $('#profileUsername');
+  const role = $('#profileRole');
+  if (username) username.textContent = state.guest ? 'Guest' : (state.user?.username || '—');
+  if (role) role.textContent = state.guest ? 'guest' : (state.user?.role || 'user');
+}
+
+// Reset the logged-in user's password from the Profile page.
+async function resetProfilePassword() {
+  const newPass = $('#profileNewPassword')?.value || '';
+  const confirmPass = $('#profileConfirmPassword')?.value || '';
+  if (newPass.length < 8) { toast('Password must be at least 8 characters.'); return; }
+  if (newPass !== confirmPass) { toast('Passwords do not match.'); return; }
+  const btn = $('#profileResetPasswordBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (state.guest) {
+      toast('Password reset simulated.');
+    } else {
+      await request('/me/password', { method: 'POST', body: JSON.stringify({ password: newPass }) });
+      toast('Password reset successfully.');
+    }
+    if ($('#profileNewPassword')) $('#profileNewPassword').value = '';
+    if ($('#profileConfirmPassword')) $('#profileConfirmPassword').value = '';
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Render the Currency page: USD→EUR ratio card + searchable list of all currencies.
+// USD (rate 1.0) and EUR are filtered out of the list.
+function renderCurrency() {
+  const usdEurEl = $('#currencyUsdEur');
+  const usd = state.currencies.find(c => c.coin === 'USD');
+  const eur = state.currencies.find(c => c.coin === 'EUR');
+  if (usdEurEl) {
+    if (usd && eur) {
+      const ratio = eur.value / usd.value;
+      usdEurEl.textContent = `1 USD = ${ratio.toFixed(4)} EUR`;
+    } else {
+      usdEurEl.textContent = '—';
+    }
+  }
+  const search = ($('#currencySearch')?.value || '').trim().toUpperCase();
+  const table = $('#currencyTable');
+  if (!table) return;
+  const eurRate = eur ? eur.value : 1;
+  // Filter the full dataset (search applies to all currencies, not just the current page).
+  const filtered = state.currencies
+    .filter(c => c.coin !== 'USD' && c.coin !== 'EUR')
+    .filter(c => !search || c.coin.includes(search));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CURRENCIES_PER_PAGE));
+  if (currencyPage >= totalPages) currencyPage = totalPages - 1;
+  if (currencyPage < 0) currencyPage = 0;
+  const start = currencyPage * CURRENCIES_PER_PAGE;
+  const pageCurrencies = filtered.slice(start, start + CURRENCIES_PER_PAGE);
+  const rows = pageCurrencies.map(c => `
+      <tr>
+        <td>${esc(c.coin)}</td>
+        <td>${Number(c.value).toFixed(4)}</td>
+        <td>${Number(c.value / eurRate).toFixed(4)}</td>
+      </tr>
+    `).join('');
+  table.innerHTML = rows || '<tr><td colspan="3" style="text-align:center;color:var(--muted);">No currencies found.</td></tr>';
+  renderCurrencyPagination(totalPages, filtered.length);
+}
+
+// Render the pagination controls (prev / page number buttons / next) for the currency table.
+function renderCurrencyPagination(totalPages, totalCount) {
+  const pagination = $('#currencyPagination');
+  if (!pagination) return;
+  if (totalPages <= 1) {
+    pagination.style.display = 'none';
+    pagination.innerHTML = '';
+    return;
+  }
+  pagination.style.display = 'flex';
+  const pageButtons = Array.from({ length: totalPages }, (_, i) => `
+    <button class="btn-sm currency-page-btn${i === currencyPage ? ' active' : ''}" type="button" data-currency-page="${i}">${i + 1}</button>
+  `).join('');
+  pagination.innerHTML = `
+    <button class="btn-sm" type="button" id="currencyPagePrev" ${currencyPage === 0 ? 'disabled' : ''}>←</button>
+    ${pageButtons}
+    <button class="btn-sm" type="button" id="currencyPageNext" ${currencyPage >= totalPages - 1 ? 'disabled' : ''}>→</button>
+  `;
+  $('#currencyPagePrev')?.addEventListener('click', () => { currencyPage--; renderCurrency(); });
+  $('#currencyPageNext')?.addEventListener('click', () => { currencyPage++; renderCurrency(); });
+  pagination.querySelectorAll('.currency-page-btn').forEach(btn => {
+    btn.addEventListener('click', () => { currencyPage = Number(btn.dataset.currencyPage); renderCurrency(); });
+  });
 }
 
 function toggleAccountFields() {
@@ -2887,6 +2982,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); maybeShowWelcomeModal(); });
   $('#logoutButton')?.addEventListener('click', logout);
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
+  $('#profileResetPasswordBtn')?.addEventListener('click', resetProfilePassword);
+  $('#currencySearch')?.addEventListener('input', () => { currencyPage = 0; renderCurrency(); });
 
   // Pressing Escape closes any open modal without saving.
   document.addEventListener('keydown', event => {

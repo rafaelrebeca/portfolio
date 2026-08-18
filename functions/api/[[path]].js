@@ -404,6 +404,15 @@ export async function onRequest(context) {
       if (!changed(await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, id).run())) return fail('User not found.', 404);
       return json({ ok: true });
     }
+    // Self-service password reset for the logged-in user (Profile page).
+    if (method === 'POST' && path === 'me/password') {
+      const user = await requireMember(request, env);
+      const { password } = await readBody(request);
+      if (String(password || '').length < 8) return fail('Password must be at least 8 characters.');
+      const hash = await bcrypt.hash(String(password), 12);
+      await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, user.id).run();
+      return json({ ok: true });
+    }
     if (method === 'PATCH' && /^admin\/users\/\d+\/role$/.test(path)) {
       const admin = await requireAdmin(request, env), id = Number(path.split('/')[2]), { role } = await readBody(request);
       if (id === admin.id) return fail('You cannot change your own role.'); if (!validRole(role)) return fail('Invalid role.');
