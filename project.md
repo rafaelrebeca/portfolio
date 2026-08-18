@@ -232,6 +232,10 @@ Goals can have up to **3 sub-goals** (`sub1`, `sub2`, `sub3`), stored as REAL co
 
 The same `goalProgressHTML` helper is used by both the goal cards (`renderGoals`) and the goal details modal (`openGoalDetailsModal`).
 
+**Goal card action buttons** are icon-only (`.goal-action-btn`, with `title` tooltips): `ℹ️` Details, `📈` History, `▶️` Simulate, `📄` Duplicate, `✏️` Edit, `🗑️` Delete. The **History** button (`data-goal-history`) is only rendered when the user has snapshots (`timeTravelList.length > 0`).
+
+**Goal History modal** (`#goalHistoryModalOverlay`): opened by `openGoalHistoryModal(goalId)`, closed by `closeGoalHistoryModal()`, maximized by `toggleGoalHistoryMaximize()`. It shows a Chart.js **line chart** (`#goalHistoryChart`) of the goal's **progress percentage (0–100%)** over time, computed from the **accounts stored in each snapshot** (snapshots are unchanged — no goal data is added to them). `goalProgressFromSnapshot(goal, snapshotAccounts)` mirrors `goalProgressHTML`: for a **normal goal** it sums the linked accounts' `valueEur` and divides by the target; for a **debt goal** (target 0) it uses `positive-sum / absolute-negative-sum`. The y-axis is fixed to 0–100 with `%` tick labels, and the zoom select (`#goalHistoryZoom`) reuses `applyHistoryZoom`.
+
 ---
 
 ## 7c. Currency Update Caching (`update_story`)

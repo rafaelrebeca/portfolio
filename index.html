@@ -1131,6 +1131,37 @@
     </div>
   </div>
 
+  <!-- MODAL: Goal History -->
+  <div class="modal-overlay" id="goalHistoryModalOverlay">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-head">
+        <h3 id="goalHistoryTitle">📈 Goal History</h3>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" id="maximizeGoalHistoryBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeGoalHistoryBtn" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="history-controls">
+        <div class="field">
+          <label>Zoom</label>
+          <select id="goalHistoryZoom" style="width:100%;">
+            <option value="all">All</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+      </div>
+      <div id="goalHistoryLoading" class="history-loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>Loading snapshots...</span>
+      </div>
+      <div id="goalHistoryChartWrap" style="position:relative;height:320px;margin-top:16px;">
+        <canvas id="goalHistoryChart"></canvas>
+      </div>
+      <div id="goalHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
+    </div>
+  </div>
+
   <!-- MODAL: Confirm (Delete / destructive actions) -->
   <div class="modal-overlay" id="confirmModalOverlay">
     <div class="modal">

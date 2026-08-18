@@ -275,6 +275,10 @@ let accountHistoryChartInstance = null; // Chart.js instance for the account his
 let accountHistoryData = null; // full snapshot data loaded for the account history chart (cleared on modal close)
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
+let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
+let goalHistoryData = null; // full snapshot data loaded for the goal history chart (cleared on modal close)
+let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
+let goalHistoryGoalId = null; // the goal id whose history is being shown
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -1568,6 +1572,147 @@ function renderAccountHistoryChart() {
   });
 }
 
+// Open the goal history modal and load all snapshot data for the goal's value over time.
+async function openGoalHistoryModal(goalId) {
+  const goal = state.goals.find(g => g.id === goalId);
+  if (!goal) return;
+  goalHistoryGoalId = goalId;
+  const title = $('#goalHistoryTitle');
+  if (title) title.textContent = `📈 ${goal.goal_name} — History`;
+  openModal('goalHistoryModalOverlay');
+  const loading = $('#goalHistoryLoading');
+  const chartWrap = $('#goalHistoryChartWrap');
+  const empty = $('#goalHistoryEmpty');
+  if (loading) loading.style.display = 'flex';
+  if (chartWrap) chartWrap.style.display = 'none';
+  if (empty) empty.style.display = 'none';
+  try {
+    const { snapshots } = await request('/snapshots');
+    goalHistoryData = snapshots || [];
+    renderGoalHistoryChart();
+  } catch (error) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+// Close the goal history modal and clear the loaded data + chart.
+function closeGoalHistoryModal() {
+  if (goalHistoryChartInstance) { goalHistoryChartInstance.destroy(); goalHistoryChartInstance = null; }
+  goalHistoryData = null;
+  goalHistoryMaximized = false;
+  goalHistoryGoalId = null;
+  const overlay = $('#goalHistoryModalOverlay');
+  if (overlay) overlay.classList.remove('maximized');
+  closeModal('goalHistoryModalOverlay');
+}
+
+// Toggle the goal history modal between normal and maximized (fullscreen) size.
+function toggleGoalHistoryMaximize() {
+  const overlay = $('#goalHistoryModalOverlay');
+  if (!overlay) return;
+  goalHistoryMaximized = !goalHistoryMaximized;
+  overlay.classList.toggle('maximized', goalHistoryMaximized);
+  const btn = $('#maximizeGoalHistoryBtn');
+  if (btn) {
+    btn.textContent = goalHistoryMaximized ? '🗗' : '⛶';
+    btn.title = goalHistoryMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', goalHistoryMaximized ? 'Restore' : 'Maximize');
+  }
+  if (goalHistoryChartInstance) goalHistoryChartInstance.resize();
+}
+
+// Compute a goal's progress percentage (0-100) from a snapshot's account data.
+// Mirrors goalProgressHTML: normal goals use current/target; debt goals use
+// positive-sum / absolute-negative-sum. Account values are stored in EUR.
+function goalProgressFromSnapshot(goal, snapshotAccounts) {
+  const linked = (snapshotAccounts || []).filter(a => (goal.account_ids || []).includes(a.id));
+  const target = Number(goal.value || 0);
+
+  // Debt clearing goal (target === 0)
+  if (target === 0) {
+    let posSum = 0, negSum = 0;
+    linked.forEach(acc => {
+      const val = Number(acc.valueEur || 0);
+      if (val > 0) posSum += val; else negSum += val;
+    });
+    const absNeg = Math.abs(negSum);
+    if (absNeg <= 0) return null;
+    return Math.min(100, Math.max(0, (posSum / absNeg) * 100));
+  }
+
+  // Normal goal (target > 0)
+  const current = linked.reduce((s, acc) => s + Number(acc.valueEur || 0), 0);
+  return Math.min(100, Math.max(0, (current / target) * 100));
+}
+
+// Draw the line chart for the selected goal's progress percentage (0-100) across snapshots.
+function renderGoalHistoryChart() {
+  const zoom = $('#goalHistoryZoom')?.value || 'all';
+  const empty = $('#goalHistoryEmpty');
+  const chartWrap = $('#goalHistoryChartWrap');
+  if (!goalHistoryData || !goalHistoryData.length || !goalHistoryGoalId) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  const goal = state.goals.find(g => g.id === goalHistoryGoalId);
+  if (!goal) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'Goal not found.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  const points = applyHistoryZoom(goalHistoryData, zoom).slice().reverse(); // oldest -> newest
+  const labels = points.map(p => formatSnapshotDay(p.day));
+  const values = points.map(p => {
+    const accounts = (p.data && p.data.accounts) || [];
+    return goalProgressFromSnapshot(goal, accounts);
+  });
+  const hasData = values.some(v => v !== null);
+  if (!hasData) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No data for this goal in the available snapshots.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  if (chartWrap) chartWrap.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+
+  const ctx = document.getElementById('goalHistoryChart')?.getContext('2d');
+  if (!ctx) return;
+  if (goalHistoryChartInstance) goalHistoryChartInstance.destroy();
+  goalHistoryChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Progress (%)',
+        data: values,
+        borderColor: CHART_COLORS[0],
+        backgroundColor: CHART_COLORS[0],
+        tension: 0.3,
+        fill: false,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { color: '#e6ebf5', callback: v => `${v}%` },
+          grid: { color: 'rgba(255,255,255,.05)' }
+        }
+      }
+    }
+  });
+}
+
 function renderAssets() {
   const searchInput = $('#assetSearch')?.value.toLowerCase() || '';
   const typeFilter = $('#assetTypeFilter')?.value || '';
@@ -2143,11 +2288,12 @@ function renderGoals() {
               <button class="btn-sm goal-order-btn" data-goal-up="${g.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
               <button class="btn-sm goal-order-btn" data-goal-down="${g.id}" title="Move down" ${isLast ? 'disabled' : ''}>↓</button>
             </span>
-            <button class="btn-sm" data-goal-details="${g.id}">Details</button>
-            <button class="btn-sm" data-simulate-goal="${g.id}">Simulate</button>
-            <button class="btn-sm" data-duplicate-goal="${g.id}">Duplicate</button>
-            <button class="btn-sm" data-edit-goal="${g.id}">Edit</button>
-            <button class="btn-sm danger" data-delete-goal="${g.id}">Delete</button>
+            <button class="btn-sm goal-action-btn" data-goal-details="${g.id}" title="Details">ℹ️</button>
+            ${timeTravelList.length > 0 ? `<button class="btn-sm goal-action-btn" data-goal-history="${g.id}" title="History">📈</button>` : ''}
+            <button class="btn-sm goal-action-btn" data-simulate-goal="${g.id}" title="Simulate">▶️</button>
+            <button class="btn-sm goal-action-btn" data-duplicate-goal="${g.id}" title="Duplicate">📄</button>
+            <button class="btn-sm goal-action-btn" data-edit-goal="${g.id}" title="Edit">✏️</button>
+            <button class="btn-sm goal-action-btn danger" data-delete-goal="${g.id}" title="Delete">🗑️</button>
           </div>
         </div>
         <div class="goal-detail-grid">
@@ -3270,6 +3416,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
+  $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
+  $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
+  $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
   $('#snapshotList')?.addEventListener('click', async event => {
     const viewBtn = event.target.closest('[data-view-snapshot]');
     if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }
@@ -4004,6 +4153,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const goalDetailsBtn = event.target.closest('[data-goal-details]');
     if (goalDetailsBtn) {
       openGoalDetailsModal(Number(goalDetailsBtn.dataset.goalDetails));
+      return;
+    }
+
+    // Goal History
+    const goalHistoryBtn = event.target.closest('[data-goal-history]');
+    if (goalHistoryBtn) {
+      openGoalHistoryModal(Number(goalHistoryBtn.dataset.goalHistory));
       return;
     }
 

@@ -1199,6 +1199,12 @@ select {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.goal-action-btn {
+  padding: 6px 8px;
+  min-width: 34px;
+  font-size: 14px;
+  line-height: 1;
+}
 
 .goal-detail-grid {
   display: grid;
