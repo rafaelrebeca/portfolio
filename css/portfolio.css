@@ -1013,6 +1013,14 @@ select {
   padding: 18px;
   margin-bottom: 14px;
 }
+.account-card.clickable {
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.account-card.clickable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
 
 .account-card-head {
   display: flex;
@@ -1601,6 +1609,23 @@ select {
   flex-direction: column;
 }
 #historyModalOverlay.maximized #historyChartWrap {
+  flex: 1;
+  height: auto !important;
+}
+#accountHistoryModalOverlay.maximized {
+  padding: 12px;
+}
+#accountHistoryModalOverlay.maximized .modal {
+  position: absolute;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-width: none !important;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+#accountHistoryModalOverlay.maximized #accountHistoryChartWrap {
   flex: 1;
   height: auto !important;
 }

@@ -244,6 +244,10 @@ let calendarPicker = false; // whether the calendar is showing the year/month pi
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart (cleared on modal close)
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
+let accountHistoryChartInstance = null; // Chart.js instance for the account history line chart
+let accountHistoryData = null; // full snapshot data loaded for the account history chart (cleared on modal close)
+let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
+let accountHistoryAccountId = null; // the account id whose history is being shown
 
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
@@ -308,12 +312,13 @@ function renderDashboardAccounts() {
       </div>`
     : '';
 
+  const hasSnapshots = timeTravelList.length > 0;
   container.innerHTML = filterBar + (accounts.length ? `
     <div class="dashboard-accounts-grid">
       ${accounts.map(a => {
         const valInEur = accountValue(a, true);
         return `
-          <div class="account-card">
+          <div class="account-card${hasSnapshots ? ' clickable' : ''}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${valInEur < 0 ? 'neg' : 'pos'}">${moneyEUR.format(valInEur)}</strong>
@@ -1428,6 +1433,112 @@ function buildHistoryDatasets(points, chartType) {
     tension: 0.3,
     fill: false
   }));
+}
+
+// Open the account history modal for a given account id.
+async function openAccountHistoryModal(accountId) {
+  const account = state.accounts.find(a => a.id === accountId);
+  if (!account) return;
+  accountHistoryAccountId = accountId;
+  const title = $('#accountHistoryTitle');
+  if (title) title.textContent = `📈 ${account.name} — History`;
+  openModal('accountHistoryModalOverlay');
+  const loading = $('#accountHistoryLoading');
+  const chartWrap = $('#accountHistoryChartWrap');
+  const empty = $('#accountHistoryEmpty');
+  if (loading) loading.style.display = 'flex';
+  if (chartWrap) chartWrap.style.display = 'none';
+  if (empty) empty.style.display = 'none';
+  try {
+    const { snapshots } = await request('/snapshots');
+    accountHistoryData = snapshots || [];
+    renderAccountHistoryChart();
+  } catch (error) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+// Close the account history modal and clear the loaded data + chart.
+function closeAccountHistoryModal() {
+  if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
+  accountHistoryData = null;
+  accountHistoryMaximized = false;
+  accountHistoryAccountId = null;
+  const overlay = $('#accountHistoryModalOverlay');
+  if (overlay) overlay.classList.remove('maximized');
+  closeModal('accountHistoryModalOverlay');
+}
+
+// Toggle the account history modal between normal and maximized (fullscreen) size.
+function toggleAccountHistoryMaximize() {
+  const overlay = $('#accountHistoryModalOverlay');
+  if (!overlay) return;
+  accountHistoryMaximized = !accountHistoryMaximized;
+  overlay.classList.toggle('maximized', accountHistoryMaximized);
+  const btn = $('#maximizeAccountHistoryBtn');
+  if (btn) {
+    btn.textContent = accountHistoryMaximized ? '🗗' : '⛶';
+    btn.title = accountHistoryMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', accountHistoryMaximized ? 'Restore' : 'Maximize');
+  }
+  if (accountHistoryChartInstance) accountHistoryChartInstance.resize();
+}
+
+// Draw the line chart for the selected account's value evolution across snapshots.
+function renderAccountHistoryChart() {
+  const zoom = $('#accountHistoryZoom')?.value || 'all';
+  const empty = $('#accountHistoryEmpty');
+  const chartWrap = $('#accountHistoryChartWrap');
+  if (!accountHistoryData || !accountHistoryData.length || !accountHistoryAccountId) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  const points = applyHistoryZoom(accountHistoryData, zoom).slice().reverse(); // oldest -> newest
+  const labels = points.map(p => formatSnapshotDay(p.day));
+  const values = points.map(p => {
+    const acc = (p.data && p.data.accounts || []).find(a => a.id === accountHistoryAccountId);
+    return acc ? (acc.valueEur ?? 0) : null;
+  });
+  const hasData = values.some(v => v !== null);
+  if (!hasData) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No data for this account in the available snapshots.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  if (chartWrap) chartWrap.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+
+  const ctx = document.getElementById('accountHistoryChart')?.getContext('2d');
+  if (!ctx) return;
+  if (accountHistoryChartInstance) accountHistoryChartInstance.destroy();
+  accountHistoryChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Value (EUR)',
+        data: values,
+        borderColor: CHART_COLORS[0],
+        backgroundColor: CHART_COLORS[0],
+        tension: 0.3,
+        fill: false,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { ticks: { color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
 }
 
 function renderAssets() {
@@ -3063,6 +3174,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
   $('#historyZoom')?.addEventListener('change', renderHistoryChart);
+  $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
+  $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
+  $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
   $('#snapshotList')?.addEventListener('click', async event => {
     const viewBtn = event.target.closest('[data-view-snapshot]');
     if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }
@@ -3545,6 +3659,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Table Delegation (Edit/Delete Actions & Add to Account)
   document.addEventListener('click', async event => {
+    // Account history (click an account card on the dashboard when snapshots exist)
+    const accountHistoryCard = event.target.closest('[data-account-history]');
+    if (accountHistoryCard) {
+      openAccountHistoryModal(Number(accountHistoryCard.dataset.accountHistory));
+      return;
+    }
     // Clickable chart legend row
     const legendRow = event.target.closest('[data-legend-label]');
     if (legendRow) {

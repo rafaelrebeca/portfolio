@@ -1043,6 +1043,37 @@
     </div>
   </div>
 
+  <!-- MODAL: Account History (per-account value evolution from snapshots) -->
+  <div class="modal-overlay" id="accountHistoryModalOverlay">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-head">
+        <h3 id="accountHistoryTitle">📈 Account History</h3>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" id="maximizeAccountHistoryBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAccountHistoryBtn" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="history-controls">
+        <div class="field">
+          <label>Zoom</label>
+          <select id="accountHistoryZoom" style="width:100%;">
+            <option value="all">All</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+      </div>
+      <div id="accountHistoryLoading" class="history-loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>Loading snapshots...</span>
+      </div>
+      <div id="accountHistoryChartWrap" style="position:relative;height:320px;margin-top:16px;">
+        <canvas id="accountHistoryChart"></canvas>
+      </div>
+      <div id="accountHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
+    </div>
+  </div>
+
   <!-- MODAL: Confirm (Delete / destructive actions) -->
   <div class="modal-overlay" id="confirmModalOverlay">
     <div class="modal">
