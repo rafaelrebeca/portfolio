@@ -32,8 +32,8 @@ const guestData = {
     { coin: 'JPY', value: 149.50 }
   ],
   goals: [
-    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', sub1: 10000, sub2: 15000, sub3: null, account_ids: [1, 2] },
-    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', sub1: null, sub2: null, sub3: null, account_ids: [3] }
+    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', sub1: 10000, sub2: 15000, sub3: null, account_ids: [1, 2], order_by: 1 },
+    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', sub1: null, sub2: null, sub3: null, account_ids: [3], order_by: 2 }
   ],
   users: [
     { id: 1, username: 'admin_user', role: 'admin', created_at: '2026-01-12', last_login: '2026-08-09' },
@@ -1985,18 +1985,25 @@ function goalProgressHTML(g, current, target, currency) {
 
 function renderGoals() {
   if (!$('#goalsList')) return;
-  $('#goalsList').innerHTML = state.goals.length ? state.goals.map(g => {
+  const sorted = state.goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
+  $('#goalsList').innerHTML = sorted.length ? sorted.map((g, idx) => {
     const current = goalCurrentValue(g);
     const target = Number(g.value || 0);
     const diff = current - target;
     const linked = state.accounts.filter(a => (g.account_ids || []).includes(a.id));
     const linkedNames = linked.map(a => `${esc(a.name)} (${esc(a.provider_name || providerName(a.provider_id))})`).join(', ') || 'No linked accounts';
     const progressHTML = goalProgressHTML(g, current, target, g.coin || 'USD');
+    const isFirst = idx === 0;
+    const isLast = idx === sorted.length - 1;
     return `
       <div class="goal-card">
         <div class="goal-card-head">
           <span class="goal-name">🎯 ${esc(g.goal_name)} <span class="tag goal">${esc(g.coin || 'USD')}</span></span>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <span class="goal-order-btns">
+              <button class="btn-sm goal-order-btn" data-goal-up="${g.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
+              <button class="btn-sm goal-order-btn" data-goal-down="${g.id}" title="Move down" ${isLast ? 'disabled' : ''}>↓</button>
+            </span>
             <button class="btn-sm" data-goal-details="${g.id}">Details</button>
             <button class="btn-sm" data-simulate-goal="${g.id}">Simulate</button>
             <button class="btn-sm" data-duplicate-goal="${g.id}">Duplicate</button>
@@ -3349,7 +3356,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } else {
         const newId = Math.max(...guestData.goals.map(g => g.id), 0) + 1;
-        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, account_ids: values.account_ids });
+        const maxOrder = Math.max(...guestData.goals.map(g => g.order_by ?? 0), 0);
+        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, account_ids: values.account_ids, order_by: maxOrder + 1 });
       }
       closeModal('goalModalOverlay');
       await loadData();
@@ -3749,6 +3757,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // Reorder Goal (up/down arrows)
+    const goalUpBtn = event.target.closest('[data-goal-up]');
+    const goalDownBtn = event.target.closest('[data-goal-down]');
+    if (goalUpBtn || goalDownBtn) {
+      const id = Number((goalUpBtn || goalDownBtn).dataset[goalUpBtn ? 'goalUp' : 'goalDown']);
+      const dir = goalUpBtn ? -1 : 1;
+      const sorted = state.goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
+      const idx = sorted.findIndex(g => g.id === id);
+      const swapIdx = idx + dir;
+      if (idx < 0 || swapIdx < 0 || swapIdx >= sorted.length) return;
+      // Swap the two goals in the sorted array, then reassign sequential order_by.
+      [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
+      sorted.forEach((g, i) => { g.order_by = i + 1; });
+      if (state.guest) {
+        guestData.goals = sorted.map(g => ({ ...g }));
+        await loadData();
+        toast('Goal reordered.');
+        return;
+      }
+      try {
+        await request('/goals/reorder', { method: 'POST', body: JSON.stringify({ ids: sorted.map(g => g.id) }) });
+        await loadData();
+        toast('Goal reordered.');
+      } catch (err) {
+        toast(err.message);
+        await loadData();
+      }
+      return;
+    }
+
     // Goal Details
     const goalDetailsBtn = event.target.closest('[data-goal-details]');
     if (goalDetailsBtn) {
@@ -3771,7 +3809,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!g) return;
       if (state.guest) {
         const newId = Math.max(...guestData.goals.map(x => x.id), 0) + 1;
-        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice() });
+        const maxOrder = Math.max(...guestData.goals.map(x => x.order_by ?? 0), 0);
+        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice(), order_by: maxOrder + 1 });
         await loadData();
         toast('Goal duplicated.');
         return;

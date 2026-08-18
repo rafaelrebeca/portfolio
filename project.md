@@ -143,10 +143,13 @@ Personal assets are **scoped to the user** who created them (each user sees only
 ### Goals
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
-| GET/POST | `/api/goals` | member | List / create-or-update goals (supports `sub1`/`sub2`/`sub3`) |
+| GET/POST | `/api/goals` | member | List / create-or-update goals (supports `sub1`/`sub2`/`sub3` and `order_by`) |
+| POST | `/api/goals/reorder` | member | Reorder goals (body: `{ ids: [goalId, ...] }` in the new order; reassigns `order_by` 1..N) |
 | DELETE | `/api/goals/{id}` | member | Delete own goal |
 
 **Sub-goal validation (POST /api/goals):** `sub1`/`sub2`/`sub3` are optional numbers. Dependency chain is enforced server-side (`sub2` requires `sub1`; `sub3` requires `sub2`). Value-dependent rules also apply: for a debt goal (`value = 0`) sub-goals must be negative; for a positive goal they must be positive, `< target`, and ascending. Violations return a 400 error.
+
+**Goal ordering (`order_by`):** goals have an `order_by` integer column (in `schema.sql` and the remote DB). The GET endpoint returns goals ordered by `order_by ASC, id ASC`. New goals are assigned `MAX(order_by) + 1` so they appear at the end. The **Goals page** renders goals in this order and shows **↑ / ↓ arrow buttons** (`.goal-order-btn`, disabled at the first/last position) on each goal card. Clicking an arrow swaps the goal with its neighbor and reassigns sequential `order_by` values (1..N), then persists via `POST /api/goals/reorder` (or updates `guestData.goals` in guest mode).
 
 ### Admin
 | Method | Path | Access | Description |

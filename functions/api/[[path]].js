@@ -324,7 +324,7 @@ export async function onRequest(context) {
 
     if (method === 'GET' && path === 'goals') {
       const user = await requireMember(request, env);
-      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3 FROM goals WHERE user_id = ? ORDER BY id').bind(user.id).all();
+      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3, order_by FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
       const items = [];
       for (const g of results) {
         const links = await env.myd1db.prepare('SELECT account_id FROM goal_link WHERE goal_id = ?').bind(g.id).all();
@@ -367,14 +367,16 @@ export async function onRequest(context) {
       if (goalId && Number.isInteger(goalId)) {
         const existing = await env.myd1db.prepare('SELECT id FROM goals WHERE id = ? AND user_id = ?').bind(goalId, user.id).first();
         if (!existing) return fail('Goal not found.', 404);
-        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, goalId).run();
+        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ?, order_by = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, body.order_by ?? null, goalId).run();
         await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(goalId).run();
         for (const aid of accountIds) {
           await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(goalId, aid).run();
         }
         return json({ id: goalId, ok: true });
       }
-      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3).run();
+      const maxOrder = await env.myd1db.prepare('SELECT COALESCE(MAX(order_by), 0) AS m FROM goals WHERE user_id = ?').bind(user.id).first();
+      const orderBy = body.order_by ?? (Number(maxOrder?.m || 0) + 1);
+      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3, order_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3, orderBy).run();
       const newId = result.meta.last_row_id;
       for (const aid of accountIds) {
         await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(newId, aid).run();
@@ -386,6 +388,17 @@ export async function onRequest(context) {
       const result = await env.myd1db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').bind(id, user.id).run();
       if (!changed(result)) return fail('Goal not found.', 404);
       await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(id).run();
+      return json({ ok: true });
+    }
+    if (method === 'POST' && path === 'goals/reorder') {
+      const user = await requireMember(request, env), body = await readBody(request);
+      const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger) : [];
+      if (!ids.length) return fail('Provide a list of goal ids.');
+      const { results } = await env.myd1db.prepare('SELECT id FROM goals WHERE user_id = ?').bind(user.id).all();
+      const owned = new Set(results.map(r => r.id));
+      if (ids.some(id => !owned.has(id))) return fail('Invalid goal id.');
+      const statements = ids.map((id, i) => env.myd1db.prepare('UPDATE goals SET order_by = ? WHERE id = ? AND user_id = ?').bind(i + 1, id, user.id));
+      await env.myd1db.batch(statements);
       return json({ ok: true });
     }
 

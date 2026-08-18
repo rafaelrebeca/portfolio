@@ -1174,6 +1174,19 @@ select {
   font-size: 15px;
 }
 
+.goal-order-btns {
+  display: inline-flex;
+  gap: 4px;
+}
+.goal-order-btn {
+  padding: 6px 10px;
+  min-width: 34px;
+}
+.goal-order-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .goal-detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
