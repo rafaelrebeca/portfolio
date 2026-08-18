@@ -367,7 +367,7 @@ export async function onRequest(context) {
       if (goalId && Number.isInteger(goalId)) {
         const existing = await env.myd1db.prepare('SELECT id FROM goals WHERE id = ? AND user_id = ?').bind(goalId, user.id).first();
         if (!existing) return fail('Goal not found.', 404);
-        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ?, order_by = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, body.order_by ?? null, goalId).run();
+        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, goalId).run();
         await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(goalId).run();
         for (const aid of accountIds) {
           await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(goalId, aid).run();
@@ -388,6 +388,12 @@ export async function onRequest(context) {
       const result = await env.myd1db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').bind(id, user.id).run();
       if (!changed(result)) return fail('Goal not found.', 404);
       await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(id).run();
+      // Renumber the remaining goals so order_by stays contiguous (no gaps).
+      const { results } = await env.myd1db.prepare('SELECT id FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
+      if (results.length) {
+        const statements = results.map((g, i) => env.myd1db.prepare('UPDATE goals SET order_by = ? WHERE id = ? AND user_id = ?').bind(i + 1, g.id, user.id));
+        await env.myd1db.batch(statements);
+      }
       return json({ ok: true });
     }
     if (method === 'POST' && path === 'goals/reorder') {
