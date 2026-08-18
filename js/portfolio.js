@@ -2084,7 +2084,8 @@ function goalProgressHTML(g, current, target, currency) {
     activePct = 100;
   }
   const activeName = activeIdx < subs.length ? `Sub-goal ${activeIdx + 1}` : 'Sub-target';
-  const activeLabel = activePct >= 100 ? '' : `${activeName}: ${activePct.toFixed(1)}%`;
+  const activeValue = activeIdx < subs.length ? formatCurrency(subs[activeIdx], currency) : null;
+  const activeLabel = activePct >= 100 ? '' : `${activeName}: ${activePct.toFixed(1)}%${activeValue ? ` (${activeValue})` : ''}`;
 
   return `
     <div class="goal-progress">
