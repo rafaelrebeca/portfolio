@@ -5,3 +5,4 @@ remote-dump.sql
 schema.sql
 wrangler.toml
 refresh-local-db.sh
+TESTING.md
