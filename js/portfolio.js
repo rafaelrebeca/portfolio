@@ -2205,7 +2205,7 @@ function initBlurObserver() {
 
 function showApp() {
   $('#loginScreen').style.display = 'none';
-  $('#app').style.display = 'block';
+  $('#app').style.display = 'flex';
   if ($('#guestBanner')) $('#guestBanner').style.display = state.guest ? 'block' : 'none';
   renderProfile();
 }

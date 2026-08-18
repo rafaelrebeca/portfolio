@@ -137,7 +137,9 @@ a {
 
 #app {
   display: none;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  flex-direction: column;
 }
 
 .topbar {
@@ -237,7 +239,8 @@ a {
 
 .layout {
   display: flex;
-  min-height: calc(100vh - 57px);
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
@@ -246,6 +249,7 @@ a {
   border-right: 1px solid var(--border);
   padding: 18px 12px;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .nav-item {
@@ -281,6 +285,7 @@ a {
 
 .main {
   flex: 1;
+  min-height: 0;
   padding: 26px 30px;
   overflow-y: auto;
 }

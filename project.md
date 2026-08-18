@@ -408,6 +408,7 @@ For the bulk variant, see §7a (`openBulkUpdateModal`, `runBulkUpdate`, etc.).
 
 - Uses CSS custom properties (`--panel2`, `--accent2`, `--muted`, `--danger`, `--border`, `--text`, etc.) for theming.
 - Layout: `.topbar`, `.layout` (sidebar + main), `.page`, `.grid-cards`, `.card`, `.charts-row`, `.chart-card`.
+- **Fixed app shell:** `#app` is a `height: 100vh; overflow: hidden; display: flex; flex-direction: column` container (shown via `showApp()` setting `display: flex`). The `.topbar` is the first flex child and stays fixed at the top. `.layout` is `flex: 1; min-height: 0` and fills the remaining height; `.main` is `flex: 1; min-height: 0; overflow-y: auto` so **only the main content scrolls** while the topbar and sidebar stay in place. `.sidebar` has `overflow-y: auto` so it scrolls internally if it's taller than the viewport. This applies on both desktop (sidebar at left) and mobile (topbar fixed at top, sidebar overlays).
 - Modals: `.modal-overlay` + `.modal` (toggled with `.show`), `.modal-actions`, `.field`, `.form-error`, `.modal-copy`.
 - Progress bar: `.progress` / `.progress-bar`.
 - Update log: `.update-log` (collapsible `<details>` with a `<pre>` block).
