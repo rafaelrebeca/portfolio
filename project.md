@@ -122,6 +122,8 @@ Single catch-all worker. All routes are under `/api/...`. Auth helpers:
 
 Personal assets are **scoped to the user** who created them (each user sees only their own). They are displayed on the Assets page together with platform assets, with their name wrapped in `[]`. They have no dividend yield/payment months, so they never appear on the Dividends page.
 
+**Assets list action buttons** are icon-only (`.action-icon-btn`): **➕ Add to Account** (green `.add`, leftmost), **🔄 Update** (admin only), **✏️ Edit**, **🗑️ Delete** (Edit/Delete only when the user can manage the asset).
+
 ### Dividends
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
@@ -182,7 +184,7 @@ Personal assets are **scoped to the user** who created them (each user sees only
 **Endpoint:** `POST /api/assets/{id}/price` (admin only)
 
 **Flow:**
-1. Admin clicks the **Update** button on an asset row (Assets page).
+1. Admin clicks the **🔄 Update** icon button on an asset row (Assets page).
 2. A modal opens showing a progress bar while the frontend calls the backend.
 3. The backend looks up the asset's `symbol`, then calls Massive.com:
    ```
@@ -232,7 +234,7 @@ Goals can have up to **3 sub-goals** (`sub1`, `sub2`, `sub3`), stored as REAL co
 
 The same `goalProgressHTML` helper is used by both the goal cards (`renderGoals`) and the goal details modal (`openGoalDetailsModal`).
 
-**Goal card action buttons** are icon-only (`.goal-action-btn`, with `title` tooltips): `ℹ️` Details, `📈` History, `▶️` Simulate, `📄` Duplicate, `✏️` Edit, `🗑️` Delete. The **History** button (`data-goal-history`) is only rendered when the user has snapshots (`timeTravelList.length > 0`).
+**Goal card action buttons** are icon-only (`.action-icon-btn`, with `title` tooltips): `ℹ️` Details, `📈` History, `▶️` Simulate, `📄` Duplicate, `✏️` Edit, `🗑️` Delete. The **History** button (`data-goal-history`) is only rendered when the user has snapshots (`timeTravelList.length > 0`).
 
 **Goal History modal** (`#goalHistoryModalOverlay`): opened by `openGoalHistoryModal(goalId)`, closed by `closeGoalHistoryModal()`, maximized by `toggleGoalHistoryMaximize()`. It shows a Chart.js **line chart** (`#goalHistoryChart`) of the goal's **progress percentage (0–100%)** over time, computed from the **accounts stored in each snapshot** (snapshots are unchanged — no goal data is added to them). `goalProgressFromSnapshot(goal, snapshotAccounts)` mirrors `goalProgressHTML`: for a **normal goal** it sums the linked accounts' `valueEur` and divides by the target; for a **debt goal** (target 0) it uses `positive-sum / absolute-negative-sum`. The y-axis is fixed to 0–100 with `%` tick labels, and the zoom select (`#goalHistoryZoom`) reuses `applyHistoryZoom`.
 
@@ -332,7 +334,7 @@ The sidebar is organized into four labeled sections, in this order: **Personal**
 
 **Responsive nav dropdown:** on screens ≤ 760px the sidebar is hidden by default and a **☰ hamburger button** (`#navToggle`, `.nav-toggle`) appears in the topbar. When opened, the sidebar is `position: absolute` (relative to the `.layout`, which becomes `position: relative`) with `z-index: 50`, a solid `--panel` background, a drop shadow, and `max-height: calc(100vh - 60px)` with vertical scroll — so it **overlays on top of the page content** instead of pushing it down. The section labels (Personal/System/Account/Admin) are shown on mobile too. Clicking it toggles the `.open` class on the sidebar (`.sidebar.open`), which shows the nav items as a dropdown panel below the topbar. Selecting a nav item closes the dropdown (`closeNavDropdown()`). The toggle updates its `aria-expanded` attribute for accessibility.
 
-**My Accounts** is a merged page combining providers and their accounts. It lists providers as **provider cards** (`.provider-card`), each with a styled header (`.provider-card-head`) showing a collapse toggle, provider icon, name, type tag, account count, the provider's **total value in EUR** (`.provider-total`, via `providerValue`), and **+ Add Account** / **Edit** / **Delete** buttons, and a body (`.provider-card-body`) containing the accounts nested inside so they visually belong to the provider.
+**My Accounts** is a merged page combining providers and their accounts. It lists providers as **provider cards** (`.provider-card`), each with a styled header (`.provider-card-head`) showing a collapse toggle, provider icon, name, type tag, account count, the provider's **total value in EUR** (`.provider-total`, via `providerValue`), and icon-only action buttons (`.action-icon-btn`): **➕ Add Account** (green `.add`, leftmost), **ℹ️ Details**, **✏️ Edit**, **🗑️ Delete**. The body (`.provider-card-body`) contains the accounts nested inside so they visually belong to the provider. Each **account card** also uses icon-only buttons: **ℹ️ Details** (asset accounts with holdings only), **✏️ Edit**, **🗑️ Delete**.
 
 - **Account value display:** every account card shows its value on the **left** of the detail grid (asset accounts show **Value** then **Holdings**; loan/interest accounts show **Balance** then **Interest Rate**; bank accounts show **Balance**). When an account's currency is not EUR, the converted **EUR value is shown in parentheses** after the value (e.g. `$1,234.56 (€1,050.00)`).
 

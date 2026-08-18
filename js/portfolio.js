@@ -1733,10 +1733,10 @@ function renderAssets() {
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${!personal && admin ? `<button class="btn-sm" data-update-asset="${a.id}">Update</button>` : ''}
-            ${canManage ? `<button class="btn-sm" data-edit-asset="${a.id}">Edit</button>` : ''}
-            ${canManage ? `<button class="btn-sm danger" data-delete-asset="${a.id}">Delete</button>` : ''}
-            <button class="btn-sm" data-add-asset-to-account="${a.id}">+ Add to Account</button>
+            <button class="btn-sm action-icon-btn add" data-add-asset-to-account="${a.id}" title="Add to Account">➕</button>
+            ${!personal && admin ? `<button class="btn-sm action-icon-btn" data-update-asset="${a.id}" title="Update">🔄</button>` : ''}
+            ${canManage ? `<button class="btn-sm action-icon-btn" data-edit-asset="${a.id}" title="Edit">✏️</button>` : ''}
+            ${canManage ? `<button class="btn-sm action-icon-btn danger" data-delete-asset="${a.id}" title="Delete">🗑️</button>` : ''}
           </div>
         </td>
       </tr>
@@ -1854,7 +1854,7 @@ function renderAccounts() {
           <div><div class="dlabel">Holdings</div><div class="dvalue">${holdingCount} assets</div></div>
         </div>`;
         if (holdingCount > 0) {
-          headActions = `<button class="btn-sm" data-account-details="${acc.id}">Details</button>`;
+          headActions = `<button class="btn-sm action-icon-btn" data-account-details="${acc.id}" title="Details">ℹ️</button>`;
         }
       } else if (acc.type === 'loan' || acc.type === 'interest_account') {
         details = `<div class="account-detail-grid">
@@ -1872,8 +1872,8 @@ function renderAccounts() {
           <span class="aname">${esc(acc.name)} <span class="tag ${acc.type}">${esc(label)}</span></span>
           <div style="display:flex;gap:6px;">
             ${headActions}
-            <button class="btn-sm" data-edit-account="${acc.id}">Edit</button>
-            <button class="btn-sm danger" data-delete-account="${acc.id}">Delete</button>
+            <button class="btn-sm action-icon-btn" data-edit-account="${acc.id}" title="Edit">✏️</button>
+            <button class="btn-sm action-icon-btn danger" data-delete-account="${acc.id}" title="Delete">🗑️</button>
           </div>
         </div>
         ${details}
@@ -1895,10 +1895,10 @@ function renderAccounts() {
           <span class="provider-total ${providerTotalClass}">${formatCurrency(providerTotalEur, 'EUR')}</span>
         </div>
         <div style="display:flex;gap:6px;">
-          <button class="btn-sm" data-provider-details="${g.provider.id}">Details</button>
-          <button class="btn-sm" data-add-account-provider="${g.provider.id}">+ Add Account</button>
-          <button class="btn-sm" data-edit-provider="${g.provider.id}">Edit</button>
-          <button class="btn-sm danger" data-delete-provider="${g.provider.id}">Delete</button>
+          <button class="btn-sm action-icon-btn add" data-add-account-provider="${g.provider.id}" title="Add Account">➕</button>
+          <button class="btn-sm action-icon-btn" data-provider-details="${g.provider.id}" title="Details">ℹ️</button>
+          <button class="btn-sm action-icon-btn" data-edit-provider="${g.provider.id}" title="Edit">✏️</button>
+          <button class="btn-sm action-icon-btn danger" data-delete-provider="${g.provider.id}" title="Delete">🗑️</button>
         </div>
       </div>
       <div class="provider-card-body">
@@ -1973,8 +1973,8 @@ function renderHoldings() {
       <td>${gainLossValue({ price, purchase_price: h.purchase_price, quantity: h.quantity })}</td>
       <td>
         <div style="display:flex;gap:6px;">
-          <button class="btn-sm" data-edit-holding="${h.id}">Edit</button>
-          <button class="btn-sm danger" data-delete-holding="${h.id}">Delete</button>
+          <button class="btn-sm action-icon-btn" data-edit-holding="${h.id}" title="Edit">✏️</button>
+          <button class="btn-sm action-icon-btn danger" data-delete-holding="${h.id}" title="Delete">🗑️</button>
         </div>
       </td>
     </tr>`;
@@ -2288,12 +2288,12 @@ function renderGoals() {
               <button class="btn-sm goal-order-btn" data-goal-up="${g.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
               <button class="btn-sm goal-order-btn" data-goal-down="${g.id}" title="Move down" ${isLast ? 'disabled' : ''}>↓</button>
             </span>
-            <button class="btn-sm goal-action-btn" data-goal-details="${g.id}" title="Details">ℹ️</button>
-            ${timeTravelList.length > 0 ? `<button class="btn-sm goal-action-btn" data-goal-history="${g.id}" title="History">📈</button>` : ''}
-            <button class="btn-sm goal-action-btn" data-simulate-goal="${g.id}" title="Simulate">▶️</button>
-            <button class="btn-sm goal-action-btn" data-duplicate-goal="${g.id}" title="Duplicate">📄</button>
-            <button class="btn-sm goal-action-btn" data-edit-goal="${g.id}" title="Edit">✏️</button>
-            <button class="btn-sm goal-action-btn danger" data-delete-goal="${g.id}" title="Delete">🗑️</button>
+            <button class="btn-sm action-icon-btn" data-goal-details="${g.id}" title="Details">ℹ️</button>
+            ${timeTravelList.length > 0 ? `<button class="btn-sm action-icon-btn" data-goal-history="${g.id}" title="History">📈</button>` : ''}
+            <button class="btn-sm action-icon-btn" data-simulate-goal="${g.id}" title="Simulate">▶️</button>
+            <button class="btn-sm action-icon-btn" data-duplicate-goal="${g.id}" title="Duplicate">📄</button>
+            <button class="btn-sm action-icon-btn" data-edit-goal="${g.id}" title="Edit">✏️</button>
+            <button class="btn-sm action-icon-btn danger" data-delete-goal="${g.id}" title="Delete">🗑️</button>
           </div>
         </div>
         <div class="goal-detail-grid">

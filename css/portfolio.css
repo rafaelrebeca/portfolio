@@ -1199,11 +1199,21 @@ select {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.goal-action-btn {
+.action-icon-btn {
   padding: 6px 8px;
   min-width: 34px;
   font-size: 14px;
   line-height: 1;
+}
+.action-icon-btn.add {
+  background: var(--accent2);
+  border-color: var(--accent2);
+  color: #0f1420;
+}
+.action-icon-btn.add:hover {
+  background: #35b28c;
+  border-color: #35b28c;
+  color: #0f1420;
 }
 
 .goal-detail-grid {
