@@ -70,10 +70,8 @@
         <div class="nav-item" id="navProfile" data-page="profile">👤 Profile</div>
 
         <div class="nav-section-label" id="adminSectionLabel" style="display:none;">Admin</div>
-        <div class="nav-item" id="navImport" style="display:none;" data-page="import">📥 Import Data</div>
-        <div class="nav-item" id="navExport" style="display:none;" data-page="export">📤 Export Data</div>
+        <div class="nav-item" id="navTools" style="display:none;" data-page="tools">🛠️ Tools</div>
         <div class="nav-item" id="navUsers" style="display:none;" data-page="users">👥 Users</div>
-        <div class="nav-item" id="navCurrencyTest" style="display:none;" data-page="currency-test">💱 Currency Test</div>
       </div>
 
       <div class="main" id="mainScroll">
@@ -315,48 +313,106 @@
           <div id="goalsList"></div>
         </div>
 
-        <!-- IMPORT DATA -->
-        <div class="page" id="page-import">
-          <div class="page-title">Import Data</div>
-          <div class="page-desc">Upload a CSV file to bulk import/update assets</div>
-          <section class="import-card">
-            <form id="importForm" class="import-controls">
-              <div class="field">
-                <label>CSV Format</label>
-                <code
-                  style="display:block;background:#1a1f2e;padding:8px;border-radius:4px;color:#3fd0a3;font-size:12px;">symbol,name,type,coin,price,yield,payment_months</code>
-                <small style="display:block;margin-top:4px;color:var(--muted);">Use <strong>|</strong> to separate
-                  payment months (e.g., 3|6|9|12)</small>
-              </div>
-              <label class="upload-box" for="csvFile">
-                <span class="upload-icon">📄</span>
-                <span><strong>Select a CSV file</strong><small id="csvFileName">No file selected</small></span>
-                <input type="file" id="csvFile" accept=".csv">
-              </label>
-              <button class="btn-sm primary import-run" type="submit">Run Import</button>
-            </form>
-          </section>
-          <div style="margin-top:18px;">
-            <div class="page-desc" style="margin-bottom:8px;">Import log</div>
-            <div class="import-log" id="importLog">Waiting for import...</div>
+        <!-- TOOLS (admin): Import / Export / Currency Test -->
+        <div class="page" id="page-tools">
+          <div class="page-title">Tools</div>
+          <div class="page-desc">Admin utilities: import, export and currency conversion testing</div>
+          <div class="tools-tabs">
+            <button class="tools-tab active" type="button" data-tools-tab="import">📥 Import</button>
+            <button class="tools-tab" type="button" data-tools-tab="export">📤 Export</button>
+            <button class="tools-tab" type="button" data-tools-tab="currency-test">💱 Currency Test</button>
           </div>
-        </div>
 
-        <!-- EXPORT DATA -->
-        <div class="page" id="page-export">
-          <div class="page-title">Export Data</div>
-          <div class="page-desc">Download a CSV file of your assets in import-ready format</div>
-          <section class="import-card">
-            <div class="import-controls">
-              <div>
-                <p class="page-desc" style="margin-bottom:12px;">symbol,name,type,coin,price,yield,payment_months</p>
-                <button class="btn-sm primary" id="exportAssetsBtn">📈 Export Assets</button>
+          <!-- IMPORT TAB -->
+          <div class="tools-panel" id="tools-panel-import">
+            <div class="page-title">Import Data</div>
+            <div class="page-desc">Upload a CSV file to bulk import/update assets</div>
+            <section class="import-card">
+              <form id="importForm" class="import-controls">
+                <div class="field">
+                  <label>CSV Format</label>
+                  <code
+                    style="display:block;background:#1a1f2e;padding:8px;border-radius:4px;color:#3fd0a3;font-size:12px;">symbol,name,type,coin,price,yield,payment_months</code>
+                  <small style="display:block;margin-top:4px;color:var(--muted);">Use <strong>|</strong> to separate
+                    payment months (e.g., 3|6|9|12)</small>
+                </div>
+                <label class="upload-box" for="csvFile">
+                  <span class="upload-icon">📄</span>
+                  <span><strong>Select a CSV file</strong><small id="csvFileName">No file selected</small></span>
+                  <input type="file" id="csvFile" accept=".csv">
+                </label>
+                <button class="btn-sm primary import-run" type="submit">Run Import</button>
+              </form>
+            </section>
+            <div style="margin-top:18px;">
+              <div class="page-desc" style="margin-bottom:8px;">Import log</div>
+              <div class="import-log" id="importLog">Waiting for import...</div>
+            </div>
+          </div>
+
+          <!-- EXPORT TAB -->
+          <div class="tools-panel" id="tools-panel-export" style="display:none;">
+            <div class="page-title">Export Data</div>
+            <div class="page-desc">Download a CSV file of your assets in import-ready format</div>
+            <section class="import-card">
+              <div class="import-controls">
+                <div>
+                  <p class="page-desc" style="margin-bottom:12px;">symbol,name,type,coin,price,yield,payment_months</p>
+                  <button class="btn-sm primary" id="exportAssetsBtn">📈 Export Assets</button>
+                </div>
+              </div>
+            </section>
+            <div style="margin-top:18px;">
+              <div class="page-desc" style="margin-bottom:8px;">Export log</div>
+              <div class="import-log" id="exportLog">Ready to export...</div>
+            </div>
+          </div>
+
+          <!-- CURRENCY TEST TAB -->
+          <div class="tools-panel" id="tools-panel-currency-test" style="display:none;">
+            <div class="page-title">Currency Test</div>
+            <div class="page-desc">Test the convertToCurrency conversion between any two coins</div>
+            <div class="card" style="max-width:560px;margin-top:16px;">
+              <div class="field">
+                <label>To coin</label>
+                <select id="currencyTestTo"></select>
+              </div>
+              <div class="currency-test-rows">
+                <div class="currency-test-row">
+                  <div class="field"><label>Amount 1</label><input type="number" id="currencyTestAmount1" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>From coin 1</label><select id="currencyTestFrom1"></select></div>
+                </div>
+                <div class="currency-test-row">
+                  <div class="field"><label>Amount 2</label><input type="number" id="currencyTestAmount2" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>From coin 2</label><select id="currencyTestFrom2"></select></div>
+                </div>
+                <div class="currency-test-row">
+                  <div class="field"><label>Amount 3</label><input type="number" id="currencyTestAmount3" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>From coin 3</label><select id="currencyTestFrom3"></select></div>
+                </div>
+                <div class="currency-test-row">
+                  <div class="field"><label>Amount 4</label><input type="number" id="currencyTestAmount4" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>From coin 4</label><select id="currencyTestFrom4"></select></div>
+                </div>
+                <div class="currency-test-row">
+                  <div class="field"><label>Amount 5</label><input type="number" id="currencyTestAmount5" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>From coin 5</label><select id="currencyTestFrom5"></select></div>
+                </div>
+              </div>
+              <button class="btn-sm primary" type="button" id="currencyTestConvertBtn" style="margin-top:8px;">Convert</button>
+              <div class="field" style="margin-top:16px;">
+                <label>Results</label>
+                <table class="currency-test-results">
+                  <thead>
+                    <tr><th>#</th><th>Amount</th><th>From</th><th>Converted</th></tr>
+                  </thead>
+                  <tbody id="currencyTestResultsBody"></tbody>
+                  <tfoot>
+                    <tr><th colspan="3">Total</th><th id="currencyTestTotal">—</th></tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
-          </section>
-          <div style="margin-top:18px;">
-            <div class="page-desc" style="margin-bottom:8px;">Export log</div>
-            <div class="import-log" id="exportLog">Ready to export...</div>
           </div>
         </div>
 
@@ -417,53 +473,6 @@
             </thead>
             <tbody id="currencyTable"></tbody>
           </table>
-        </div>
-
-        <!-- CURRENCY TEST (admin) -->
-        <div class="page" id="page-currency-test">
-          <div class="page-title">Currency Test</div>
-          <div class="page-desc">Test the convertToCurrency conversion between any two coins</div>
-          <div class="card" style="max-width:560px;margin-top:16px;">
-            <div class="field">
-              <label>To coin</label>
-              <select id="currencyTestTo"></select>
-            </div>
-            <div class="currency-test-rows">
-              <div class="currency-test-row">
-                <div class="field"><label>Amount 1</label><input type="number" id="currencyTestAmount1" step="any" min="0" placeholder="e.g. 100"></div>
-                <div class="field"><label>From coin 1</label><select id="currencyTestFrom1"></select></div>
-              </div>
-              <div class="currency-test-row">
-                <div class="field"><label>Amount 2</label><input type="number" id="currencyTestAmount2" step="any" min="0" placeholder="e.g. 100"></div>
-                <div class="field"><label>From coin 2</label><select id="currencyTestFrom2"></select></div>
-              </div>
-              <div class="currency-test-row">
-                <div class="field"><label>Amount 3</label><input type="number" id="currencyTestAmount3" step="any" min="0" placeholder="e.g. 100"></div>
-                <div class="field"><label>From coin 3</label><select id="currencyTestFrom3"></select></div>
-              </div>
-              <div class="currency-test-row">
-                <div class="field"><label>Amount 4</label><input type="number" id="currencyTestAmount4" step="any" min="0" placeholder="e.g. 100"></div>
-                <div class="field"><label>From coin 4</label><select id="currencyTestFrom4"></select></div>
-              </div>
-              <div class="currency-test-row">
-                <div class="field"><label>Amount 5</label><input type="number" id="currencyTestAmount5" step="any" min="0" placeholder="e.g. 100"></div>
-                <div class="field"><label>From coin 5</label><select id="currencyTestFrom5"></select></div>
-              </div>
-            </div>
-            <button class="btn-sm primary" type="button" id="currencyTestConvertBtn" style="margin-top:8px;">Convert</button>
-            <div class="field" style="margin-top:16px;">
-              <label>Results</label>
-              <table class="currency-test-results">
-                <thead>
-                  <tr><th>#</th><th>Amount</th><th>From</th><th>Converted</th></tr>
-                </thead>
-                <tbody id="currencyTestResultsBody"></tbody>
-                <tfoot>
-                  <tr><th colspan="3">Total</th><th id="currencyTestTotal">—</th></tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
         </div>
 
       </div>

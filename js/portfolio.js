@@ -831,10 +831,8 @@ function render() {
     document.querySelectorAll('.write-action').forEach(el => el.style.display = write ? '' : 'none');
     document.querySelectorAll('.admin-action').forEach(el => el.style.display = admin ? '' : 'none');
     if ($('#adminSectionLabel')) $('#adminSectionLabel').style.display = admin ? 'block' : 'none';
-    if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
-    if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
+    if ($('#navTools')) $('#navTools').style.display = admin ? 'flex' : 'none';
     if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
-    if ($('#navCurrencyTest')) $('#navCurrencyTest').style.display = admin ? 'flex' : 'none';
     updateNavVisibility();
     return;
   }
@@ -889,10 +887,8 @@ function render() {
   document.querySelectorAll('.write-action').forEach(el => el.style.display = write ? '' : 'none');
   document.querySelectorAll('.admin-action').forEach(el => el.style.display = admin ? '' : 'none');
   if ($('#adminSectionLabel')) $('#adminSectionLabel').style.display = admin ? 'block' : 'none';
-  if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
-  if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
+  if ($('#navTools')) $('#navTools').style.display = admin ? 'flex' : 'none';
   if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
-  if ($('#navCurrencyTest')) $('#navCurrencyTest').style.display = admin ? 'flex' : 'none';
   updateNavVisibility();
 }
 
@@ -2455,6 +2451,16 @@ function renderCurrencyPagination(totalPages, totalCount) {
   });
 }
 
+// Switch the active tab on the admin Tools page (import / export / currency-test).
+function switchToolsTab(tab) {
+  document.querySelectorAll('.tools-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.toolsTab === tab);
+  });
+  document.querySelectorAll('.tools-panel').forEach(panel => {
+    panel.style.display = panel.id === `tools-panel-${tab}` ? '' : 'none';
+  });
+}
+
 // Render the Currency Test page (admin). The coin selects are populated by
 // fillSelects(); this just resets the results table.
 function renderCurrencyTest() {
@@ -3194,6 +3200,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
     showPage(button.dataset.page);
     closeNavDropdown();
+  }));
+  document.querySelectorAll('.tools-tab').forEach(btn => btn.addEventListener('click', () => {
+    switchToolsTab(btn.dataset.toolsTab);
   }));
   $('#navToggle')?.addEventListener('click', toggleNavDropdown);
   $('#assetSearch')?.addEventListener('input', renderAssets);
