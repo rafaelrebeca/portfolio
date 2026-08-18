@@ -1654,3 +1654,41 @@ select {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Currency Test page (admin) */
+.currency-test-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.currency-test-row {
+  display: flex;
+  gap: 12px;
+}
+.currency-test-row .field {
+  flex: 1;
+  margin: 0;
+}
+.currency-test-results {
+  width: 100%;
+  margin-top: 4px;
+}
+.currency-test-results th,
+.currency-test-results td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.currency-test-results tfoot th {
+  border-bottom: none;
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+@media (max-width: 480px) {
+  .currency-test-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+

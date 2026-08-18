@@ -83,6 +83,33 @@ function convertToEUR(amount, fromCurrency) {
   return amountInUSD * eurRate.value;
 }
 
+// Generic currency conversion between any two coins. Currency data is stored as
+// "1 USD = X coin" (state.currencies[].value). This is the future replacement
+// for convertToEUR; convertToEUR is kept as-is for now.
+function convertToCurrency(amount, fromCoin, toCoin) {
+  if (!amount || !fromCoin || !toCoin) return 0;
+  if (fromCoin === toCoin) return amount;
+
+  // fromCoin is USD: 1 USD = toRate.value toCoin
+  if (fromCoin === 'USD') {
+    const toRate = state.currencies.find(c => c.coin === toCoin);
+    return toRate ? amount * toRate.value : amount;
+  }
+
+  // toCoin is USD: 1 fromCoin = 1 / fromRate.value USD
+  if (toCoin === 'USD') {
+    const fromRate = state.currencies.find(c => c.coin === fromCoin);
+    return fromRate ? amount / fromRate.value : amount;
+  }
+
+  // Neither is USD: convert fromCoin -> USD, then USD -> toCoin
+  const fromRate = state.currencies.find(c => c.coin === fromCoin);
+  const toRate = state.currencies.find(c => c.coin === toCoin);
+  if (!fromRate || !toRate) return amount;
+  const amountInUSD = amount / fromRate.value;
+  return amountInUSD * toRate.value;
+}
+
 function formatCurrency(amount, currency = 'USD') {
   if (currency === 'EUR') {
     return moneyEUR.format(amount);
@@ -795,6 +822,7 @@ function render() {
     renderUsers();
     renderProfile();
     renderCurrency();
+    renderCurrencyTest();
     fillSelects();
     renderPortfolioCards();
     renderPortfolioCharts();
@@ -806,6 +834,7 @@ function render() {
     if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
     if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
     if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
+    if ($('#navCurrencyTest')) $('#navCurrencyTest').style.display = admin ? 'flex' : 'none';
     updateNavVisibility();
     return;
   }
@@ -849,6 +878,7 @@ function render() {
   renderUsers();
   renderProfile();
   renderCurrency();
+  renderCurrencyTest();
   fillSelects();
   renderCharts();
   renderPortfolioCards();
@@ -862,6 +892,7 @@ function render() {
   if ($('#navImport')) $('#navImport').style.display = admin ? 'flex' : 'none';
   if ($('#navExport')) $('#navExport').style.display = admin ? 'flex' : 'none';
   if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
+  if ($('#navCurrencyTest')) $('#navCurrencyTest').style.display = admin ? 'flex' : 'none';
   updateNavVisibility();
 }
 
@@ -2198,6 +2229,13 @@ function fillSelects() {
   if ($('#goalCoin')) {
     $('#goalCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
   }
+  for (let i = 1; i <= 5; i++) {
+    const fromSel = $('#currencyTestFrom' + i);
+    if (fromSel) fromSel.innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
+  }
+  if ($('#currencyTestTo')) {
+    $('#currencyTestTo').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
+  }
 }
 
 function fillCurrencyOptions() {
@@ -2415,6 +2453,50 @@ function renderCurrencyPagination(totalPages, totalCount) {
   pagination.querySelectorAll('.currency-page-btn').forEach(btn => {
     btn.addEventListener('click', () => { currencyPage = Number(btn.dataset.currencyPage); renderCurrency(); });
   });
+}
+
+// Render the Currency Test page (admin). The coin selects are populated by
+// fillSelects(); this just resets the results table.
+function renderCurrencyTest() {
+  const body = $('#currencyTestResultsBody');
+  if (body) body.innerHTML = '';
+  const total = $('#currencyTestTotal');
+  if (total) total.textContent = '—';
+}
+
+// Run up to 5 conversions using the Currency Test page inputs, showing each
+// individual result and the sum of all converted values.
+function runCurrencyTest() {
+  const toCoin = $('#currencyTestTo')?.value;
+  const body = $('#currencyTestResultsBody');
+  const totalEl = $('#currencyTestTotal');
+  if (!body || !totalEl) return;
+  if (!toCoin) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--danger);">Pick a "To coin" first.</td></tr>';
+    totalEl.textContent = '—';
+    return;
+  }
+
+  const rows = [];
+  let sum = 0;
+  for (let i = 1; i <= 5; i++) {
+    const amount = Number($('#currencyTestAmount' + i)?.value);
+    const fromCoin = $('#currencyTestFrom' + i)?.value;
+    if (!amount || !fromCoin) {
+      rows.push(`<tr><td>${i}</td><td colspan="3" style="color:var(--muted);">—</td></tr>`);
+      continue;
+    }
+    const converted = convertToCurrency(amount, fromCoin, toCoin);
+    sum += converted;
+    rows.push(`<tr>
+      <td>${i}</td>
+      <td>${formatCurrency(amount, fromCoin)}</td>
+      <td>${esc(fromCoin)}</td>
+      <td>${formatCurrency(converted, toCoin)}</td>
+    </tr>`);
+  }
+  body.innerHTML = rows.join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);">Enter at least one amount and from coin.</td></tr>';
+  totalEl.textContent = formatCurrency(sum, toCoin);
 }
 
 function toggleAccountFields() {
@@ -3153,6 +3235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#holdingAccount')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
   $('#newUserBtn')?.addEventListener('click', () => openModal('userModalOverlay'));
+  $('#currencyTestConvertBtn')?.addEventListener('click', runCurrencyTest);
   $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
   $('#closeWelcomeBtn')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
   $('#welcomeModalNext')?.addEventListener('click', () => setWelcomePage(2));
