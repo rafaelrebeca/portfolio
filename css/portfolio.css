@@ -1403,22 +1403,30 @@ select {
 }
 
 @media (max-width: 760px) {
-  .layout { flex-direction: column; }
+  .layout { flex-direction: column; position: relative; }
   .topbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
   .brand { display: none; }
   .topbar-center { flex: 1 1 100%; order: 2; }
   .nav-toggle { display: inline-flex; }
   .sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    z-index: 50;
     display: none;
     flex-direction: column;
     padding: 8px;
   }
   .sidebar.open { display: flex; }
   .nav-item { white-space: nowrap; margin-bottom: 0; font-size: 13px; padding: 8px 10px; }
-  .nav-section-label { display: none; }
+  .nav-section-label { display: block; }
   .main { padding: 18px; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .details-chart-row { flex-wrap: wrap; gap: 12px; }
