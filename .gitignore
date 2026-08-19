@@ -6,3 +6,4 @@ schema.sql
 wrangler.toml
 refresh-local-db.sh
 TESTING.md
+*.sql
