@@ -303,6 +303,15 @@ export async function onRequest(context) {
       if (!Number.isInteger(accountId) || !Number.isFinite(quantity) || quantity <= 0 || (purchasePrice !== null && (!Number.isFinite(purchasePrice) || purchasePrice < 0))) return fail('Provide valid holding details.');
       const account = await env.myd1db.prepare(`SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND a.type = 'asset_account' AND p.user_id = ?`).bind(accountId, user.id).first();
       if (!account) return fail('Asset account not found.', 404);
+      // Editing an existing holding: update the specific row (ownership-checked)
+      // instead of upserting, so changing quantity/price never duplicates it.
+      const holdingId = body.holding_id ? Number(body.holding_id) : null;
+      if (holdingId) {
+        const existing = await env.myd1db.prepare(`SELECT h.id FROM account_holdings h JOIN accounts a ON a.id = h.account_id JOIN providers p ON p.id = a.provider_id WHERE h.id = ? AND p.user_id = ?`).bind(holdingId, user.id).first();
+        if (!existing) return fail('Holding not found.', 404);
+        await env.myd1db.prepare(`UPDATE account_holdings SET account_id = ?, asset_id = ?, personal_asset_id = ?, quantity = ?, purchase_price = ? WHERE id = ?`).bind(accountId, assetId, personalAssetId, quantity, purchasePrice, holdingId).run();
+        return json({ ok: true }, 200);
+      }
       if (isPersonal) {
         const personal = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND user_id = ?').bind(personalAssetId, user.id).first();
         if (!personal) return fail('Personal asset not found.', 404);

@@ -137,7 +137,7 @@ Personal assets are **scoped to the user** who created them (each user sees only
 | GET/POST | `/api/accounts` | member | List / create-or-update accounts |
 | PUT/PATCH | `/api/accounts/{id}` | member | Update account |
 | DELETE | `/api/accounts/{id}` | member | Delete own account |
-| GET/POST | `/api/holdings` | member | List / upsert holdings (platform **or** personal assets) |
+| GET/POST | `/api/holdings` | member | List / upsert holdings (platform **or** personal assets). `POST` with a `holding_id` **updates** that specific holding (ownership-checked) instead of upserting — this prevents duplication when editing a platform holding's quantity/price (the `ON CONFLICT(account_id, asset_id, personal_asset_id)` upsert does not match when `personal_asset_id` is NULL, since SQLite treats NULLs as distinct in unique constraints) |
 | DELETE | `/api/holdings/{id}` | member | Delete own holding |
 
 **Holdings with personal assets:** `POST /api/holdings` accepts a negative `asset_id` to mean a personal asset (e.g. `-1` = personal asset id 1); the backend validates it belongs to the current user and stores it in `personal_asset_id`. `GET /api/holdings` returns personal holdings with a **negated `asset_id`** (matching the negated id in `GET /api/assets`), so the frontend resolves them with the same lookup as platform holdings.
