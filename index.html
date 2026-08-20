@@ -455,11 +455,17 @@
         <div class="page" id="page-currency">
           <div class="page-title">Currency</div>
           <div class="page-desc">Currency conversion rates</div>
-          <div class="card" style="max-width:420px;margin:16px auto 0;text-align:center;">
-            <div class="label" style="font-size:12px;color:var(--muted);">USD → EUR</div>
-            <div id="currencyUsdEur" style="font-size:28px;font-weight:700;margin-top:6px;">—</div>
+          <div class="currency-ratio-cards">
+            <div class="card" style="max-width:420px;margin-top:16px;text-align:center;">
+              <div class="label" style="font-size:12px;color:var(--muted);">USD → EUR</div>
+              <div id="currencyUsdEur" style="font-size:28px;font-weight:700;margin-top:6px;">—</div>
+            </div>
+            <div class="card" style="max-width:420px;margin-top:16px;text-align:center;">
+              <div class="label" style="font-size:12px;color:var(--muted);">EUR → USD</div>
+              <div id="currencyEurUsd" style="font-size:28px;font-weight:700;margin-top:6px;">—</div>
+            </div>
           </div>
-          <div class="toolbar" style="margin-top:16px;">
+          <div class="toolbar" style="margin-top:16px;justify-content:center;">
             <input type="text" id="currencySearch" class="search-input" placeholder="Search currencies...">
           </div>
           <div class="snapshot-pagination" id="currencyPagination"></div>

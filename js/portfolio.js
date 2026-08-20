@@ -2627,15 +2627,16 @@ async function resetProfilePassword() {
 // USD (rate 1.0) and EUR are filtered out of the list.
 function renderCurrency() {
   const usdEurEl = $('#currencyUsdEur');
+  const eurUsdEl = $('#currencyEurUsd');
   const usd = state.currencies.find(c => c.coin === 'USD');
   const eur = state.currencies.find(c => c.coin === 'EUR');
-  if (usdEurEl) {
-    if (usd && eur) {
-      const ratio = eur.value / usd.value;
-      usdEurEl.textContent = `1 USD = ${ratio.toFixed(4)} EUR`;
-    } else {
-      usdEurEl.textContent = '—';
-    }
+  if (usd && eur) {
+    const ratio = eur.value / usd.value;
+    if (usdEurEl) usdEurEl.textContent = `1 USD = ${ratio.toFixed(4)} EUR`;
+    if (eurUsdEl) eurUsdEl.textContent = `1 EUR = ${(1 / ratio).toFixed(4)} USD`;
+  } else {
+    if (usdEurEl) usdEurEl.textContent = '—';
+    if (eurUsdEl) eurUsdEl.textContent = '—';
   }
   const search = ($('#currencySearch')?.value || '').trim().toUpperCase();
   const table = $('#currencyTable');
@@ -2661,7 +2662,25 @@ function renderCurrency() {
   renderCurrencyPagination(totalPages, filtered.length);
 }
 
+// Build the list of page numbers to show in the pagination, collapsing far-away
+// pages into an ellipsis (null). Always keeps the first and last page visible.
+// Returns an array of 0-based page indices, with null marking an ellipsis gap.
+function paginationPages(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages = new Set([0, total - 1, current - 1, current, current + 1]);
+  const sorted = [...pages].filter(p => p >= 0 && p < total).sort((a, b) => a - b);
+  const result = [];
+  let prev = null;
+  for (const p of sorted) {
+    if (prev !== null && p - prev > 1) result.push(null);
+    result.push(p);
+    prev = p;
+  }
+  return result;
+}
+
 // Render the pagination controls (prev / page number buttons / next) for the currency table.
+// Far-away page numbers are collapsed into an ellipsis so the arrows stay visible on narrow screens.
 function renderCurrencyPagination(totalPages, totalCount) {
   const pagination = $('#currencyPagination');
   if (!pagination) return;
@@ -2671,9 +2690,11 @@ function renderCurrencyPagination(totalPages, totalCount) {
     return;
   }
   pagination.style.display = 'flex';
-  const pageButtons = Array.from({ length: totalPages }, (_, i) => `
-    <button class="btn-sm currency-page-btn${i === currencyPage ? ' active' : ''}" type="button" data-currency-page="${i}">${i + 1}</button>
-  `).join('');
+  const pageButtons = paginationPages(currencyPage, totalPages).map(p =>
+    p === null
+      ? '<span class="currency-page-ellipsis">…</span>'
+      : `<button class="btn-sm currency-page-btn${p === currencyPage ? ' active' : ''}" type="button" data-currency-page="${p}">${p + 1}</button>`
+  ).join('');
   pagination.innerHTML = `
     <button class="btn-sm" type="button" id="currencyPagePrev" ${currencyPage === 0 ? 'disabled' : ''}>←</button>
     ${pageButtons}

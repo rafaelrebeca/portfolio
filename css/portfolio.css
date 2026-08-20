@@ -628,6 +628,18 @@ tbody tr:last-child td {
   min-width: 220px;
 }
 
+.currency-ratio-cards {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.currency-ratio-cards .card {
+  flex: 0 1 350px;
+  max-width: 420px;
+}
+
 .btn-sm {
   padding: 8px 14px;
   border-radius: 8px;
@@ -1820,6 +1832,7 @@ select {
   justify-content: center;
   gap: 12px;
   margin-top: 12px;
+  flex-wrap: wrap;
 }
 
 .snapshot-pagination .snapshot-page-indicator {
@@ -1831,6 +1844,13 @@ select {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.currency-page-ellipsis {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 2px;
+  user-select: none;
 }
 
 #currencyPagination {
