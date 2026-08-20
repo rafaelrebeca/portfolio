@@ -473,6 +473,21 @@ th {
   letter-spacing: .04em;
 }
 
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.sortable:hover {
+  color: var(--accent);
+}
+
+th.sortable .sort-arrow {
+  color: var(--accent);
+  font-size: 9px;
+}
+
 tbody tr:hover {
   background: var(--panel2);
 }

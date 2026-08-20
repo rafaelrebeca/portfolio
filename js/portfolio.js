@@ -255,6 +255,7 @@ let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
+let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
 let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
 let portfolioAssetOthers = [];
@@ -1910,6 +1911,91 @@ function renderAccounts() {
   $('#accountsList').innerHTML = html;
 }
 
+// Build a sortable "row" object for a holding, resolving the same display values
+// used by the table so sorting matches what the user sees.
+function holdingSortRow(h) {
+  const asset = state.assets.find(a => a.id === h.asset_id);
+  const account = state.accounts.find(a => a.id === h.account_id);
+  const provider = account ? state.providers.find(p => p.id === account.provider_id) : null;
+  const price = asset ? Number(asset.price || 0) : Number(h.price || 0);
+  const quantity = Number(h.quantity || 0);
+  const isPersonalHolding = asset?.is_personal === 1 || h.asset_id < 0;
+  const name = (h.asset_name || asset?.name || '—');
+  const symbol = h.symbol || asset?.symbol || '—';
+  const displayName = isPersonalHolding ? `[${name}]` : name;
+  const accName = h.account_name || account?.name || '—';
+  const purchasePrice = h.purchase_price == null ? null : Number(h.purchase_price);
+  const gainPct = (purchasePrice != null && purchasePrice > 0 && price != null)
+    ? ((price - purchasePrice) / purchasePrice) * 100
+    : null;
+  const gainValue = (purchasePrice != null && purchasePrice > 0 && price != null)
+    ? (price - purchasePrice) * quantity
+    : null;
+  return {
+    asset: symbol.toLowerCase(),
+    assetName: displayName.toLowerCase(),
+    account: accName.toLowerCase(),
+    provider: (provider ? provider.name : '').toLowerCase(),
+    quantity,
+    purchase_price: purchasePrice,
+    market_value: price * quantity,
+    gain_pct: gainPct,
+    gain_value: gainValue
+  };
+}
+
+// Sort holdings per the current holdingsSort state. When sorting by account, the
+// secondary key is always asset ascending (regardless of the account direction).
+function sortHoldings(holdings) {
+  if (!holdingsSort) return holdings;
+  const { field, dir } = holdingsSort;
+  const rows = holdings.map(h => ({ h, r: holdingSortRow(h) }));
+  rows.sort((a, b) => {
+    if (field === 'account') {
+      const byAccount = a.r.account.localeCompare(b.r.account) || a.r.provider.localeCompare(b.r.provider);
+      if (byAccount !== 0) return byAccount * dir;
+      return a.r.asset.localeCompare(b.r.asset) || a.r.assetName.localeCompare(b.r.assetName);
+    }
+    if (field === 'asset') {
+      return (a.r.asset.localeCompare(b.r.asset) || a.r.assetName.localeCompare(b.r.assetName)) * dir;
+    }
+    const av = a.r[field];
+    const bv = b.r[field];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return (av - bv) * dir;
+  });
+  return rows.map(x => x.h);
+}
+
+// Toggle the sort for a column header and re-render the holdings table.
+function setHoldingsSort(field) {
+  if (holdingsSort && holdingsSort.field === field) {
+    holdingsSort = { field, dir: holdingsSort.dir === 1 ? -1 : 1 };
+  } else {
+    holdingsSort = { field, dir: 1 };
+  }
+  renderHoldings();
+}
+
+// Update the sort indicator (▲/▼) on the active column header.
+function renderHoldingsSortIndicators() {
+  const table = $('#holdingsTable')?.closest('table');
+  if (!table) return;
+  table.querySelectorAll('thead th.sortable').forEach(th => {
+    const field = th.dataset.sort;
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.remove();
+    if (holdingsSort && holdingsSort.field === field) {
+      const span = document.createElement('span');
+      span.className = 'sort-arrow';
+      span.textContent = holdingsSort.dir === 1 ? ' ▲' : ' ▼';
+      th.appendChild(span);
+    }
+  });
+}
+
 function renderHoldings() {
   if (!$('#holdingsTable')) return;
 
@@ -1938,6 +2024,9 @@ function renderHoldings() {
       filterLabel = `Type: ${val}`;
     }
   }
+
+  holdings = sortHoldings(holdings);
+  renderHoldingsSortIndicators();
 
   const filterBar = $('#portfolioFilterBar');
   if (filterBar) {
@@ -3386,6 +3475,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateToggleAllLabel();
   });
   $('#newHoldingBtn')?.addEventListener('click', () => openHoldingModal());
+  $('#holdingsTable')?.closest('table')?.querySelectorAll('thead th.sortable').forEach(th => {
+    th.addEventListener('click', () => setHoldingsSort(th.dataset.sort));
+  });
   $('#holdingAssetTypeFilter')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#holdingAccount')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
