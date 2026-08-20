@@ -1832,7 +1832,7 @@ select {
   justify-content: center;
   gap: 12px;
   margin-top: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .snapshot-pagination .snapshot-page-indicator {

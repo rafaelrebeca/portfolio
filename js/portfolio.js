@@ -2483,6 +2483,9 @@ function showPage(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
   document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.id === `page-${page}`));
+  // Re-render the currency pagination once the page is visible, so it adapts to the
+  // real available width (it can't be measured correctly while the page is hidden).
+  if (page === 'currency') renderCurrency();
   applyBlur();
 }
 
@@ -2662,9 +2665,9 @@ function renderCurrency() {
   renderCurrencyPagination(totalPages, filtered.length);
 }
 
-// Build the list of page numbers to show in the pagination, collapsing far-away
-// pages into an ellipsis (null). Always keeps the first and last page visible.
-// Returns an array of 0-based page indices, with null marking an ellipsis gap.
+// Build the list of page numbers to show in the windowed pagination, collapsing
+// far-away pages into an ellipsis (null). Always keeps the first and last page
+// visible. Returns an array of 0-based page indices, with null marking a gap.
 function paginationPages(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
   const pages = new Set([0, total - 1, current - 1, current, current + 1]);
@@ -2679,8 +2682,55 @@ function paginationPages(current, total) {
   return result;
 }
 
+// Build the pagination HTML for a given mode: 'all' (every page number),
+// 'windowed' (current page + neighbors + ellipsis), or 'arrows' (just ← / →).
+function buildPaginationHTML(mode, totalPages) {
+  let items;
+  if (mode === 'arrows') {
+    items = [];
+  } else if (mode === 'all') {
+    items = Array.from({ length: totalPages }, (_, i) => i);
+  } else {
+    items = paginationPages(currencyPage, totalPages);
+  }
+  const pageButtons = items.map(p =>
+    p === null
+      ? '<span class="currency-page-ellipsis">…</span>'
+      : `<button class="btn-sm currency-page-btn${p === currencyPage ? ' active' : ''}" type="button" data-currency-page="${p}">${p + 1}</button>`
+  ).join('');
+  return `
+    <button class="btn-sm" type="button" id="currencyPagePrev" ${currencyPage === 0 ? 'disabled' : ''}>←</button>
+    ${pageButtons}
+    <button class="btn-sm" type="button" id="currencyPageNext" ${currencyPage >= totalPages - 1 ? 'disabled' : ''}>→</button>
+  `;
+}
+
+// Wire up the prev/next and page-number click handlers for the currency pagination.
+function wireCurrencyPaginationEvents() {
+  $('#currencyPagePrev')?.addEventListener('click', () => { currencyPage--; renderCurrency(); });
+  $('#currencyPageNext')?.addEventListener('click', () => { currencyPage++; renderCurrency(); });
+  document.querySelectorAll('#currencyPagination .currency-page-btn').forEach(btn => {
+    btn.addEventListener('click', () => { currencyPage = Number(btn.dataset.currencyPage); renderCurrency(); });
+  });
+}
+
+// Measure the total rendered width of the pagination's children (buttons + ellipsis)
+// including the flex gap. This is more reliable than scrollWidth for a centered flex row.
+function paginationContentWidth(pagination) {
+  const children = [...pagination.children];
+  if (!children.length) return 0;
+  let width = 0;
+  for (let i = 0; i < children.length; i++) {
+    width += children[i].offsetWidth;
+    if (i < children.length - 1) width += 12; // .snapshot-pagination gap
+  }
+  return width;
+}
+
 // Render the pagination controls (prev / page number buttons / next) for the currency table.
-// Far-away page numbers are collapsed into an ellipsis so the arrows stay visible on narrow screens.
+// Adapts to the available width: renders the largest mode that fits on one line — all page
+// numbers when they fit, a windowed view with an ellipsis when they don't, and arrows-only
+// on very narrow screens. The actual rendered width is measured so it matches what the user sees.
 function renderCurrencyPagination(totalPages, totalCount) {
   const pagination = $('#currencyPagination');
   if (!pagination) return;
@@ -2690,21 +2740,16 @@ function renderCurrencyPagination(totalPages, totalCount) {
     return;
   }
   pagination.style.display = 'flex';
-  const pageButtons = paginationPages(currencyPage, totalPages).map(p =>
-    p === null
-      ? '<span class="currency-page-ellipsis">…</span>'
-      : `<button class="btn-sm currency-page-btn${p === currencyPage ? ' active' : ''}" type="button" data-currency-page="${p}">${p + 1}</button>`
-  ).join('');
-  pagination.innerHTML = `
-    <button class="btn-sm" type="button" id="currencyPagePrev" ${currencyPage === 0 ? 'disabled' : ''}>←</button>
-    ${pageButtons}
-    <button class="btn-sm" type="button" id="currencyPageNext" ${currencyPage >= totalPages - 1 ? 'disabled' : ''}>→</button>
-  `;
-  $('#currencyPagePrev')?.addEventListener('click', () => { currencyPage--; renderCurrency(); });
-  $('#currencyPageNext')?.addEventListener('click', () => { currencyPage++; renderCurrency(); });
-  pagination.querySelectorAll('.currency-page-btn').forEach(btn => {
-    btn.addEventListener('click', () => { currencyPage = Number(btn.dataset.currencyPage); renderCurrency(); });
-  });
+  const modes = ['all', 'windowed', 'arrows'];
+  for (const mode of modes) {
+    pagination.innerHTML = buildPaginationHTML(mode, totalPages);
+    if (paginationContentWidth(pagination) <= pagination.clientWidth) {
+      wireCurrencyPaginationEvents();
+      return;
+    }
+  }
+  // arrows always fits (just two buttons); wire events for the last rendered mode.
+  wireCurrencyPaginationEvents();
 }
 
 // Switch the active tab on the admin Tools page (import / export / currency-test).
@@ -3447,6 +3492,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
   $('#profileResetPasswordBtn')?.addEventListener('click', resetProfilePassword);
   $('#currencySearch')?.addEventListener('input', () => { currencyPage = 0; renderCurrency(); });
+
+  // Re-adapt the currency pagination when the window is resized (only while the
+  // Currency page is active, so it keeps fitting the current window size).
+  window.addEventListener('resize', () => {
+    if (currentPage === 'currency') renderCurrency();
+  });
 
   // Pressing Escape closes any open modal without saving.
   document.addEventListener('keydown', event => {
