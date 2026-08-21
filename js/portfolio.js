@@ -57,12 +57,12 @@ function findAsset(id, isPersonal) {
 // Currency conversion helpers
 function getExchangeRate(fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return 1;
-  
+
   const fromRate = state.currencies.find(c => c.coin === fromCurrency);
   const toRate = state.currencies.find(c => c.coin === toCurrency);
-  
+
   if (!fromRate || !toRate) return null;
-  
+
   // Exchange rates are relative to USD
   // To convert from X to Y: (1 / X_rate) * Y_rate
   return (1 / fromRate.value) * toRate.value;
@@ -71,19 +71,19 @@ function getExchangeRate(fromCurrency, toCurrency) {
 function convertToEUR(amount, fromCurrency) {
   if (!amount || !fromCurrency) return 0;
   if (fromCurrency === 'EUR') return amount;
-  
+
   // If from USD, use direct EUR rate
   if (fromCurrency === 'USD') {
     const eurRate = state.currencies.find(c => c.coin === 'EUR');
     return eurRate ? amount * eurRate.value : amount;
   }
-  
+
   // For other currencies: convert to USD first, then to EUR
   const usdRate = getExchangeRate(fromCurrency, 'USD');
   const eurRate = state.currencies.find(c => c.coin === 'EUR');
-  
+
   if (!usdRate || !eurRate) return amount;
-  
+
   const amountInUSD = amount * usdRate;
   return amountInUSD * eurRate.value;
 }
@@ -354,8 +354,8 @@ function renderDashboardAccounts() {
   container.innerHTML = filterBar + (accounts.length ? `
     <div class="dashboard-accounts-grid">
       ${accounts.map(a => {
-        const valInEur = accountValue(a, true);
-        return `
+    const valInEur = accountValue(a, true);
+    return `
           <div class="account-card${hasSnapshots ? ' clickable' : ''}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
@@ -364,7 +364,7 @@ function renderDashboardAccounts() {
             <div class="dlabel">${esc(a.provider_name || providerName(a.provider_id))}</div>
           </div>
         `;
-      }).join('')}
+  }).join('')}
     </div>
   ` : '<div class="page-desc">No accounts match this filter.</div>');
 }
@@ -386,7 +386,7 @@ function topNWithOthers(map, n) {
 
 function renderCharts() {
   if (typeof Chart === 'undefined') return;
-  
+
   const allocCtx = document.getElementById('allocationChart')?.getContext('2d');
   const typeCtx = document.getElementById('accountTypeChart')?.getContext('2d');
   if (!allocCtx || !typeCtx) return;
@@ -404,7 +404,7 @@ function renderCharts() {
       allocMap[type] = (allocMap[type] || 0) + valInEur;
     }
   });
-  
+
   // Separate loans, cash (bank accounts) and deposits (interest accounts) - convert to EUR
   const loansTotal = state.accounts.filter(a => a.type === 'loan').reduce((sum, a) => {
     const balance = Number(a.balance || 0);
@@ -418,7 +418,7 @@ function renderCharts() {
     const balance = Number(a.balance || 0);
     return sum + convertToEUR(balance, a.coin || 'USD');
   }, 0);
-  
+
   if (loansTotal !== 0) allocMap['Loans'] = loansTotal;
   if (cashTotal !== 0) allocMap['Cash'] = cashTotal;
   if (depositsTotal !== 0) allocMap['Deposits'] = depositsTotal;
@@ -443,6 +443,7 @@ function renderCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !allocLabels.length) return;
@@ -492,6 +493,7 @@ function renderCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !providerLabels.length) return;
@@ -516,14 +518,14 @@ function renderCharts() {
 function renderLegend(elementId, labels, data, colors, onClick = null) {
   const legendEl = document.getElementById(elementId);
   if (!legendEl) return;
-  
+
   const totalAbs = data.reduce((sum, val) => sum + Math.abs(val), 0);
-  
+
   if (labels.length === 0 || totalAbs === 0) {
     legendEl.innerHTML = '<div class="legend-row"><span class="lname" style="color:var(--muted);">No data yet</span></div>';
     return;
   }
-  
+
   legendEl.innerHTML = labels.map((label, i) => {
     const value = data[i];
     const absValue = Math.abs(value);
@@ -732,7 +734,7 @@ function renderPortfolioCharts() {
 
 function accountValue(acc, convertToEur = false) {
   const target = convertToEur ? 'EUR' : (acc.coin || 'USD');
-  
+
   if (acc.type === 'asset_account') {
     // Sum each holding's value converted to the target currency individually,
     // because holdings in one account can be in different coins.
@@ -748,7 +750,7 @@ function accountValue(acc, convertToEur = false) {
         return sum + (rate ? raw * rate : raw);
       }, 0);
   }
-  
+
   const value = Number(acc.balance || 0);
   const coin = acc.coin || 'USD';
   if (coin === target) return value;
@@ -849,7 +851,7 @@ function render() {
   }
 
   const totalVal = totalPortfolioValue();
-  
+
   if ($('#providerCount')) $('#providerCount').textContent = state.providers.length;
   if ($('#accountCount')) $('#accountCount').textContent = state.accounts.length;
 
@@ -2503,7 +2505,7 @@ function fillSelects() {
     const assetAccounts = state.accounts.filter(a => a.type === 'asset_account');
     $('#holdingAccount').innerHTML = assetAccounts.length ? assetAccounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('') : '<option value="">No asset accounts available</option>';
   }
-  
+
   // Fill currency selects with EUR and USD at top
   const currencyOptions = fillCurrencyOptions();
   if ($('#assetCoin')) {
@@ -2527,10 +2529,10 @@ function fillSelects() {
 function fillCurrencyOptions() {
   const topCurrencies = ['EUR', 'USD'];
   const otherCurrencies = state.currencies.filter(c => !topCurrencies.includes(c.coin)).sort((a, b) => a.coin.localeCompare(b.coin));
-  
+
   const topOptions = topCurrencies.map(code => `<option value="${code}">${code}</option>`).join('');
   const otherOptions = otherCurrencies.map(c => `<option value="${esc(c.coin)}">${esc(c.coin)}</option>`).join('');
-  
+
   return topOptions + (otherOptions ? '<option disabled>───────</option>' + otherOptions : '');
 }
 
@@ -2889,7 +2891,7 @@ async function signIn(event) {
     await loadData();
     toast(`Signed in as ${state.user.username}`);
     maybeShowWelcomeModal();
-    
+
     // Update currency rates if admin
     if (state.user.role === 'admin') {
       try {
@@ -4034,9 +4036,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Skip header row
       if (index === 0 && parts[0]?.toLowerCase() === 'symbol') return;
       if (!parts[0]) return;
-      
+
       // Format: symbol,name,type,coin,price,yield,payment_months
-      rows.push({ 
+      rows.push({
         symbol: parts[0],
         name: parts[1] || '',
         type: parts[2] || 'stock',
@@ -4101,7 +4103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#exportAssetsBtn')?.addEventListener('click', () => {
     const log = $('#exportLog');
     const now = new Date().toLocaleTimeString();
-    
+
     try {
       const headers = ['symbol', 'name', 'type', 'coin', 'price', 'yield', 'payment_months'];
       const rows = state.assets.map(asset => [
@@ -4113,10 +4115,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         asset.dividend_yield !== null && asset.dividend_yield !== undefined ? asset.dividend_yield : '',
         Array.isArray(asset.payment_months) && asset.payment_months.length > 0 ? asset.payment_months.join('|') : ''
       ]);
-      
+
       const csv = arrayToCSV(headers, rows);
       downloadCSV(csv, 'assets_export.csv');
-      
+
       if (log) {
         log.innerHTML = `[${now}] <span class="ok">[SUCCESS]</span> Exported ${rows.length} assets to assets_export.csv`;
       }
@@ -4497,7 +4499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.guest = state.user.role === 'guest';
       showApp();
       await loadData();
-      
+
       // Update currency rates if admin
       if (state.user.role === 'admin') {
         try {
