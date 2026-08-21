@@ -2091,6 +2091,35 @@ select {
   background: rgba(99, 102, 241, .1);
 }
 
+.asset-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 16px 0 18px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.asset-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.asset-tab:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.asset-tab.active {
+  color: var(--accent);
+  background: rgba(99, 102, 241, .1);
+}
+
 /* Currency Test page (admin) */
 .currency-test-rows {
   display: flex;

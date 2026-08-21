@@ -48,6 +48,11 @@ let currentPage = 'dashboard';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const numeric = value => value === null || value === undefined || value === '' ? null : Number(value);
+// Find an asset by id AND personal flag. Personal and platform assets can share
+// the same numeric id, so matching on id alone is ambiguous.
+function findAsset(id, isPersonal) {
+  return state.assets.find(a => a.id === Number(id) && (a.is_personal === 1) === (isPersonal === 1 || isPersonal === true));
+}
 
 // Currency conversion helpers
 function getExchangeRate(fromCurrency, toCurrency) {
@@ -256,6 +261,7 @@ let providerDetailsChartInstance = null;
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
+let activeAssetTab = 'system'; // 'system' or 'personal' — which Assets page tab is shown
 let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
 let portfolioAssetOthers = [];
@@ -301,7 +307,7 @@ function renderDashboardAccounts() {
         const relevantAccountIds = new Set(
           state.holdings
             .filter(h => {
-              const asset = state.assets.find(a => a.id === h.asset_id);
+              const asset = findAsset(h.asset_id, h.is_personal);
               return asset && dashboardAllocOthers.includes(asset.type || 'Other');
             })
             .map(h => h.account_id)
@@ -311,7 +317,7 @@ function renderDashboardAccounts() {
         const relevantAccountIds = new Set(
           state.holdings
             .filter(h => {
-              const asset = state.assets.find(a => a.id === h.asset_id);
+              const asset = findAsset(h.asset_id, h.is_personal);
               return asset && asset.type === val;
             })
             .map(h => h.account_id)
@@ -390,7 +396,7 @@ function renderCharts() {
 
   const allocMap = {};
   state.holdings.forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (asset) {
       const val = Number(asset.price || 0) * Number(h.quantity || 0);
       const valInEur = convertToEUR(val, asset.coin || 'USD');
@@ -542,7 +548,7 @@ function renderPortfolioCards() {
   let totalAnnualDividendEur = 0;
 
   state.holdings.forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (!asset) return;
     const qty = Number(h.quantity || 0);
     const marketVal = Number(asset.price || 0) * qty;
@@ -626,7 +632,7 @@ function renderPortfolioCharts() {
   // By Asset: market value per individual asset
   const assetMap = {};
   state.holdings.forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (asset) {
       const val = Number(asset.price || 0) * Number(h.quantity || 0);
       const valInEur = convertToEUR(val, asset.coin || 'USD');
@@ -676,7 +682,7 @@ function renderPortfolioCharts() {
   // By Asset Type: allocation by asset type
   const typeMap = {};
   state.holdings.forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (asset) {
       const val = Number(asset.price || 0) * Number(h.quantity || 0);
       const valInEur = convertToEUR(val, asset.coin || 'USD');
@@ -733,7 +739,7 @@ function accountValue(acc, convertToEur = false) {
     return state.holdings
       .filter(h => h.account_id === acc.id)
       .reduce((sum, h) => {
-        const asset = state.assets.find(a => a.id === h.asset_id);
+        const asset = findAsset(h.asset_id, h.is_personal);
         if (!asset) return sum;
         const raw = Number(asset.price || 0) * Number(h.quantity || 0);
         const coin = asset.coin || 'USD';
@@ -915,7 +921,7 @@ function formatSnapshotDay(day) {
 function collectDashboardSnapshot() {
   const byType = {};
   state.holdings.forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (asset) {
       const val = Number(asset.price || 0) * Number(h.quantity || 0);
       const valInEur = convertToEUR(val, asset.coin || 'USD');
@@ -1714,36 +1720,85 @@ function renderGoalHistoryChart() {
   });
 }
 
-function renderAssets() {
-  const searchInput = $('#assetSearch')?.value.toLowerCase() || '';
-  const typeFilter = $('#assetTypeFilter')?.value || '';
-  const items = state.assets.filter(a => (!typeFilter || a.type === typeFilter) && `${a.symbol || ''} ${a.name}`.toLowerCase().includes(searchInput));
+// Render the System Assets tab (platform assets, admin-managed).
+function renderSystemAssets() {
+  const searchInput = $('#systemAssetSearch')?.value.toLowerCase() || '';
+  const typeFilter = $('#systemAssetTypeFilter')?.value || '';
   const admin = isAdminUser();
+  const items = state.assets
+    .filter(a => a.is_personal !== 1)
+    .filter(a => (!typeFilter || a.type === typeFilter) && `${a.symbol || ''} ${a.name}`.toLowerCase().includes(searchInput));
 
-  if ($('#assetsTable')) {
-    $('#assetsTable').innerHTML = items.length ? items.map(a => {
-      const personal = a.is_personal === 1;
-      const canManage = personal ? (admin || a.user_id === state.user?.id) : admin;
-      const displayName = personal ? `[${a.name}]` : a.name;
-      return `
+  if ($('#systemAssetsTable')) {
+    $('#systemAssetsTable').innerHTML = items.length ? items.map(a => `
       <tr>
         <td><strong>${esc(a.symbol || '—')}</strong></td>
-        <td>${esc(displayName)}</td>
+        <td>${esc(a.name)}</td>
         <td><span class="tag ${a.type}">${esc(a.type)}</span></td>
         <td>${a.price == null ? '—' : formatCurrency(a.price, a.coin || 'USD')}</td>
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn-sm action-icon-btn add" data-add-asset-to-account="${a.id}" title="Add to Account">➕</button>
-            ${!personal && admin ? `<button class="btn-sm action-icon-btn" data-update-asset="${a.id}" title="Update">🔄</button>` : ''}
-            ${canManage ? `<button class="btn-sm action-icon-btn" data-edit-asset="${a.id}" title="Edit">✏️</button>` : ''}
-            ${canManage ? `<button class="btn-sm action-icon-btn danger" data-delete-asset="${a.id}" title="Delete">🗑️</button>` : ''}
+            ${admin ? `<button class="btn-sm action-icon-btn" data-update-asset="${a.id}" title="Update">🔄</button>` : ''}
+            ${admin ? `<button class="btn-sm action-icon-btn" data-edit-asset="${a.id}" data-edit-asset-personal="0" title="Edit">✏️</button>` : ''}
+            ${admin ? `<button class="btn-sm action-icon-btn danger" data-delete-asset="${a.id}" data-delete-asset-personal="0" title="Delete">🗑️</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('') : emptyRow(6, 'No system assets found.');
+  }
+}
+
+// Render the Personal Assets tab (user-scoped assets).
+function renderPersonalAssets() {
+  const searchInput = $('#personalAssetSearch')?.value.toLowerCase() || '';
+  const typeFilter = $('#personalAssetTypeFilter')?.value || '';
+  const items = state.assets
+    .filter(a => a.is_personal === 1)
+    .filter(a => (!typeFilter || a.type === typeFilter) && `${a.symbol || ''} ${a.name}`.toLowerCase().includes(searchInput));
+  const admin = isAdminUser();
+
+  if ($('#personalAssetsTable')) {
+    $('#personalAssetsTable').innerHTML = items.length ? items.map(a => {
+      const canManage = admin || a.user_id === state.user?.id;
+      return `
+      <tr>
+        <td><strong>${esc(a.symbol || '—')}</strong></td>
+        <td>${esc(a.name)}</td>
+        <td><span class="tag ${a.type}">${esc(a.type)}</span></td>
+        <td>${a.price == null ? '—' : formatCurrency(a.price, a.coin || 'USD')}</td>
+        <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${canManage ? `<button class="btn-sm action-icon-btn" data-edit-asset="${a.id}" data-edit-asset-personal="1" title="Edit">✏️</button>` : ''}
+            ${canManage ? `<button class="btn-sm action-icon-btn danger" data-delete-asset="${a.id}" data-delete-asset-personal="1" title="Delete">🗑️</button>` : ''}
           </div>
         </td>
       </tr>
     `;
-    }).join('') : emptyRow(6, 'No assets found.');
+    }).join('') : emptyRow(6, 'No personal assets found.');
   }
+}
+
+// Render the active Assets page tab.
+function renderAssets() {
+  if (activeAssetTab === 'personal') {
+    renderPersonalAssets();
+  } else {
+    renderSystemAssets();
+  }
+}
+
+// Switch between the System Assets and Personal Assets tabs.
+function switchAssetTab(tab) {
+  activeAssetTab = tab;
+  document.querySelectorAll('.asset-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.assetTab === tab);
+  });
+  document.querySelectorAll('.asset-panel').forEach(panel => {
+    panel.style.display = panel.id === `asset-panel-${tab}` ? '' : 'none';
+  });
+  renderAssets();
 }
 
 function fillDividendPeriodValue() {
@@ -1914,12 +1969,12 @@ function renderAccounts() {
 // Build a sortable "row" object for a holding, resolving the same display values
 // used by the table so sorting matches what the user sees.
 function holdingSortRow(h) {
-  const asset = state.assets.find(a => a.id === h.asset_id);
+  const asset = findAsset(h.asset_id, h.is_personal);
   const account = state.accounts.find(a => a.id === h.account_id);
   const provider = account ? state.providers.find(p => p.id === account.provider_id) : null;
   const price = asset ? Number(asset.price || 0) : Number(h.price || 0);
   const quantity = Number(h.quantity || 0);
-  const isPersonalHolding = asset?.is_personal === 1 || h.asset_id < 0;
+  const isPersonalHolding = asset?.is_personal === 1 || h.is_personal === 1;
   const name = (h.asset_name || asset?.name || '—');
   const symbol = h.symbol || asset?.symbol || '—';
   const displayName = isPersonalHolding ? `[${name}]` : name;
@@ -2006,7 +2061,7 @@ function renderHoldings() {
     if (portfolioFilter.source === 'asset') {
       const val = portfolioFilter.value;
       holdings = state.holdings.filter(h => {
-        const asset = state.assets.find(a => a.id === h.asset_id);
+        const asset = findAsset(h.asset_id, h.is_personal);
         const symbol = h.symbol || asset?.symbol || asset?.name || 'Unknown';
         if (val === 'Others') return portfolioAssetOthers.includes(symbol);
         return symbol === val;
@@ -2015,7 +2070,7 @@ function renderHoldings() {
     } else if (portfolioFilter.source === 'type') {
       const val = portfolioFilter.value;
       holdings = state.holdings.filter(h => {
-        const asset = state.assets.find(a => a.id === h.asset_id);
+        const asset = findAsset(h.asset_id, h.is_personal);
         if (!asset) return false;
         const type = asset.type || 'Other';
         if (val === 'Others') return portfolioTypeOthers.includes(type);
@@ -2040,14 +2095,14 @@ function renderHoldings() {
   }
 
   $('#holdingsTable').innerHTML = holdings.length ? holdings.map(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     const account = state.accounts.find(a => a.id === h.account_id);
     const provider = account ? state.providers.find(p => p.id === account.provider_id) : null;
     const price = asset ? Number(asset.price || 0) : Number(h.price || 0);
     const value = price * Number(h.quantity || 0);
     const currency = h.coin || asset?.coin || 'USD';
     const symbol = h.symbol || asset?.symbol || '—';
-    const isPersonalHolding = asset?.is_personal === 1 || h.asset_id < 0;
+    const isPersonalHolding = asset?.is_personal === 1 || h.is_personal === 1;
     const name = (h.asset_name || asset?.name || '—');
     const displayName = isPersonalHolding ? `[${name}]` : name;
     const accName = h.account_name || account?.name || '—';
@@ -2090,11 +2145,11 @@ function openAccountDetailsModal(accountId) {
   // Per-asset market value, converted to EUR, sorted descending
   const assetMap = {};
   state.holdings.filter(h => h.account_id === acc.id).forEach(h => {
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if (!asset) return;
     const val = Number(asset.price || 0) * Number(h.quantity || 0);
     const converted = convertToEUR(val, asset.coin || 'USD');
-    const isPersonalHolding = asset.is_personal === 1 || h.asset_id < 0;
+    const isPersonalHolding = asset.is_personal === 1 || h.is_personal === 1;
     const label = (h.symbol || asset.symbol || asset.name || 'Unknown');
     const displayLabel = isPersonalHolding ? `[${label}]` : label;
     assetMap[displayLabel] = (assetMap[displayLabel] || 0) + converted;
@@ -2430,13 +2485,13 @@ function fillHoldingAssetSelect(keepAssetId = null) {
   if (!select) return;
   const typeFilter = $('#holdingAssetTypeFilter')?.value || '';
   const accountId = Number($('#holdingAccount')?.value);
-  const existingAssetIds = new Set(
-    state.holdings.filter(h => h.account_id === accountId).map(h => h.asset_id)
+  const existingAssetKeys = new Set(
+    state.holdings.filter(h => h.account_id === accountId).map(h => `${h.asset_id}|${h.is_personal === 1 ? 1 : 0}`)
   );
-  if (keepAssetId != null) existingAssetIds.delete(Number(keepAssetId));
+  if (keepAssetId != null) existingAssetKeys.delete(String(keepAssetId));
   let assets = typeFilter ? state.assets.filter(a => a.type === typeFilter) : state.assets;
-  assets = assets.filter(a => !existingAssetIds.has(a.id));
-  select.innerHTML = assets.length ? assets.map(a => `<option value="${a.id}">${esc(a.symbol || a.name)} — ${a.is_personal === 1 ? `[${esc(a.name)}]` : esc(a.name)}</option>`).join('') : '<option value="">No assets available</option>';
+  assets = assets.filter(a => !existingAssetKeys.has(`${a.id}|${a.is_personal === 1 ? 1 : 0}`));
+  select.innerHTML = assets.length ? assets.map(a => `<option value="${a.id}|${a.is_personal === 1 ? 1 : 0}">${esc(a.symbol || a.name)} — ${a.is_personal === 1 ? `[${esc(a.name)}]` : esc(a.name)}</option>`).join('') : '<option value="">No assets available</option>';
 }
 
 function fillSelects() {
@@ -2856,13 +2911,13 @@ async function logout() {
 
 /* ================= MODAL OPEN / EDIT HELPERS ================= */
 
-function openAssetModal(assetId = null, isPersonal = false) {
+function openAssetModal(assetId = null, isPersonal = null) {
   const form = $('#assetForm');
   if (!form) return;
   form.reset();
   const err = form.querySelector('.form-error'); if (err) err.textContent = '';
   if (assetId) {
-    const a = state.assets.find(item => item.id === assetId);
+    const a = findAsset(assetId, isPersonal);
     if (!a) return;
     isPersonal = a.is_personal === 1;
     $('#assetModalTitle').textContent = isPersonal ? 'Edit Personal Asset' : 'Edit Asset';
@@ -2875,6 +2930,8 @@ function openAssetModal(assetId = null, isPersonal = false) {
     $('#assetYield').value = a.dividend_yield ?? '';
     $('#assetMonths').value = (a.payment_months || []).join(',');
   } else {
+    // When creating a new asset, default to the active tab's type.
+    if (isPersonal === null) isPersonal = activeAssetTab === 'personal';
     $('#assetModalTitle').textContent = isPersonal ? 'New Personal Asset' : 'New Asset';
     $('#assetEditId').value = '';
     $('#assetCoin').value = 'USD';
@@ -3106,7 +3163,7 @@ function openAccountModal(accountId = null, providerId = null) {
   openModal('accountModalOverlay');
 }
 
-function openHoldingModal(assetId = null, holdingId = null) {
+function openHoldingModal(holdingId = null) {
   if (!state.assets.length) return toast('Create an asset first.');
   const assetAccounts = state.accounts.filter(a => a.type === 'asset_account');
   if (!assetAccounts.length) return toast('Create an asset account first.');
@@ -3117,14 +3174,14 @@ function openHoldingModal(assetId = null, holdingId = null) {
   if (holdingId) {
     const h = state.holdings.find(item => item.id === holdingId);
     if (!h) return;
-    const asset = state.assets.find(a => a.id === h.asset_id);
+    const asset = findAsset(h.asset_id, h.is_personal);
     if ($('#holdingAssetTypeFilter')) $('#holdingAssetTypeFilter').value = asset?.type || '';
     fillSelects();
     $('#holdingAccount').value = h.account_id;
-    fillHoldingAssetSelect(h.asset_id);
+    fillHoldingAssetSelect(`${h.asset_id}|${h.is_personal === 1 ? 1 : 0}`);
     $('#holdingModalTitle').textContent = 'Edit Holding';
     $('#holdingEditId').value = h.id;
-    $('#holdingAsset').value = h.asset_id;
+    $('#holdingAsset').value = `${h.asset_id}|${h.is_personal === 1 ? 1 : 0}`;
     $('#holdingQty').value = h.quantity;
     $('#holdingPurchasePrice').value = h.purchase_price ?? '';
   } else {
@@ -3132,7 +3189,6 @@ function openHoldingModal(assetId = null, holdingId = null) {
     fillSelects();
     $('#holdingModalTitle').textContent = 'Add Holding';
     $('#holdingEditId').value = '';
-    if (assetId) $('#holdingAsset').value = assetId;
   }
   openModal('holdingModalOverlay');
 }
@@ -3512,8 +3568,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     switchToolsTab(btn.dataset.toolsTab);
   }));
   $('#navToggle')?.addEventListener('click', toggleNavDropdown);
-  $('#assetSearch')?.addEventListener('input', renderAssets);
-  $('#assetTypeFilter')?.addEventListener('change', renderAssets);
+  document.querySelectorAll('.asset-tab').forEach(btn => btn.addEventListener('click', () => switchAssetTab(btn.dataset.assetTab)));
+  $('#systemAssetSearch')?.addEventListener('input', renderSystemAssets);
+  $('#systemAssetTypeFilter')?.addEventListener('change', renderSystemAssets);
+  $('#personalAssetSearch')?.addEventListener('input', renderPersonalAssets);
+  $('#personalAssetTypeFilter')?.addEventListener('change', renderPersonalAssets);
   $('#dividendPeriodType')?.addEventListener('change', () => { fillDividendPeriodValue(); renderDividends(); });
   $('#dividendPeriodValue')?.addEventListener('change', renderDividends);
   $('#accountTypeSelect')?.addEventListener('change', toggleAccountFields);
@@ -3661,24 +3720,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
       closeModal('assetModalOverlay');
-      if ($('#assetSearch')) $('#assetSearch').value = '';
-      if ($('#assetTypeFilter')) $('#assetTypeFilter').value = '';
+      if ($('#systemAssetSearch')) $('#systemAssetSearch').value = '';
+      if ($('#systemAssetTypeFilter')) $('#systemAssetTypeFilter').value = '';
+      if ($('#personalAssetSearch')) $('#personalAssetSearch').value = '';
+      if ($('#personalAssetTypeFilter')) $('#personalAssetTypeFilter').value = '';
       await loadData();
       toast(assetId ? 'Asset updated.' : 'New asset added.');
       return;
     }
 
     const isPersonal = event.currentTarget.dataset.isPersonal === '1';
-    const realId = isPersonal ? Math.abs(assetId) : assetId;
     try {
       if (assetId) {
-        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${realId}`, { method: 'PUT', body: JSON.stringify(values) });
+        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${assetId}`, { method: 'PUT', body: JSON.stringify(values) });
       } else {
         await request(isPersonal ? '/personal-assets' : '/assets', { method: 'POST', body: JSON.stringify(values) });
       }
       closeModal('assetModalOverlay');
-      if ($('#assetSearch')) $('#assetSearch').value = '';
-      if ($('#assetTypeFilter')) $('#assetTypeFilter').value = '';
+      if ($('#systemAssetSearch')) $('#systemAssetSearch').value = '';
+      if ($('#systemAssetTypeFilter')) $('#systemAssetTypeFilter').value = '';
+      if ($('#personalAssetSearch')) $('#personalAssetSearch').value = '';
+      if ($('#personalAssetTypeFilter')) $('#personalAssetTypeFilter').value = '';
       await loadData();
       toast(assetId ? (isPersonal ? 'Personal asset updated.' : 'Asset updated.') : (isPersonal ? 'New personal asset saved.' : 'New asset saved.'));
     } catch (error) {
@@ -3808,7 +3870,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const err = $('#holdingForm .form-error'); if (err) err.textContent = '';
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
-    values.asset_id = numeric(values.asset_id);
+    const [assetIdStr, isPersonalStr] = String(values.asset_id || '').split('|');
+    values.asset_id = numeric(assetIdStr);
+    values.is_personal = Number(isPersonalStr) === 1 ? 1 : 0;
     values.account_id = numeric(values.account_id);
     values.quantity = numeric(values.quantity);
     values.purchase_price = numeric(values.purchase_price);
@@ -3819,13 +3883,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const h = guestData.holdings.find(item => item.id === holdingId);
         if (h) {
           h.asset_id = values.asset_id;
+          h.is_personal = values.is_personal;
           h.account_id = values.account_id;
           h.quantity = values.quantity;
           h.purchase_price = values.purchase_price;
         }
       } else {
         const newId = Math.max(...guestData.holdings.map(h => h.id), 0) + 1;
-        guestData.holdings.push({ id: newId, account_id: values.account_id, asset_id: values.asset_id, quantity: values.quantity, purchase_price: values.purchase_price });
+        guestData.holdings.push({ id: newId, account_id: values.account_id, asset_id: values.asset_id, is_personal: values.is_personal, quantity: values.quantity, purchase_price: values.purchase_price });
       }
       closeModal('holdingModalOverlay');
       await loadData();
@@ -3834,7 +3899,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      await request('/holdings', { method: 'POST', body: JSON.stringify(values) });
+      const body = { ...values };
+      await request('/holdings', { method: 'POST', body: JSON.stringify(body) });
       closeModal('holdingModalOverlay');
       await loadData();
       toast('Holding saved.');
@@ -4108,14 +4174,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // Add asset to account
-    const addAssetBtn = event.target.closest('[data-add-asset-to-account]');
-    if (addAssetBtn) {
-      const assetId = Number(addAssetBtn.dataset.addAssetToAccount);
-      openHoldingModal(assetId);
-      return;
-    }
-
     // Update Asset Value / Yield
     const updateAssetBtn = event.target.closest('[data-update-asset]');
     if (updateAssetBtn) {
@@ -4126,7 +4184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Edit Asset
     const editAssetBtn = event.target.closest('[data-edit-asset]');
     if (editAssetBtn) {
-      openAssetModal(Number(editAssetBtn.dataset.editAsset));
+      openAssetModal(Number(editAssetBtn.dataset.editAsset), Number(editAssetBtn.dataset.editAssetPersonal));
       return;
     }
 
@@ -4134,8 +4192,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const deleteAssetBtn = event.target.closest('[data-delete-asset]');
     if (deleteAssetBtn) {
       const assetId = Number(deleteAssetBtn.dataset.deleteAsset);
-      const asset = state.assets.find(a => a.id === assetId);
-      const isPersonal = asset?.is_personal === 1;
+      const isPersonal = Number(deleteAssetBtn.dataset.deleteAssetPersonal) === 1;
+      const asset = findAsset(assetId, isPersonal);
       if (!await confirmDialog(isPersonal ? 'Delete this personal asset?' : 'Delete this asset? This will also remove any holdings using it.')) return;
       if (state.guest) {
         guestData.assets = guestData.assets.filter(a => a.id !== assetId);
@@ -4144,7 +4202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       try {
-        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${isPersonal ? Math.abs(assetId) : assetId}`, { method: 'DELETE' });
+        await request(`${isPersonal ? '/personal-assets' : '/assets'}/${assetId}`, { method: 'DELETE' });
         await loadData();
         toast(isPersonal ? 'Personal asset deleted.' : 'Asset deleted.');
       } catch (err) {
@@ -4249,7 +4307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Edit Holding
     const editHoldingBtn = event.target.closest('[data-edit-holding]');
     if (editHoldingBtn) {
-      openHoldingModal(null, Number(editHoldingBtn.dataset.editHolding));
+      openHoldingModal(Number(editHoldingBtn.dataset.editHolding));
       return;
     }
 

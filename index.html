@@ -146,42 +146,84 @@
         <!-- ASSETS -->
         <div class="page" id="page-assets">
           <div class="page-title">Assets</div>
-          <div class="page-desc">Platform assets and personal assets. Personal asset names are marked with [].</div>
-          <div class="toolbar">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <input id="assetSearch" class="search-input" placeholder="Search symbol or name...">
-              <select id="assetTypeFilter">
-                <option value="">All types</option>
-                <option value="stock">Stock</option>
-                <option value="etf">ETF</option>
-                <option value="bond">Bond</option>
-                <option value="cfd">CFD</option>
-                <option value="commodity">Commodity</option>
-              </select>
+          <div class="page-desc">Manage system and personal assets in separate tabs.</div>
+          <div class="asset-tabs">
+            <button class="asset-tab active" type="button" data-asset-tab="system">📈 System Assets</button>
+            <button class="asset-tab" type="button" data-asset-tab="personal">👤 Personal Assets</button>
+          </div>
+
+          <!-- SYSTEM ASSETS TAB -->
+          <div class="asset-panel" id="asset-panel-system">
+            <div class="toolbar">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="systemAssetSearch" class="search-input" placeholder="Search symbol or name...">
+                <select id="systemAssetTypeFilter">
+                  <option value="">All types</option>
+                  <option value="stock">Stock</option>
+                  <option value="etf">ETF</option>
+                  <option value="bond">Bond</option>
+                  <option value="cfd">CFD</option>
+                  <option value="commodity">Commodity</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn-sm primary write-action admin-action" id="newAssetBtn" style="display:none;">+ New
+                  Asset</button>
+                <button class="btn-sm success admin-action" id="updateAllPricesBtn" style="display:none;">↻ Update All
+                  Prices</button>
+              </div>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <button class="btn-sm primary write-action" id="newPersonalAssetBtn" style="display:none;">+ New
-                Personal Asset</button>
-              <button class="btn-sm primary write-action admin-action" id="newAssetBtn" style="display:none;">+ New
-                Asset</button>
-              <button class="btn-sm success admin-action" id="updateAllPricesBtn" style="display:none;">↻ Update All
-                Prices</button>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Latest Price</th>
+                    <th>Yield</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="systemAssetsTable"></tbody>
+              </table>
             </div>
           </div>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Latest Price</th>
-                  <th>Yield</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="assetsTable"></tbody>
-            </table>
+
+          <!-- PERSONAL ASSETS TAB -->
+          <div class="asset-panel" id="asset-panel-personal" style="display:none;">
+            <div class="toolbar">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="personalAssetSearch" class="search-input" placeholder="Search symbol or name...">
+                <select id="personalAssetTypeFilter">
+                  <option value="">All types</option>
+                  <option value="stock">Stock</option>
+                  <option value="etf">ETF</option>
+                  <option value="bond">Bond</option>
+                  <option value="cfd">CFD</option>
+                  <option value="commodity">Commodity</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn-sm primary write-action" id="newPersonalAssetBtn" style="display:none;">+ New
+                  Personal Asset</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Latest Price</th>
+                    <th>Yield</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="personalAssetsTable"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
