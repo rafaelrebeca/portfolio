@@ -269,6 +269,8 @@ let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
 let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
+let timeTravelPlayTimer = null; // timeout id for the "play through snapshots" playback
+let timeTravelPlayIndex = -1; // current index in timeTravelList during playback
 const SNAPSHOTS_PER_PAGE = 5; // snapshots shown per page in the Time Travel modal
 let snapshotPage = 0; // current page index (0-based) of the snapshot list
 const CURRENCIES_PER_PAGE = 20; // currencies shown per page in the Currency table
@@ -1075,7 +1077,9 @@ function renderTimeTravelBanner() {
 function updateTimeTravelArrows() {
   const prevBtn = $('#timeTravelPrevBtn');
   const nextBtn = $('#timeTravelNextBtn');
+  const playBtn = $('#timeTravelPlayBtn');
   if (!prevBtn || !nextBtn) return;
+  if (playBtn) playBtn.disabled = timeTravelList.length === 0;
   if (!timeTravelActive()) {
     // Not viewing a snapshot: back is active if any snapshot exists (enters Time Travel), forward is disabled.
     prevBtn.disabled = timeTravelList.length === 0;
@@ -1090,6 +1094,7 @@ function updateTimeTravelArrows() {
 }
 
 async function openTimeTravelModal() {
+  stopTimeTravelPlay();
   snapshotPage = 0;
   openModal('timeTravelModalOverlay');
   await loadSnapshotList();
@@ -1158,6 +1163,7 @@ function renderSnapshotPagination(totalPages) {
 
 // Open the standalone calendar modal (calendar only, no snapshot list or other buttons).
 async function openCalendarModal() {
+  stopTimeTravelPlay();
   const now = new Date();
   calendarMonth = { year: now.getUTCFullYear(), month: now.getUTCMonth() };
   calendarPicker = false;
@@ -1278,6 +1284,7 @@ async function viewSnapshot(day) {
 // Navigate to the previous (older) snapshot in the list.
 // When not viewing a snapshot, enters Time Travel at the most recent snapshot.
 async function goToPrevSnapshot() {
+  stopTimeTravelPlay();
   if (!timeTravelActive()) {
     if (timeTravelList.length === 0) return;
     await viewSnapshot(timeTravelList[0].day);
@@ -1291,6 +1298,7 @@ async function goToPrevSnapshot() {
 // Navigate to the next (newer) snapshot in the list.
 // When on the most recent snapshot, exits Time Travel back to the live dashboard.
 async function goToNextSnapshot() {
+  stopTimeTravelPlay();
   if (!timeTravelActive()) return;
   const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
   if (idx <= 0) {
@@ -1298,6 +1306,40 @@ async function goToNextSnapshot() {
     return;
   }
   await viewSnapshot(timeTravelList[idx - 1].day);
+}
+
+// Stop any in-progress "play through snapshots" playback.
+function stopTimeTravelPlay() {
+  if (timeTravelPlayTimer) {
+    clearTimeout(timeTravelPlayTimer);
+    timeTravelPlayTimer = null;
+  }
+  timeTravelPlayIndex = -1;
+}
+
+// Play through all snapshots from oldest to newest, one every 2 seconds.
+// Starts at the oldest snapshot, advances to the next (newer) one every 2s,
+// and after showing the most recent for 2s exits Time Travel back to the live dashboard.
+function timeTravelPlay() {
+  if (timeTravelList.length === 0) return;
+  stopTimeTravelPlay();
+  timeTravelPlayIndex = timeTravelList.length - 1; // oldest (last in newest-first list)
+  viewSnapshot(timeTravelList[timeTravelPlayIndex].day);
+  scheduleTimeTravelPlay();
+}
+
+function scheduleTimeTravelPlay() {
+  timeTravelPlayTimer = setTimeout(async () => {
+    timeTravelPlayIndex--;
+    if (timeTravelPlayIndex < 0) {
+      // Reached the most recent snapshot; after 2s exit Time Travel.
+      timeTravelPlayTimer = null;
+      exitTimeTravel();
+      return;
+    }
+    await viewSnapshot(timeTravelList[timeTravelPlayIndex].day);
+    scheduleTimeTravelPlay();
+  }, 2000);
 }
 
 async function deleteSnapshot(day) {
@@ -1316,6 +1358,7 @@ async function deleteSnapshot(day) {
 }
 
 function exitTimeTravel() {
+  stopTimeTravelPlay();
   timeTravelSnapshot = null;
   render();
   toast('Exited Time Travel.');
@@ -1350,6 +1393,7 @@ async function cleanSnapshots(mode) {
 
 // Open the history modal, show the loading spinner, and load all snapshot data.
 async function openHistoryModal() {
+  stopTimeTravelPlay();
   openModal('historyModalOverlay');
   const loading = $('#historyLoading');
   const chartWrap = $('#historyChartWrap');
@@ -2436,7 +2480,7 @@ function renderGoals() {
             </span>
             <button class="btn-sm action-icon-btn" data-goal-details="${g.id}" title="Details">ℹ️</button>
             ${timeTravelList.length > 0 ? `<button class="btn-sm action-icon-btn" data-goal-history="${g.id}" title="History">📈</button>` : ''}
-            <button class="btn-sm action-icon-btn" data-simulate-goal="${g.id}" title="Simulate">▶️</button>
+            <button class="btn-sm action-icon-btn" data-simulate-goal="${g.id}" title="Simulate">⚡</button>
             <button class="btn-sm action-icon-btn" data-duplicate-goal="${g.id}" title="Duplicate">📄</button>
             <button class="btn-sm action-icon-btn" data-edit-goal="${g.id}" title="Edit">✏️</button>
             <button class="btn-sm action-icon-btn danger" data-delete-goal="${g.id}" title="Delete">🗑️</button>
@@ -3627,6 +3671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#timeTravelBtn')?.addEventListener('click', openTimeTravelModal);
   $('#timeTravelPrevBtn')?.addEventListener('click', goToPrevSnapshot);
   $('#timeTravelNextBtn')?.addEventListener('click', goToNextSnapshot);
+  $('#timeTravelPlayBtn')?.addEventListener('click', timeTravelPlay);
   $('#timeTravelSaveBtn')?.addEventListener('click', saveSnapshot);
   $('#timeTravelHistoryBtn')?.addEventListener('click', openHistoryModal);
   $('#timeTravelCalendarBtn')?.addEventListener('click', openCalendarModal);
