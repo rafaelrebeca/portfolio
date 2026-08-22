@@ -1013,7 +1013,7 @@ function renderDashboardFromSnapshot(data) {
           labels: allocTop.labels.length ? allocTop.labels : ['No Data'],
           datasets: [{ data: allocDataAbs.length ? allocDataAbs : [1], backgroundColor: allocDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
       });
     }
     if (typeCtx) {
@@ -1023,7 +1023,7 @@ function renderDashboardFromSnapshot(data) {
           labels: providerTop.labels.length ? providerTop.labels : ['No Data'],
           datasets: [{ data: providerDataAbs.length ? providerDataAbs : [1], backgroundColor: providerDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
       });
     }
     renderLegend('allocationLegend', allocTop.labels, allocTop.data, CHART_COLORS, false);
