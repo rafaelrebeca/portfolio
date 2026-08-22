@@ -443,6 +443,32 @@ a {
   color: var(--danger);
 }
 
+.value .value-delta {
+  display: inline-block;
+  font-size: 0.7em;
+  font-weight: 400;
+  margin-left: 4px;
+  white-space: nowrap;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.value .value-delta .delta-num {
+  overflow-wrap: anywhere;
+}
+
+.value .value-delta.zero {
+  color: var(--text);
+}
+
+.value .value-delta.pos {
+  color: #7ab8ff;
+}
+
+.value .value-delta.neg {
+  color: var(--warn);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

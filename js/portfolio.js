@@ -201,6 +201,7 @@ function gainLossValue(h) {
 async function loadData() {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
+    timeTravelList = [];
     render();
     return;
   }
@@ -858,9 +859,11 @@ function render() {
   if ($('#accountCount')) $('#accountCount').textContent = state.accounts.length;
 
   // Global Value - color by sign (red negative, green positive, white zero)
+  const prev = getPreviousSnapshotData();
   const portfolioValueEl = $('#portfolioValue');
   if (portfolioValueEl) {
-    portfolioValueEl.textContent = moneyEUR.format(totalVal);
+    const delta = prev ? formatDelta(totalVal - Number(prev.globalValue || 0)) : '';
+    portfolioValueEl.innerHTML = `${moneyEUR.format(totalVal)}${delta}`;
     portfolioValueEl.className = 'value ' + (totalVal < 0 ? 'neg' : (totalVal > 0 ? 'pos' : ''));
   }
 
@@ -874,7 +877,9 @@ function render() {
   });
   const debitCreditValue = $('#debitCreditValue');
   if (debitCreditValue) {
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}</span><br><span class="neg">${moneyEUR.format(credit)}</span>`;
+    const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
+    const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
+    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
   }
 
   dashboardFilter = null;
@@ -974,22 +979,58 @@ function collectDashboardSnapshot() {
   };
 }
 
+// Current UTC date as a YYYYMMDD string (matches the snapshot `day` format).
+function todayDayString() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}`;
+}
+
+// Return the data of the snapshot immediately before the current view, or null when there is none.
+// - In Time Travel: the next older snapshot in the newest-first list (null when viewing the oldest).
+// - On the live dashboard: the most recent snapshot that is NOT from today (a same-day snapshot is
+//   ignored because it reflects the same live state), falling back to the next older one; null when
+//   there is no such snapshot.
+function getPreviousSnapshotData() {
+  if (timeTravelActive()) {
+    const idx = timeTravelList.findIndex(s => s.day === timeTravelSnapshot.day);
+    if (idx < 0 || idx >= timeTravelList.length - 1) return null;
+    return timeTravelList[idx + 1].data;
+  }
+  if (timeTravelList.length === 0) return null;
+  const today = todayDayString();
+  const prev = timeTravelList.find(s => s.day !== today);
+  return prev ? prev.data : null;
+}
+
+// Format a value change for appending to a dashboard value, e.g. "(+€20.00)" / "(-€20.00)" / "(±€0.00)".
+function formatDelta(delta) {
+  const cls = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
+  const sign = delta > 0 ? '(+' : (delta < 0 ? '(-' : '(±');
+  const num = moneyEUR.format(Math.abs(delta));
+  return `<span class="value-delta ${cls}"><span class="delta-sign">${sign}</span><span class="delta-num">${num}</span>)</span>`;
+}
+
 // Render the dashboard cards, charts and account overview from a snapshot payload.
 function renderDashboardFromSnapshot(data) {
   const d = data || {};
   if ($('#providerCount')) $('#providerCount').textContent = d.providerCount ?? '—';
   if ($('#accountCount')) $('#accountCount').textContent = d.accountCount ?? '—';
+  const prev = getPreviousSnapshotData();
   const portfolioValueEl = $('#portfolioValue');
   if (portfolioValueEl) {
     const v = Number(d.globalValue || 0);
-    portfolioValueEl.textContent = moneyEUR.format(v);
+    const delta = prev ? formatDelta(v - Number(prev.globalValue || 0)) : '';
+    portfolioValueEl.innerHTML = `${moneyEUR.format(v)}${delta}`;
     portfolioValueEl.className = 'value ' + (v < 0 ? 'neg' : (v > 0 ? 'pos' : ''));
   }
   const debitCreditValue = $('#debitCreditValue');
   if (debitCreditValue) {
     const debit = Number(d.debit || 0);
     const credit = Number(d.credit || 0);
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}</span><br><span class="neg">${moneyEUR.format(credit)}</span>`;
+    const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
+    const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
+    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
   }
 
   // Charts (By Type / By Provider) + legends
