@@ -354,12 +354,15 @@ function renderDashboardAccounts() {
     : '';
 
   const hasSnapshots = timeTravelList.length > 0;
+  const prevData = getPreviousSnapshotData();
   container.innerHTML = filterBar + (accounts.length ? `
     <div class="dashboard-accounts-grid">
       ${accounts.map(a => {
     const valInEur = accountValue(a, true);
+    const prevVal = previousAccountValue(prevData, a.id);
+    const changeClass = accountChangeClass(valInEur, prevVal);
     return `
-          <div class="account-card${hasSnapshots ? ' clickable' : ''}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
+          <div class="account-card${hasSnapshots ? ' clickable' : ''} ${changeClass}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${valInEur < 0 ? 'neg' : 'pos'}">${moneyEUR.format(valInEur)}</strong>
@@ -1003,6 +1006,20 @@ function getPreviousSnapshotData() {
   return prev ? prev.data : null;
 }
 
+// Return the previous snapshot's value (EUR) for an account, or null if the account wasn't in it.
+function previousAccountValue(prevData, accountId) {
+  if (!prevData || !prevData.accounts) return null;
+  const prev = prevData.accounts.find(a => Number(a.id) === Number(accountId));
+  return prev ? Number(prev.valueEur || 0) : null;
+}
+
+// Border class for an account card based on its value change vs the previous snapshot:
+// 'account-up' (green) when increased, 'account-down' (red) when decreased, '' when equal or no previous value.
+function accountChangeClass(current, prev) {
+  if (prev === null || current === prev) return '';
+  return current > prev ? 'account-up' : 'account-down';
+}
+
 // Format a value change for appending to a dashboard value, e.g. "(+€20.00)" / "(-€20.00)" / "(±€0.00)".
 function formatDelta(delta) {
   const cls = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
@@ -1079,15 +1096,20 @@ function renderDashboardFromSnapshot(data) {
     const accounts = d.accounts || [];
     container.innerHTML = accounts.length ? `
       <div class="dashboard-accounts-grid">
-        ${accounts.map(a => `
-          <div class="account-card">
+        ${accounts.map(a => {
+          const val = Number(a.valueEur || 0);
+          const prevVal = previousAccountValue(prev, a.id);
+          const changeClass = accountChangeClass(val, prevVal);
+          return `
+          <div class="account-card ${changeClass}">
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
-              <strong class="${Number(a.valueEur) < 0 ? 'neg' : 'pos'}">${moneyEUR.format(Number(a.valueEur || 0))}</strong>
+              <strong class="${val < 0 ? 'neg' : 'pos'}">${moneyEUR.format(val)}</strong>
             </div>
             <div class="dlabel">${esc(a.provider || '—')}</div>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     ` : '<div class="page-desc">No accounts in this snapshot.</div>';
   }
