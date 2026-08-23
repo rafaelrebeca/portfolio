@@ -241,19 +241,20 @@ export async function onRequest(context) {
       const providerId = Number(body.provider_id), name = clean(body.name), type = clean(body.type);
       const balance = body.balance === null ? null : Number(body.balance), rate = body.interest_rate === null ? null : Number(body.interest_rate);
       const coin = clean(body.coin) || 'USD';
-      if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100))) return fail('Provide valid account details.');
+      const finishDate = type === 'loan' ? clean(body.finish_date) : null;
+      if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) || (finishDate !== null && !/^\d{8}$/.test(finishDate))) return fail('Provide valid account details.');
       const owner = await env.myd1db.prepare('SELECT id FROM providers WHERE id = ? AND user_id = ?').bind(providerId, user.id).first(); if (!owner) return fail('Provider not found.', 404);
 
       if (accountId && Number.isInteger(accountId)) {
         // Update existing account
         const existing = await env.myd1db.prepare('SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND p.user_id = ?').bind(accountId, user.id).first();
         if (!existing) return fail('Account not found.', 404);
-        const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, accountId).run();
+        const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, accountId).run();
         if (!changed(updateRes)) return fail('Failed to update account.', 500);
         return json({ id: accountId, ok: true });
       } else {
         // Create new account
-        const result = await env.myd1db.prepare('INSERT INTO accounts (provider_id, name, type, balance, interest_rate, coin) VALUES (?, ?, ?, ?, ?, ?)').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin).run();
+        const result = await env.myd1db.prepare('INSERT INTO accounts (provider_id, name, type, balance, interest_rate, coin, finish_date) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate).run();
         return json({ id: result.meta.last_row_id }, 201);
       }
     }
@@ -262,11 +263,12 @@ export async function onRequest(context) {
       const providerId = Number(body.provider_id), name = clean(body.name), type = clean(body.type);
       const balance = body.balance === null ? null : Number(body.balance), rate = body.interest_rate === null ? null : Number(body.interest_rate);
       const coin = clean(body.coin) || 'USD';
-      if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100))) return fail('Provide valid account details.');
+      const finishDate = type === 'loan' ? clean(body.finish_date) : null;
+      if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) || (finishDate !== null && !/^\d{8}$/.test(finishDate))) return fail('Provide valid account details.');
       const owner = await env.myd1db.prepare('SELECT id FROM providers WHERE id = ? AND user_id = ?').bind(providerId, user.id).first(); if (!owner) return fail('Provider not found.', 404);
       const existing = await env.myd1db.prepare('SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND p.user_id = ?').bind(id, user.id).first();
       if (!existing) return fail('Account not found.', 404);
-      const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, id).run();
+      const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, id).run();
       if (!changed(updateRes)) return fail('Failed to update account.', 500);
       return json({ ok: true });
     }

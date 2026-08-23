@@ -2022,12 +2022,15 @@ function renderAccounts() {
           headActions = `<button class="btn-sm action-icon-btn" data-account-details="${acc.id}" title="Details">ℹ️</button>`;
         }
       } else if (acc.type === 'loan' || acc.type === 'interest_account') {
+        const finishDate = acc.type === 'loan' && acc.finish_date ? finishDateToInput(acc.finish_date) : '';
         details = `<div class="account-detail-grid">
           <div><div class="dlabel">Balance</div>${valueHTML}</div>
           <div><div class="dlabel">Interest Rate</div><div class="dvalue">${acc.interest_rate != null ? Number(acc.interest_rate).toFixed(2) : '0.00'}%</div></div>
+          ${acc.type === 'loan' ? `<div><div class="dlabel">Finish Date</div><div class="dvalue">${finishDate || '—'}</div></div>` : ''}
         </div>`;
         if (acc.type === 'loan') {
-          headActions = `<button class="btn-sm action-icon-btn" data-loan-sim="${acc.id}" title="Loan simulator">⚡</button>`;
+          const simReady = acc.balance != null && acc.coin && acc.interest_rate != null && acc.finish_date;
+          headActions = `<button class="btn-sm action-icon-btn" data-loan-sim="${acc.id}" title="Loan simulator"${simReady ? '' : ' disabled'}>⚡</button>`;
         }
       } else {
         details = `<div class="account-detail-grid">
@@ -2977,16 +2980,20 @@ function toggleAccountFields() {
   const type = $('#accountTypeSelect')?.value;
   const balField = $('#balanceField');
   const rateField = $('#rateField');
-  if (!balField || !rateField) return;
+  const finishDateField = $('#finishDateField');
+  if (!balField || !rateField || !finishDateField) return;
   if (type === 'asset_account') {
     balField.style.display = 'none';
     rateField.style.display = 'none';
+    finishDateField.style.display = 'none';
   } else if (type === 'loan' || type === 'interest_account') {
     balField.style.display = 'block';
     rateField.style.display = 'block';
+    finishDateField.style.display = type === 'loan' ? 'block' : 'none';
   } else {
     balField.style.display = 'block';
     rateField.style.display = 'none';
+    finishDateField.style.display = 'none';
   }
 }
 
@@ -3259,6 +3266,7 @@ function openAccountModal(accountId = null, providerId = null) {
     $('#accountCoin').value = acc.coin || 'USD';
     $('#accountBalanceInput').value = acc.balance ?? '';
     $('#accountRateInput').value = acc.interest_rate ?? '';
+    $('#accountFinishDateInput').value = acc.finish_date ? finishDateToInput(acc.finish_date) : '';
     if (providerField) providerField.style.display = '';
   } else {
     $('#accountModalTitle').textContent = 'New Account';
@@ -3655,9 +3663,23 @@ function runGoalSimulation() {
 
 let loanSimChartInstance = null;
 
+// Convert a stored finish_date (YYYYMMDD) to a date-input value (YYYY-MM-DD).
+function finishDateToInput(dbDate) {
+  const s = String(dbDate || '').replace(/\D/g, '');
+  if (s.length !== 8) return '';
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+// Convert a date-input value (YYYY-MM-DD) to the stored format (YYYYMMDD).
+function finishDateToDb(inputDate) {
+  const s = String(inputDate || '').replace(/\D/g, '');
+  return s.length === 8 ? s : '';
+}
+
 function openLoanSimModal(accountId) {
   const acc = state.accounts.find(a => a.id === accountId);
   if (!acc) return;
+  if (acc.balance == null || !acc.coin || acc.interest_rate == null || !acc.finish_date) return;
   const form = $('#loanSimForm');
   if (!form) return;
   form.reset();
@@ -3667,10 +3689,12 @@ function openLoanSimModal(accountId) {
   $('#loanSimResult').innerHTML = '';
   const capital = Math.abs(Number(acc.balance || 0));
   const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
+  const finishDate = acc.finish_date ? finishDateToInput(acc.finish_date) : '';
   $('#loanSimSummary').innerHTML = `
     <div class="goal-sim-summary">
       <div><div class="dlabel">Remaining credit</div><div class="dvalue">${formatCurrency(capital, 'EUR')}</div></div>
       <div><div class="dlabel">TAEG</div><div class="dvalue">${rate.toFixed(2)}%</div></div>
+      <div><div class="dlabel">Finish date</div><div class="dvalue">${finishDate || '—'}</div></div>
     </div>`;
   openModal('loanSimModalOverlay');
 }
@@ -3707,7 +3731,7 @@ function runLoanSimulation() {
 
   const capital = Math.abs(Number(acc.balance || 0));
   const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
-  const endDate = $('#loanSimEndDate').value;
+  const endDate = acc.finish_date ? finishDateToInput(acc.finish_date) : '';
   const amortization = Number($('#loanSimAmount').value);
   const months = loanMonthsUntilDate(endDate);
 
@@ -4061,6 +4085,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     values.provider_id = numeric(values.provider_id);
     values.balance = values.type === 'asset_account' ? null : numeric(values.balance);
     values.interest_rate = (values.type === 'loan' || values.type === 'interest_account') ? numeric(values.interest_rate) : null;
+    values.finish_date = values.type === 'loan' ? finishDateToDb(values.finish_date) : null;
     const accountId = values.account_id ? Number(values.account_id) : null;
 
     if (state.guest) {
@@ -4073,10 +4098,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           acc.coin = values.coin || 'USD';
           acc.balance = values.balance;
           acc.interest_rate = values.interest_rate;
+          acc.finish_date = values.finish_date;
         }
       } else {
         const newId = Math.max(...guestData.accounts.map(a => a.id), 0) + 1;
-        guestData.accounts.push({ id: newId, provider_id: values.provider_id, name: values.name, type: values.type, coin: values.coin || 'USD', balance: values.balance, interest_rate: values.interest_rate });
+        guestData.accounts.push({ id: newId, provider_id: values.provider_id, name: values.name, type: values.type, coin: values.coin || 'USD', balance: values.balance, interest_rate: values.interest_rate, finish_date: values.finish_date });
       }
       closeModal('accountModalOverlay');
       await loadData();
