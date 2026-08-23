@@ -2026,6 +2026,9 @@ function renderAccounts() {
           <div><div class="dlabel">Balance</div>${valueHTML}</div>
           <div><div class="dlabel">Interest Rate</div><div class="dvalue">${acc.interest_rate != null ? Number(acc.interest_rate).toFixed(2) : '0.00'}%</div></div>
         </div>`;
+        if (acc.type === 'loan') {
+          headActions = `<button class="btn-sm action-icon-btn" data-loan-sim="${acc.id}" title="Loan simulator">⚡</button>`;
+        }
       } else {
         details = `<div class="account-detail-grid">
           <div><div class="dlabel">Balance</div>${valueHTML}</div>
@@ -3648,6 +3651,121 @@ function runGoalSimulation() {
   }
 }
 
+/* ================= LOAN SIMULATOR ================= */
+
+let loanSimChartInstance = null;
+
+function openLoanSimModal(accountId) {
+  const acc = state.accounts.find(a => a.id === accountId);
+  if (!acc) return;
+  const form = $('#loanSimForm');
+  if (!form) return;
+  form.reset();
+  const err = form.querySelector('.form-error'); if (err) err.textContent = '';
+  $('#loanSimId').value = acc.id;
+  $('#loanSimTitle').textContent = `Loan Simulator: ${acc.name}`;
+  $('#loanSimResult').innerHTML = '';
+  const capital = Math.abs(Number(acc.balance || 0));
+  const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
+  $('#loanSimSummary').innerHTML = `
+    <div class="goal-sim-summary">
+      <div><div class="dlabel">Remaining credit</div><div class="dvalue">${formatCurrency(capital, 'EUR')}</div></div>
+      <div><div class="dlabel">TAEG</div><div class="dvalue">${rate.toFixed(2)}%</div></div>
+    </div>`;
+  openModal('loanSimModalOverlay');
+}
+
+// Monthly payment for a loan: { interest, principal, total }.
+function loanPayment(capital, annualRate, months) {
+  const rate = annualRate / 100 / 12;
+  const total = rate === 0 ? capital / months : capital * rate / (1 - Math.pow(1 + rate, -months));
+  return { interest: capital * rate, principal: total - capital * rate, total };
+}
+
+// Number of months needed to pay off `capital` with a fixed monthly payment.
+function loanRemainingTerm(capital, monthlyPayment, annualRate) {
+  const rate = annualRate / 100 / 12;
+  return rate === 0 ? capital / monthlyPayment : -Math.log(1 - (rate * capital / monthlyPayment)) / Math.log(1 + rate);
+}
+
+// Whole months between today and the given end date (YYYY-MM-DD).
+function loanMonthsUntilDate(dateText) {
+  const today = new Date();
+  const end = new Date(dateText + 'T12:00:00');
+  let months = (end.getFullYear() - today.getFullYear()) * 12 + end.getMonth() - today.getMonth();
+  if (end.getDate() < today.getDate()) months -= 1;
+  return months;
+}
+
+function runLoanSimulation() {
+  const form = $('#loanSimForm');
+  const err = form.querySelector('.form-error'); if (err) err.textContent = '';
+  const result = $('#loanSimResult');
+  const accountId = Number($('#loanSimId').value);
+  const acc = state.accounts.find(a => a.id === accountId);
+  if (!acc) return;
+
+  const capital = Math.abs(Number(acc.balance || 0));
+  const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
+  const endDate = $('#loanSimEndDate').value;
+  const amortization = Number($('#loanSimAmount').value);
+  const months = loanMonthsUntilDate(endDate);
+
+  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || !(amortization >= 0) || amortization > capital) {
+    err.textContent = 'Check the values and choose a future date for the last payment.';
+    return;
+  }
+
+  const current = loanPayment(capital, rate, months);
+  const newCapital = capital - amortization;
+  const keepTerm = loanPayment(newCapital, rate, months);
+  const newTerm = loanRemainingTerm(newCapital, current.total, rate);
+  const monthlyRate = rate / 100 / 12;
+  const interestKeepPayment = newCapital * monthlyRate;
+  const principalKeepPayment = current.total - interestKeepPayment;
+  const interestCurrent = current.total * months - capital;
+  const interestKeepTerm = keepTerm.total * months - newCapital;
+  const interestTotalKeepPayment = current.total * newTerm - newCapital;
+  const totalCurrent = current.total * months;
+  const totalKeepTerm = amortization + keepTerm.total * months;
+  const totalKeepPayment = amortization + current.total * newTerm;
+
+  result.innerHTML = `
+    <div class="loan-sim-grid">
+      <section class="loan-sim-section">
+        <h4>Current scenario</h4>
+        <dl>
+          <dt>Payments remaining</dt><dd>${months} months</dd>
+          <dt>Interest in next payment</dt><dd>${formatCurrency(current.interest, 'EUR')}</dd>
+          <dt>Principal amortized</dt><dd>${formatCurrency(current.principal, 'EUR')}</dd>
+          <dt>Monthly payment</dt><dd>${formatCurrency(current.total, 'EUR')}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(totalCurrent, 'EUR')}</dd>
+        </dl>
+      </section>
+      <section class="loan-sim-section">
+        <h4>Amortize &amp; keep the term</h4>
+        <dl>
+          <dt>New monthly payment</dt><dd>${formatCurrency(keepTerm.total, 'EUR')}</dd>
+          <dt>Monthly reduction</dt><dd>${formatCurrency(current.total - keepTerm.total, 'EUR')}</dd>
+          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestKeepTerm, 'EUR')}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(keepTerm.total * months, 'EUR')}</dd>
+          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepTerm, 'EUR')}</dd>
+        </dl>
+      </section>
+      <section class="loan-sim-section loan-sim-highlight">
+        <h4>Amortize &amp; keep the payment</h4>
+        <dl>
+          <dt>New estimated term</dt><dd>${newTerm.toFixed(1)} months (-${(months - newTerm).toFixed(1)})</dd>
+          <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, 'EUR')} interest + ${formatCurrency(principalKeepPayment, 'EUR')} amortization</dd>
+          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestTotalKeepPayment, 'EUR')}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(current.total * newTerm, 'EUR')}</dd>
+          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepPayment, 'EUR')}</dd>
+        </dl>
+      </section>
+    </div>
+  `;
+}
+
 /* ================= EVENT LISTENERS ================= */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -3773,6 +3891,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeHoldingModalBtn')?.addEventListener('click', () => closeModal('holdingModalOverlay'));
   $('#closeGoalModalBtn')?.addEventListener('click', () => closeModal('goalModalOverlay'));
   $('#goalSimForm')?.addEventListener('submit', event => { event.preventDefault(); runGoalSimulation(); });
+  $('#loanSimForm')?.addEventListener('submit', event => { event.preventDefault(); runLoanSimulation(); });
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');
@@ -3789,6 +3908,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeHoldingModalX')?.addEventListener('click', () => closeModal('holdingModalOverlay'));
   $('#closeGoalModalX')?.addEventListener('click', () => closeModal('goalModalOverlay'));
   $('#closeGoalSimX')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
+  $('#closeLoanSimX')?.addEventListener('click', () => closeModal('loanSimModalOverlay'));
   $('#closeGoalDetailsX')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
   $('#closeAccountDetailsX')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
   $('#closeProviderDetailsX')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
@@ -4382,6 +4502,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const accountDetailsBtn = event.target.closest('[data-account-details]');
     if (accountDetailsBtn) {
       openAccountDetailsModal(Number(accountDetailsBtn.dataset.accountDetails));
+      return;
+    }
+
+    // Loan Simulator
+    const loanSimBtn = event.target.closest('[data-loan-sim]');
+    if (loanSimBtn) {
+      openLoanSimModal(Number(loanSimBtn.dataset.loanSim));
       return;
     }
 

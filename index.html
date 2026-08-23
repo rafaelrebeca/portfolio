@@ -834,6 +834,27 @@
     </div>
   </div>
 
+  <!-- MODAL: Loan Simulator -->
+  <div class="modal-overlay" id="loanSimModalOverlay">
+    <div class="modal" style="max-width:720px;">
+      <div class="modal-head">
+        <h3 id="loanSimTitle">Loan Simulator</h3>
+        <button class="modal-close" type="button" id="closeLoanSimX" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div class="loan-sim-summary" id="loanSimSummary" style="margin-bottom:14px;"></div>
+      <form id="loanSimForm">
+        <input type="hidden" id="loanSimId" name="account_id">
+        <div class="field"><label>Date of last payment</label><input type="date" id="loanSimEndDate" name="end_date" required></div>
+        <div class="field"><label>Amount to amortize (€)</label><input type="number" step="0.01" min="0" id="loanSimAmount" name="amount" required placeholder="e.g. 5000.00"></div>
+        <p class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-sm primary" type="submit">Calculate</button>
+        </div>
+      </form>
+      <div id="loanSimResult" style="margin-top:18px;"></div>
+    </div>
+  </div>
+
   <!-- MODAL: Provider Details (account breakdown) -->
   <div class="modal-overlay" id="providerDetailsModalOverlay">
     <div class="modal" style="max-width:560px;">
