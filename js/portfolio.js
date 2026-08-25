@@ -2776,7 +2776,7 @@ function renderProfile() {
 async function resetProfilePassword() {
   const newPass = $('#profileNewPassword')?.value || '';
   const confirmPass = $('#profileConfirmPassword')?.value || '';
-  if (newPass.length < 8) { toast('Password must be at least 8 characters.'); return; }
+  if (newPass.length < 8 || newPass.length > 50) { toast('Password must be 8–50 characters.'); return; }
   if (newPass !== confirmPass) { toast('Passwords do not match.'); return; }
   const btn = $('#profileResetPasswordBtn');
   if (btn) btn.disabled = true;
