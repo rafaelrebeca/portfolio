@@ -92,7 +92,7 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
 
       const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin).run();
       const assetId = result.meta.last_row_id;
@@ -125,7 +125,7 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
 
       const updateRes = await env.myd1db.prepare('UPDATE assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, symbol, type, price, coin, id).run();
       if (!changed(updateRes)) return fail('Asset not found.', 404);
@@ -163,7 +163,7 @@ export async function onRequest(context) {
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
-      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
       const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin).run();
       return json({ id: result.meta.last_row_id, ok: true }, 201);
     }
@@ -174,7 +174,7 @@ export async function onRequest(context) {
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
-      if (!name || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
       const owner = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').first();
       if (!owner) return fail('Personal asset not found.', 404);
       const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, symbol, type, price, coin, id).run();
@@ -427,12 +427,12 @@ export async function onRequest(context) {
     }
     if (method === 'POST' && path === 'admin/users') {
       await requireAdmin(request, env); const body = await readBody(request), username = clean(body.username), password = String(body.password || ''), role = clean(body.role || 'user');
-      if (!/^[a-zA-Z0-9_.-]{3,50}$/.test(username) || password.length < 8 || !validRole(role)) return fail('Use a 3–50 character username, a password of at least 8 characters, and a valid role.');
+      if (!/^[a-zA-Z0-9_.-]{3,50}$/.test(username) || password.length < 8 || password.length > 50 || !validRole(role)) return fail('Use a 3–50 character username, a password of 8–50 characters, and a valid role.');
       const result = await env.myd1db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').bind(username, await bcrypt.hash(password, 12), role).run(); return json({ id: result.meta.last_row_id }, 201);
     }
     if (method === 'POST' && /^admin\/users\/\d+\/password$/.test(path)) {
       await requireAdmin(request, env); const id = Number(path.split('/')[2]), body = await readBody(request), password = String(body.password || '');
-      if (password.length < 8) return fail('Password must be at least 8 characters.');
+      if (password.length < 8 || password.length > 50) return fail('Password must be 8–50 characters.');
       const hash = await bcrypt.hash(password, 12);
       if (!changed(await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, id).run())) return fail('User not found.', 404);
       return json({ ok: true });
@@ -441,7 +441,8 @@ export async function onRequest(context) {
     if (method === 'POST' && path === 'me/password') {
       const user = await requireMember(request, env);
       const { password } = await readBody(request);
-      if (String(password || '').length < 8) return fail('Password must be at least 8 characters.');
+      const passStr = String(password || '');
+      if (passStr.length < 8 || passStr.length > 50) return fail('Password must be 8–50 characters.');
       const hash = await bcrypt.hash(String(password), 12);
       await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, user.id).run();
       return json({ ok: true });
@@ -642,7 +643,10 @@ export async function onRequest(context) {
     return fail('Route not found.', 404);
   } catch (error) {
     const status = error.status || 500;
-    if (status === 500) console.error(error);
-    return fail(error.message || 'Internal server error.', status);
+    if (status === 500) {
+      console.error(error);
+      return fail('Internal server error.', 500); // Do not leak internal exception details
+    }
+    return fail(error.message || 'Request failed.', status);
   }
 }

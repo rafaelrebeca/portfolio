@@ -28,7 +28,7 @@
         <div class="field"><label>Username</label><input type="text" id="usernameInput" name="username" required
             autocomplete="username"></div>
         <div class="field"><label>Password</label><input type="password" id="passwordInput" name="password" required
-            autocomplete="current-password"></div>
+            maxlength="50" autocomplete="current-password"></div>
         <p id="loginError" class="error" role="alert"></p>
         <button class="btn-primary" type="submit">Sign In</button>
       </form>
@@ -489,8 +489,8 @@
             <div class="field"><label>Username</label><div id="profileUsername" style="padding:8px 0;font-weight:600;"></div></div>
             <div class="field"><label>User type</label><div id="profileRole" style="padding:8px 0;"></div></div>
             <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
-            <div class="field"><label>New password</label><input type="password" id="profileNewPassword" autocomplete="new-password" placeholder="Enter a new password"></div>
-            <div class="field"><label>Confirm new password</label><input type="password" id="profileConfirmPassword" autocomplete="new-password" placeholder="Confirm the new password"></div>
+            <div class="field"><label>New password</label><input type="password" id="profileNewPassword" maxlength="50" autocomplete="new-password" placeholder="Enter a new password"></div>
+            <div class="field"><label>Confirm new password</label><input type="password" id="profileConfirmPassword" maxlength="50" autocomplete="new-password" placeholder="Confirm the new password"></div>
             <button class="btn-sm primary" type="button" id="profileResetPasswordBtn" style="margin-top:8px;">Reset password</button>
           </div>
         </div>
@@ -538,7 +538,7 @@
       <form id="assetForm">
         <input type="hidden" id="assetEditId" name="asset_id">
         <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required
-            placeholder="e.g. Apple Inc."></div>
+            maxlength="50" placeholder="e.g. Apple Inc."></div>
         <div class="field"><label>Symbol</label><input type="text" id="assetSymbol" name="symbol" required
             placeholder="e.g. AAPL"></div>
         <div class="field"><label>Type</label>
@@ -898,10 +898,10 @@
             <option value="admin">Admin</option>
           </select>
         </div>
-        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8"
+        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8" maxlength="50"
             placeholder="At least 8 characters" autocomplete="new-password"></div>
         <div class="field"><label>Confirm Password</label><input type="password" name="confirm_password" required
-            minlength="8" placeholder="Repeat password" autocomplete="new-password"></div>
+            minlength="8" maxlength="50" placeholder="Repeat password" autocomplete="new-password"></div>
         <p class="form-error"></p>
         <div class="modal-actions">
           <button class="btn-sm" type="button" id="closeUserModalBtn">Cancel</button>
@@ -921,10 +921,10 @@
       <p class="modal-copy">Set a new password for <strong id="resetPasswordUsername"></strong>.</p>
       <form id="resetPasswordForm">
         <input type="hidden" id="resetPasswordUserId" name="user_id">
-        <div class="field"><label>New Password</label><input type="password" name="password" required minlength="8"
+        <div class="field"><label>New Password</label><input type="password" name="password" required minlength="8" maxlength="50"
             placeholder="At least 8 characters" autocomplete="new-password"></div>
         <div class="field"><label>Confirm New Password</label><input type="password" name="confirm_password" required
-            minlength="8" placeholder="Repeat password" autocomplete="new-password"></div>
+            minlength="8" maxlength="50" placeholder="Repeat password" autocomplete="new-password"></div>
         <p class="form-error"></p>
         <div class="modal-actions">
           <button class="btn-sm" type="button" id="closeResetPasswordModalBtn">Cancel</button>
