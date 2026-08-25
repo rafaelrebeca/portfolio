@@ -642,7 +642,10 @@ export async function onRequest(context) {
     return fail('Route not found.', 404);
   } catch (error) {
     const status = error.status || 500;
-    if (status === 500) console.error(error);
-    return fail(error.message || 'Internal server error.', status);
+    if (status === 500) {
+      console.error(error);
+      return fail('Internal server error.', 500); // Do not leak internal exception details
+    }
+    return fail(error.message || 'Request failed.', status);
   }
 }
