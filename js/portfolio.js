@@ -1097,10 +1097,10 @@ function renderDashboardFromSnapshot(data) {
     container.innerHTML = accounts.length ? `
       <div class="dashboard-accounts-grid">
         ${accounts.map(a => {
-          const val = Number(a.valueEur || 0);
-          const prevVal = previousAccountValue(prev, a.id);
-          const changeClass = accountChangeClass(val, prevVal);
-          return `
+      const val = Number(a.valueEur || 0);
+      const prevVal = previousAccountValue(prev, a.id);
+      const changeClass = accountChangeClass(val, prevVal);
+      return `
           <div class="account-card ${changeClass}">
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
@@ -1109,7 +1109,7 @@ function renderDashboardFromSnapshot(data) {
             <div class="dlabel">${esc(a.provider || '—')}</div>
           </div>
         `;
-        }).join('')}
+    }).join('')}
       </div>
     ` : '<div class="page-desc">No accounts in this snapshot.</div>';
   }
@@ -3876,6 +3876,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#timeTravelBtn')?.addEventListener('click', openTimeTravelModal);
   $('#timeTravelPrevBtn')?.addEventListener('click', goToPrevSnapshot);
   $('#timeTravelNextBtn')?.addEventListener('click', goToNextSnapshot);
+  document.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target;
+    const isTyping = target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    );
+    if (isTyping) return;
+
+    if (event.key === 'ArrowLeft') {
+      const prevBtn = $('#timeTravelPrevBtn');
+      if (prevBtn && !prevBtn.disabled) {
+        event.preventDefault();
+        goToPrevSnapshot();
+      }
+    } else if (event.key === 'ArrowRight') {
+      const nextBtn = $('#timeTravelNextBtn');
+      if (nextBtn && !nextBtn.disabled) {
+        event.preventDefault();
+        goToNextSnapshot();
+      }
+    }
+  });
   $('#timeTravelPlayBtn')?.addEventListener('click', timeTravelPlay);
   $('#timeTravelSaveBtn')?.addEventListener('click', saveSnapshot);
   $('#timeTravelHistoryBtn')?.addEventListener('click', openHistoryModal);
