@@ -45,7 +45,8 @@
       <div class="brand"><span class="dot"></span> Portfolio Manager</div>
       <div class="topbar-center">
         <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Menu" aria-expanded="false">☰</button>
-        <button class="blur-btn" id="blurButton" title="Toggle privacy blur (H)" aria-label="Toggle privacy blur (H)">👁</button>
+        <button class="blur-btn" id="blurButton" title="Toggle privacy blur (H)"
+          aria-label="Toggle privacy blur (H)">👁</button>
         <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data">⟳</button>
         <button class="logout-btn" id="helpButton" title="Show usage guide" aria-label="Show usage guide">?</button>
         <button class="logout-btn" id="logoutButton" title="Log out" aria-label="Log out">⏻</button>
@@ -86,12 +87,18 @@
             <div class="time-travel-group">
               <div id="timeTravelBanner" class="time-travel-banner" style="display:none;"></div>
               <div class="time-travel-controls" style="display:none;">
-                <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" disabled>←</button>
-                <button class="btn-sm icon-btn" id="timeTravelBtn" title="View or save a snapshot of the dashboard">🕰</button>
-                <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button" title="Save today's snapshot">💾</button>
-                <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button" title="Snapshot history">📈</button>
-                <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button" title="Snapshot calendar">📅</button>
-                <button class="btn-sm icon-btn" id="timeTravelPlayBtn" type="button" title="Play through snapshots" disabled>▶</button>
+                <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot"
+                  disabled>←</button>
+                <button class="btn-sm icon-btn" id="timeTravelBtn"
+                  title="View or save a snapshot of the dashboard">🕰</button>
+                <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button"
+                  title="Save today's snapshot">💾</button>
+                <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button"
+                  title="Snapshot history">📈</button>
+                <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button"
+                  title="Snapshot calendar">📅</button>
+                <button class="btn-sm icon-btn" id="timeTravelPlayBtn" type="button" title="Play through snapshots"
+                  disabled>▶</button>
                 <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
               </div>
             </div>
@@ -422,36 +429,50 @@
               </div>
               <div class="currency-test-rows">
                 <div class="currency-test-row">
-                  <div class="field"><label>Amount 1</label><input type="number" id="currencyTestAmount1" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>Amount 1</label><input type="number" id="currencyTestAmount1" step="any"
+                      min="0" placeholder="e.g. 100"></div>
                   <div class="field"><label>From coin 1</label><select id="currencyTestFrom1"></select></div>
                 </div>
                 <div class="currency-test-row">
-                  <div class="field"><label>Amount 2</label><input type="number" id="currencyTestAmount2" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>Amount 2</label><input type="number" id="currencyTestAmount2" step="any"
+                      min="0" placeholder="e.g. 100"></div>
                   <div class="field"><label>From coin 2</label><select id="currencyTestFrom2"></select></div>
                 </div>
                 <div class="currency-test-row">
-                  <div class="field"><label>Amount 3</label><input type="number" id="currencyTestAmount3" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>Amount 3</label><input type="number" id="currencyTestAmount3" step="any"
+                      min="0" placeholder="e.g. 100"></div>
                   <div class="field"><label>From coin 3</label><select id="currencyTestFrom3"></select></div>
                 </div>
                 <div class="currency-test-row">
-                  <div class="field"><label>Amount 4</label><input type="number" id="currencyTestAmount4" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>Amount 4</label><input type="number" id="currencyTestAmount4" step="any"
+                      min="0" placeholder="e.g. 100"></div>
                   <div class="field"><label>From coin 4</label><select id="currencyTestFrom4"></select></div>
                 </div>
                 <div class="currency-test-row">
-                  <div class="field"><label>Amount 5</label><input type="number" id="currencyTestAmount5" step="any" min="0" placeholder="e.g. 100"></div>
+                  <div class="field"><label>Amount 5</label><input type="number" id="currencyTestAmount5" step="any"
+                      min="0" placeholder="e.g. 100"></div>
                   <div class="field"><label>From coin 5</label><select id="currencyTestFrom5"></select></div>
                 </div>
               </div>
-              <button class="btn-sm primary" type="button" id="currencyTestConvertBtn" style="margin-top:8px;">Convert</button>
+              <button class="btn-sm primary" type="button" id="currencyTestConvertBtn"
+                style="margin-top:8px;">Convert</button>
               <div class="field" style="margin-top:16px;">
                 <label>Results</label>
                 <table class="currency-test-results">
                   <thead>
-                    <tr><th>#</th><th>Amount</th><th>From</th><th>Converted</th></tr>
+                    <tr>
+                      <th>#</th>
+                      <th>Amount</th>
+                      <th>From</th>
+                      <th>Converted</th>
+                    </tr>
                   </thead>
                   <tbody id="currencyTestResultsBody"></tbody>
                   <tfoot>
-                    <tr><th colspan="3">Total</th><th id="currencyTestTotal">—</th></tr>
+                    <tr>
+                      <th colspan="3">Total</th>
+                      <th id="currencyTestTotal">—</th>
+                    </tr>
                   </tfoot>
                 </table>
               </div>
@@ -486,12 +507,19 @@
           <div class="page-title">Profile</div>
           <div class="page-desc">View your account details and reset your password</div>
           <div class="card" style="max-width:420px;margin-top:16px;">
-            <div class="field"><label>Username</label><div id="profileUsername" style="padding:8px 0;font-weight:600;"></div></div>
-            <div class="field"><label>User type</label><div id="profileRole" style="padding:8px 0;"></div></div>
+            <div class="field"><label>Username</label>
+              <div id="profileUsername" style="padding:8px 0;font-weight:600;"></div>
+            </div>
+            <div class="field"><label>User type</label>
+              <div id="profileRole" style="padding:8px 0;"></div>
+            </div>
             <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
-            <div class="field"><label>New password</label><input type="password" id="profileNewPassword" maxlength="50" autocomplete="new-password" placeholder="Enter a new password"></div>
-            <div class="field"><label>Confirm new password</label><input type="password" id="profileConfirmPassword" maxlength="50" autocomplete="new-password" placeholder="Confirm the new password"></div>
-            <button class="btn-sm primary" type="button" id="profileResetPasswordBtn" style="margin-top:8px;">Reset password</button>
+            <div class="field"><label>New password</label><input type="password" id="profileNewPassword" maxlength="50"
+                autocomplete="new-password" placeholder="Enter a new password"></div>
+            <div class="field"><label>Confirm new password</label><input type="password" id="profileConfirmPassword"
+                maxlength="50" autocomplete="new-password" placeholder="Confirm the new password"></div>
+            <button class="btn-sm primary" type="button" id="profileResetPasswordBtn" style="margin-top:8px;">Reset
+              password</button>
           </div>
         </div>
 
@@ -537,8 +565,8 @@
       </div>
       <form id="assetForm">
         <input type="hidden" id="assetEditId" name="asset_id">
-        <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required
-            maxlength="50" placeholder="e.g. Apple Inc."></div>
+        <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required maxlength="50"
+            placeholder="e.g. Apple Inc."></div>
         <div class="field"><label>Symbol</label><input type="text" id="assetSymbol" name="symbol" required
             placeholder="e.g. AAPL"></div>
         <div class="field"><label>Type</label>
@@ -576,12 +604,15 @@
     <div class="modal">
       <div class="modal-head">
         <h3>Update Asset Value</h3>
-        <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close" aria-label="Close">✕</button>
+        <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close"
+          aria-label="Close">✕</button>
       </div>
       <p class="modal-copy">Fetching the latest price for <strong id="updateAssetName"></strong> from Massive.</p>
       <div class="field" id="updateAssetProgressWrap">
         <label>Fetching latest price…</label>
-        <div class="progress"><div class="progress-bar" id="updateAssetProgressBar"></div></div>
+        <div class="progress">
+          <div class="progress-bar" id="updateAssetProgressBar"></div>
+        </div>
       </div>
       <form id="updateAssetForm" style="display:none;">
         <input type="hidden" id="updateAssetId" name="asset_id">
@@ -610,7 +641,9 @@
         commodities and non-USD assets are skipped. Massive is limited to 4 calls/minute, so this may take a while.</p>
       <div class="field">
         <label id="updateAllPricesLabel">Preparing...</label>
-        <div class="progress"><div class="progress-bar" id="updateAllPricesProgressBar"></div></div>
+        <div class="progress">
+          <div class="progress-bar" id="updateAllPricesProgressBar"></div>
+        </div>
       </div>
       <p class="form-error" id="updateAllPricesError"></p>
       <details class="update-log" id="updateAllPricesLogWrap" style="display:none;">
@@ -741,12 +774,12 @@
             placeholder="e.g. Emergency Fund, Down Payment"></div>
         <div class="field"><label>Target Value</label><input type="number" step="0.01" min="0" id="goalValue"
             name="value" required placeholder="20000.00"></div>
-        <div class="field"><label>Sub-goal 1 (optional)</label><input type="number" step="0.01"
-            id="goalSub1" name="sub1" placeholder="First milestone"></div>
-        <div class="field"><label>Sub-goal 2 (optional)</label><input type="number" step="0.01"
-            id="goalSub2" name="sub2" placeholder="Requires Sub-goal 1"></div>
-        <div class="field"><label>Sub-goal 3 (optional)</label><input type="number" step="0.01"
-            id="goalSub3" name="sub3" placeholder="Requires Sub-goal 2"></div>
+        <div class="field"><label>Sub-goal 1 (optional)</label><input type="number" step="0.01" id="goalSub1"
+            name="sub1" placeholder="First milestone"></div>
+        <div class="field"><label>Sub-goal 2 (optional)</label><input type="number" step="0.01" id="goalSub2"
+            name="sub2" placeholder="Requires Sub-goal 1"></div>
+        <div class="field"><label>Sub-goal 3 (optional)</label><input type="number" step="0.01" id="goalSub3"
+            name="sub3" placeholder="Requires Sub-goal 2"></div>
         <div class="field"><label>Currency</label>
           <select id="goalCoin" name="coin" style="width:100%;" required>
             <option value="">Select currency...</option>
@@ -820,7 +853,8 @@
       </div>
       <div class="goal-details-summary" id="accountDetailsSummary"></div>
       <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="accountDetailsChart"></canvas>
+        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
+            id="accountDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="accountDetailsLegend" style="flex:1;"></div>
       </div>
@@ -828,7 +862,11 @@
         <div class="dlabel" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Others</div>
         <table>
           <thead>
-            <tr><th>Ticker</th><th>Value</th><th>%</th></tr>
+            <tr>
+              <th>Ticker</th>
+              <th>Value</th>
+              <th>%</th>
+            </tr>
           </thead>
           <tbody id="accountDetailsOthersTable"></tbody>
         </table>
@@ -838,21 +876,42 @@
 
   <!-- MODAL: Loan Simulator -->
   <div class="modal-overlay" id="loanSimModalOverlay">
-    <div class="modal" style="max-width:720px;">
+    <div class="modal" style="max-width:960px;">
       <div class="modal-head">
         <h3 id="loanSimTitle">Loan Simulator</h3>
         <button class="modal-close" type="button" id="closeLoanSimX" title="Close" aria-label="Close">✕</button>
       </div>
-      <div class="loan-sim-summary" id="loanSimSummary" style="margin-bottom:14px;"></div>
+      <p style="color:var(--muted); font-size:13px; margin:-4px 0 16px 0;">
+        Enter the loan parameters below. Rates are annual and monthly payments are constant.
+      </p>
       <form id="loanSimForm">
         <input type="hidden" id="loanSimId" name="account_id">
-        <div class="field"><label>Amount to amortize (€)</label><input type="number" step="0.01" min="0" id="loanSimAmount" name="amount" required placeholder="e.g. 5000.00"></div>
-        <p class="form-error"></p>
-        <div class="modal-actions">
-          <button class="btn-sm primary" type="submit">Calculate</button>
+        <div class="loan-sim-inputs-grid">
+          <div class="field">
+            <label>Outstanding credit (€)</label>
+            <input type="number" step="0.01" min="0" id="loanSimCapital" name="capital" required placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Annual interest rate (%)</label>
+            <input type="number" step="0.01" min="0" id="loanSimRate" name="rate" required placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Last payment date</label>
+            <input type="date" id="loanSimEndDate" name="end_date" required>
+          </div>
+          <div class="field">
+            <label>Downpayment / Amortization (€)</label>
+            <input type="number" step="0.01" min="0" id="loanSimAmount" name="amount" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Monthly extra amortization (optional) (€)</label>
+            <input type="number" step="0.01" min="0" id="loanSimMonthlyAmount" name="monthly_amount" placeholder="0.00">
+          </div>
         </div>
+
+        <p class="form-error" style="margin-top:8px;"></p>
       </form>
-      <div id="loanSimResult" style="margin-top:18px;"></div>
+      <div id="loanSimResult" style="margin-top:20px;"></div>
     </div>
   </div>
 
@@ -865,7 +924,8 @@
       </div>
       <div class="goal-details-summary" id="providerDetailsSummary"></div>
       <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="providerDetailsChart"></canvas>
+        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
+            id="providerDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="providerDetailsLegend" style="flex:1;"></div>
       </div>
@@ -873,7 +933,11 @@
         <div class="dlabel" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Others</div>
         <table>
           <thead>
-            <tr><th>Account</th><th>Value</th><th>%</th></tr>
+            <tr>
+              <th>Account</th>
+              <th>Value</th>
+              <th>%</th>
+            </tr>
           </thead>
           <tbody id="providerDetailsOthersTable"></tbody>
         </table>
@@ -898,8 +962,8 @@
             <option value="admin">Admin</option>
           </select>
         </div>
-        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8" maxlength="50"
-            placeholder="At least 8 characters" autocomplete="new-password"></div>
+        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8"
+            maxlength="50" placeholder="At least 8 characters" autocomplete="new-password"></div>
         <div class="field"><label>Confirm Password</label><input type="password" name="confirm_password" required
             minlength="8" maxlength="50" placeholder="Repeat password" autocomplete="new-password"></div>
         <p class="form-error"></p>
@@ -921,8 +985,8 @@
       <p class="modal-copy">Set a new password for <strong id="resetPasswordUsername"></strong>.</p>
       <form id="resetPasswordForm">
         <input type="hidden" id="resetPasswordUserId" name="user_id">
-        <div class="field"><label>New Password</label><input type="password" name="password" required minlength="8" maxlength="50"
-            placeholder="At least 8 characters" autocomplete="new-password"></div>
+        <div class="field"><label>New Password</label><input type="password" name="password" required minlength="8"
+            maxlength="50" placeholder="At least 8 characters" autocomplete="new-password"></div>
         <div class="field"><label>Confirm New Password</label><input type="password" name="confirm_password" required
             minlength="8" maxlength="50" placeholder="Repeat password" autocomplete="new-password"></div>
         <p class="form-error"></p>
@@ -948,120 +1012,132 @@
       </div>
 
       <div class="welcome-page" data-welcome-page="1">
-      <!-- Guest demo guide -->
-      <div class="welcome-body" id="welcomeGuestBody" style="display:none;">
-        <p class="welcome-intro">You're exploring the <span class="kw kw-guest">demo</span>. Here's what you're
-          looking at and what you can do:</p>
+        <!-- Guest demo guide -->
+        <div class="welcome-body" id="welcomeGuestBody" style="display:none;">
+          <p class="welcome-intro">You're exploring the <span class="kw kw-guest">demo</span>. Here's what you're
+            looking at and what you can do:</p>
 
-        <div class="welcome-step">
-          <span class="welcome-num">1</span>
-          <div>
-            <p class="welcome-title">Sample <span class="kw kw-assets" data-page="assets">Assets</span></p>
-            <p class="welcome-text">The demo ships with a few <span class="kw kw-assets" data-page="assets">assets</span>
-              — like <em>AAPL</em>, <em>VYM</em>, <em>TLT</em> and <em>MSFT</em> — each with a price, type and dividend
-              yield. You can also add your own <strong>personal assets</strong> (shown in <strong>[]</strong>) — these
-              are demo-only and not saved.</p>
+          <div class="welcome-step">
+            <span class="welcome-num">1</span>
+            <div>
+              <p class="welcome-title">Sample <span class="kw kw-assets" data-page="assets">Assets</span></p>
+              <p class="welcome-text">The demo ships with a few <span class="kw kw-assets"
+                  data-page="assets">assets</span>
+                — like <em>AAPL</em>, <em>VYM</em>, <em>TLT</em> and <em>MSFT</em> — each with a price, type and
+                dividend
+                yield. You can also add your own <strong>personal assets</strong> (shown in <strong>[]</strong>) — these
+                are demo-only and not saved.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">2</span>
+            <div>
+              <p class="welcome-title">Sample <span class="kw kw-provider" data-page="accounts">Providers</span> &amp;
+                <span class="kw kw-account" data-page="accounts">Accounts</span>
+              </p>
+              <p class="welcome-text">Two <span class="kw kw-provider" data-page="accounts">providers</span>
+                (<em>Revolut</em> and <em>Trading 212</em>) hold sample <span class="kw kw-account"
+                  data-page="accounts">accounts</span> — a checking account, a savings account and an <span
+                  class="kw kw-asset">asset account</span>.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">3</span>
+            <div>
+              <p class="welcome-title">How it's <span class="kw kw-goal">connected</span></p>
+              <p class="welcome-text"><span class="kw kw-holding" data-page="portfolio">Holdings</span> live inside an
+                <span class="kw kw-asset" data-page="accounts">asset account</span> and reference <span
+                  class="kw kw-assets" data-page="assets">assets</span>. <span class="kw kw-goal"
+                  data-page="goals">Goals</span> link to <span class="kw kw-account"
+                  data-page="accounts">accounts</span>,
+                and the <span class="menu" data-page="dashboard">Dashboard</span> &amp; <span class="menu"
+                  data-page="portfolio">My Portfolio</span> roll all of it up into charts and totals.
+              </p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">4</span>
+            <div>
+              <p class="welcome-title">What you can <span class="kw kw-guest">do</span></p>
+              <p class="welcome-text">Everything is <strong>editable</strong> — add providers, accounts, holdings and
+                goals to explore the app freely. Changes are <strong>local only</strong> and are <strong>not
+                  saved</strong>.</p>
+            </div>
           </div>
         </div>
 
-        <div class="welcome-step">
-          <span class="welcome-num">2</span>
-          <div>
-            <p class="welcome-title">Sample <span class="kw kw-provider" data-page="accounts">Providers</span> &amp;
-              <span class="kw kw-account" data-page="accounts">Accounts</span></p>
-            <p class="welcome-text">Two <span class="kw kw-provider" data-page="accounts">providers</span>
-              (<em>Revolut</em> and <em>Trading 212</em>) hold sample <span class="kw kw-account"
-                data-page="accounts">accounts</span> — a checking account, a savings account and an <span
-                class="kw kw-asset">asset account</span>.</p>
+        <!-- Regular user first-run guide -->
+        <div class="welcome-body" id="welcomeBody">
+          <p class="welcome-intro">You're all set to start tracking your wealth. Here's how to get going:</p>
+
+          <div class="welcome-step">
+            <span class="welcome-num">1</span>
+            <div>
+              <p class="welcome-title">Add a <span class="kw kw-provider" data-page="accounts">Provider</span></p>
+              <p class="welcome-text">Head to the <span class="menu" data-page="accounts">My Accounts</span> menu and
+                create your first <span class="kw kw-provider" data-page="accounts">provider</span> — a <em>bank</em>,
+                <em>broker</em> or <em>other</em> institution that holds your money.
+              </p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">2</span>
+            <div>
+              <p class="welcome-title">Add an <span class="kw kw-account" data-page="accounts">Account</span></p>
+              <p class="welcome-text">Inside that provider, create an <span class="kw kw-account"
+                  data-page="accounts">account</span> — for example an <span class="kw kw-asset"
+                  data-page="accounts">asset account</span> to hold your investments.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">3</span>
+            <div>
+              <p class="welcome-title">Unlock <span class="kw kw-goal" data-page="goals">Goals</span></p>
+              <p class="welcome-text">Your <span class="kw kw-goal" data-page="goals">Goals</span> will be unlocked once
+                you've created at least <strong>1 account</strong>.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">4</span>
+            <div>
+              <p class="welcome-title">Unlock <span class="kw kw-portfolio" data-page="portfolio">My Portfolio</span>,
+                <span class="kw kw-assets" data-page="assets">Assets</span> &amp; <span class="kw kw-dividends"
+                  data-page="dividends">Dividends</span>
+              </p>
+              <p class="welcome-text">Once you create an <span class="kw kw-asset" data-page="accounts">asset
+                  account</span>,
+                the <span class="menu" data-page="portfolio">My Portfolio</span>, <span class="menu"
+                  data-page="assets">Assets</span> and <span class="menu" data-page="dividends">Dividends</span> menus
+                unlock — letting you add <span class="kw kw-holding" data-page="portfolio">Holdings</span> / <span
+                  class="kw kw-asset" data-page="assets">Assets</span> to your portfolio on any existing asset account.
+              </p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">5</span>
+            <div>
+              <p class="welcome-title">Track <span class="kw kw-assets" data-page="assets">Personal Assets</span></p>
+              <p class="welcome-text">On the <span class="menu" data-page="assets">Assets</span> page, click <strong>+
+                  New
+                  Personal Asset</strong> to track something that isn't a platform security (e.g. a private holding or a
+                custom item). Personal assets are private to your account and their names are shown in
+                <strong>[]</strong>.</p>
+            </div>
           </div>
         </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">3</span>
-          <div>
-            <p class="welcome-title">How it's <span class="kw kw-goal">connected</span></p>
-            <p class="welcome-text"><span class="kw kw-holding" data-page="portfolio">Holdings</span> live inside an
-              <span class="kw kw-asset" data-page="accounts">asset account</span> and reference <span
-                class="kw kw-assets" data-page="assets">assets</span>. <span class="kw kw-goal"
-                data-page="goals">Goals</span> link to <span class="kw kw-account" data-page="accounts">accounts</span>,
-              and the <span class="menu" data-page="dashboard">Dashboard</span> &amp; <span class="menu"
-                data-page="portfolio">My Portfolio</span> roll all of it up into charts and totals.</p>
-          </div>
-        </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">4</span>
-          <div>
-            <p class="welcome-title">What you can <span class="kw kw-guest">do</span></p>
-            <p class="welcome-text">Everything is <strong>editable</strong> — add providers, accounts, holdings and
-              goals to explore the app freely. Changes are <strong>local only</strong> and are <strong>not
-                saved</strong>.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Regular user first-run guide -->
-      <div class="welcome-body" id="welcomeBody">
-        <p class="welcome-intro">You're all set to start tracking your wealth. Here's how to get going:</p>
-
-        <div class="welcome-step">
-          <span class="welcome-num">1</span>
-          <div>
-            <p class="welcome-title">Add a <span class="kw kw-provider" data-page="accounts">Provider</span></p>
-            <p class="welcome-text">Head to the <span class="menu" data-page="accounts">My Accounts</span> menu and
-              create your first <span class="kw kw-provider" data-page="accounts">provider</span> — a <em>bank</em>,
-              <em>broker</em> or <em>other</em> institution that holds your money.</p>
-          </div>
-        </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">2</span>
-          <div>
-            <p class="welcome-title">Add an <span class="kw kw-account" data-page="accounts">Account</span></p>
-            <p class="welcome-text">Inside that provider, create an <span class="kw kw-account"
-                data-page="accounts">account</span> — for example an <span class="kw kw-asset"
-                data-page="accounts">asset account</span> to hold your investments.</p>
-          </div>
-        </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">3</span>
-          <div>
-            <p class="welcome-title">Unlock <span class="kw kw-goal" data-page="goals">Goals</span></p>
-            <p class="welcome-text">Your <span class="kw kw-goal" data-page="goals">Goals</span> will be unlocked once
-              you've created at least <strong>1 account</strong>.</p>
-          </div>
-        </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">4</span>
-          <div>
-            <p class="welcome-title">Unlock <span class="kw kw-portfolio" data-page="portfolio">My Portfolio</span>,
-              <span class="kw kw-assets" data-page="assets">Assets</span> &amp; <span class="kw kw-dividends"
-                data-page="dividends">Dividends</span></p>
-            <p class="welcome-text">Once you create an <span class="kw kw-asset" data-page="accounts">asset account</span>,
-              the <span class="menu" data-page="portfolio">My Portfolio</span>, <span class="menu"
-                data-page="assets">Assets</span> and <span class="menu" data-page="dividends">Dividends</span> menus
-              unlock — letting you add <span class="kw kw-holding" data-page="portfolio">Holdings</span> / <span
-                class="kw kw-asset" data-page="assets">Assets</span> to your portfolio on any existing asset account.</p>
-          </div>
-        </div>
-
-        <div class="welcome-step">
-          <span class="welcome-num">5</span>
-          <div>
-            <p class="welcome-title">Track <span class="kw kw-assets" data-page="assets">Personal Assets</span></p>
-            <p class="welcome-text">On the <span class="menu" data-page="assets">Assets</span> page, click <strong>+ New
-                Personal Asset</strong> to track something that isn't a platform security (e.g. a private holding or a
-              custom item). Personal assets are private to your account and their names are shown in <strong>[]</strong>.</p>
-          </div>
-        </div>
-      </div>
       </div>
 
       <div class="welcome-page" data-welcome-page="2" style="display:none;">
         <div class="welcome-body">
-          <p class="welcome-intro">Your data is private to you, and you can look back at how your dashboard looked on any past day.</p>
+          <p class="welcome-intro">Your data is private to you, and you can look back at how your dashboard looked on
+            any past day.</p>
 
           <div class="welcome-step">
             <span class="welcome-num">1</span>
@@ -1069,7 +1145,8 @@
               <p class="welcome-title">Your data is <span class="kw kw-guest">private</span></p>
               <p class="welcome-text">Everything you add — providers, accounts, holdings, assets and goals — is stored
                 only under <strong>your account</strong>. No other user can see it, and guests only ever see the
-                <strong>demo</strong> data. Press <strong>H</strong> to hide the values on screen from people nearby.</p>
+                <strong>demo</strong> data. Press <strong>H</strong> to hide the values on screen from people nearby.
+              </p>
             </div>
           </div>
 
@@ -1079,7 +1156,8 @@
               <p class="welcome-title"><span class="kw kw-goal">Time Travel</span> snapshots</p>
               <p class="welcome-text">On the <span class="menu" data-page="dashboard">Dashboard</span>, the
                 <strong>🕰 Time Travel</strong> button lets you save a snapshot of today's dashboard and view how it
-                looked on any past day. Snapshots are <strong>private to you</strong>.</p>
+                looked on any past day. Snapshots are <strong>private to you</strong>.
+              </p>
             </div>
           </div>
 
@@ -1098,7 +1176,8 @@
       <div class="modal-actions">
         <button class="btn-sm" type="button" id="welcomeModalPrev" style="display:none;">← Back</button>
         <button class="btn-sm primary" type="button" id="welcomeModalNext">Next →</button>
-        <button class="btn-sm primary" type="button" id="welcomeModalOk" style="display:none;">Got it, let's start</button>
+        <button class="btn-sm primary" type="button" id="welcomeModalOk" style="display:none;">Got it, let's
+          start</button>
       </div>
     </div>
   </div>
@@ -1115,8 +1194,10 @@
       <div id="snapshotList" style="max-height:320px;overflow-y:auto;">Loading...</div>
       <div id="snapshotPagination" class="snapshot-pagination" style="display:none;"></div>
       <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;gap:8px;">
-        <button class="btn-sm" type="button" id="cleanMonthsBtn" title="Keep only the most recent snapshot per month (current month untouched)">🧹 Clean Months</button>
-        <button class="btn-sm" type="button" id="cleanYearsBtn" title="Keep only the most recent snapshot per year (current year untouched)">🧹 Clean Years</button>
+        <button class="btn-sm" type="button" id="cleanMonthsBtn"
+          title="Keep only the most recent snapshot per month (current month untouched)">🧹 Clean Months</button>
+        <button class="btn-sm" type="button" id="cleanYearsBtn"
+          title="Keep only the most recent snapshot per year (current year untouched)">🧹 Clean Years</button>
       </div>
     </div>
   </div>
@@ -1138,7 +1219,8 @@
       <div class="modal-head">
         <h3>📈 Snapshot History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeHistoryBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="maximizeHistoryBtn" title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1177,8 +1259,10 @@
       <div class="modal-head">
         <h3 id="accountHistoryTitle">📈 Account History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeAccountHistoryBtn" title="Maximize" aria-label="Maximize">⛶</button>
-          <button class="modal-close" type="button" id="closeAccountHistoryBtn" title="Close" aria-label="Close">✕</button>
+          <button class="modal-close" type="button" id="maximizeAccountHistoryBtn" title="Maximize"
+            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAccountHistoryBtn" title="Close"
+            aria-label="Close">✕</button>
         </div>
       </div>
       <div class="history-controls">
@@ -1208,7 +1292,8 @@
       <div class="modal-head">
         <h3 id="goalHistoryTitle">📈 Goal History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeGoalHistoryBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="maximizeGoalHistoryBtn" title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeGoalHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>

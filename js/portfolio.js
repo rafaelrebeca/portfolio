@@ -3684,21 +3684,17 @@ function openLoanSimModal(accountId) {
   if (acc.balance == null || !acc.coin || acc.interest_rate == null || !acc.finish_date) return;
   const form = $('#loanSimForm');
   if (!form) return;
-  form.reset();
   const err = form.querySelector('.form-error'); if (err) err.textContent = '';
   $('#loanSimId').value = acc.id;
   $('#loanSimTitle').textContent = `Loan Simulator: ${acc.name}`;
+  $('#loanSimCapital').value = Math.abs(Number(acc.balance || 0)).toFixed(2);
+  $('#loanSimRate').value = Number(acc.interest_rate || 0).toFixed(2);
+  $('#loanSimEndDate').value = finishDateToInput(acc.finish_date);
+  $('#loanSimAmount').value = '';
+  $('#loanSimMonthlyAmount').value = '';
   $('#loanSimResult').innerHTML = '';
-  const capital = Math.abs(Number(acc.balance || 0));
-  const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
-  const finishDate = acc.finish_date ? finishDateToInput(acc.finish_date) : '';
-  $('#loanSimSummary').innerHTML = `
-    <div class="goal-sim-summary">
-      <div><div class="dlabel">Remaining credit</div><div class="dvalue">${formatCurrency(capital, 'EUR')}</div></div>
-      <div><div class="dlabel">TAEG</div><div class="dvalue">${rate.toFixed(2)}%</div></div>
-      <div><div class="dlabel">Finish date</div><div class="dvalue">${finishDate || '—'}</div></div>
-    </div>`;
   openModal('loanSimModalOverlay');
+  runLoanSimulation();
 }
 
 // Monthly payment for a loan: { interest, principal, total }.
@@ -3723,22 +3719,73 @@ function loanMonthsUntilDate(dateText) {
   return months;
 }
 
+// Month-by-month evolution calculator for "keep term" scenario with extra monthly payments.
+function gerarEvolucaoComAmortizacaoMensal(capitalInicial, taxaAnual, amortizacaoInicial, amortizacaoMensal, mesesTotais) {
+  const taxaMensal = taxaAnual / 100 / 12;
+  const linhas = [];
+  let saldo = Math.max(0, capitalInicial - amortizacaoInicial);
+
+  const dataRef = new Date();
+  let anoRef = dataRef.getFullYear();
+  let mesRef = dataRef.getMonth();
+
+  const limiteMeses = 1200;
+  let contador = 0;
+
+  while (saldo > 0.005 && contador < limiteMeses && contador < mesesTotais) {
+    contador += 1;
+    mesRef += 1;
+    if (mesRef > 11) { mesRef = 0; anoRef += 1; }
+
+    const mesesRestantes = mesesTotais - contador + 1;
+    const saldoAnterior = saldo;
+    const juros = saldoAnterior * taxaMensal;
+    let prestacaoMesBase = loanPayment(saldoAnterior, taxaAnual, mesesRestantes).total;
+    let amortizacaoPrestacao = prestacaoMesBase - juros;
+    let amortizacaoExtra = amortizacaoMensal > 0 ? amortizacaoMensal : 0;
+
+    if (amortizacaoPrestacao + amortizacaoExtra >= saldoAnterior) {
+      amortizacaoPrestacao = Math.min(amortizacaoPrestacao, saldoAnterior);
+      amortizacaoExtra = Math.max(0, saldoAnterior - amortizacaoPrestacao);
+      prestacaoMesBase = juros + amortizacaoPrestacao;
+      saldo = 0;
+    } else {
+      saldo = saldoAnterior - amortizacaoPrestacao - amortizacaoExtra;
+    }
+
+    linhas.push({
+      ano: anoRef,
+      mes: mesRef + 1,
+      saldo: saldo,
+      prestacaoTotal: prestacaoMesBase + amortizacaoExtra,
+      prestacaoBase: prestacaoMesBase,
+      juros: juros,
+      amortizacao: amortizacaoPrestacao + amortizacaoExtra
+    });
+  }
+
+  return linhas;
+}
+
 function runLoanSimulation() {
   const form = $('#loanSimForm');
+  if (!form) return;
   const err = form.querySelector('.form-error'); if (err) err.textContent = '';
   const result = $('#loanSimResult');
   const accountId = Number($('#loanSimId').value);
   const acc = state.accounts.find(a => a.id === accountId);
-  if (!acc) return;
+  const coin = acc ? (acc.coin || 'EUR') : 'EUR';
 
-  const capital = Math.abs(Number(acc.balance || 0));
-  const rate = acc.interest_rate != null ? Number(acc.interest_rate) : 0;
-  const endDate = acc.finish_date ? finishDateToInput(acc.finish_date) : '';
-  const amortization = Number($('#loanSimAmount').value);
+  const capital = Number($('#loanSimCapital').value);
+  const rate = Number($('#loanSimRate').value);
+  const endDate = $('#loanSimEndDate').value;
+  const amortization = Number($('#loanSimAmount').value || 0);
+  const monthlyAmortization = Number($('#loanSimMonthlyAmount').value || 0);
   const months = loanMonthsUntilDate(endDate);
 
-  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || !(amortization >= 0) || amortization > capital) {
-    err.textContent = 'Check the values and choose a future date for the last payment.';
+  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || amortization < 0 || amortization > capital || monthlyAmortization < 0) {
+    if (err) err.textContent = 'Check the values and choose a future date for the last payment.';
+    result.innerHTML = '';
     return;
   }
 
@@ -3756,39 +3803,85 @@ function runLoanSimulation() {
   const totalKeepTerm = amortization + keepTerm.total * months;
   const totalKeepPayment = amortization + current.total * newTerm;
 
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const evolutionLines = gerarEvolucaoComAmortizacaoMensal(capital, rate, amortization, monthlyAmortization, months);
+
+  let tableRowsHtml = '';
+  evolutionLines.forEach(line => {
+    const isPaid = line.saldo <= 0.005;
+    tableRowsHtml += `
+      <tr>
+        <td>${line.ano}</td>
+        <td>${monthNames[line.mes - 1]}</td>
+        <td>${isPaid ? 'Paid' : formatCurrency(line.saldo, coin)}</td>
+        <td>${formatCurrency(line.prestacaoTotal, coin)}</td>
+        <td class="coluna-secundaria">${formatCurrency(line.prestacaoBase, coin)}</td>
+        <td>${formatCurrency(line.juros, coin)}</td>
+        <td>${formatCurrency(line.amortizacao, coin)}</td>
+      </tr>`;
+  });
+
   result.innerHTML = `
     <div class="loan-sim-grid">
       <section class="loan-sim-section">
         <h4>Current scenario</h4>
         <dl>
-          <dt>Payments remaining</dt><dd>${months} months</dd>
-          <dt>Interest in next payment</dt><dd>${formatCurrency(current.interest, 'EUR')}</dd>
-          <dt>Principal amortized</dt><dd>${formatCurrency(current.principal, 'EUR')}</dd>
-          <dt>Monthly payment</dt><dd>${formatCurrency(current.total, 'EUR')}</dd>
-          <dt>Total payments to end</dt><dd>${formatCurrency(totalCurrent, 'EUR')}</dd>
+          <dt>Payments remaining (calculated)</dt><dd>${months} months</dd>
+          <dt>Interest in next payment</dt><dd>${formatCurrency(current.interest, coin)}</dd>
+          <dt>Principal amortized</dt><dd>${formatCurrency(current.principal, coin)}</dd>
+          <dt>Monthly payment</dt><dd>${formatCurrency(current.total, coin)}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(totalCurrent, coin)}</dd>
         </dl>
       </section>
       <section class="loan-sim-section">
         <h4>Amortize &amp; keep the term</h4>
         <dl>
-          <dt>New monthly payment</dt><dd>${formatCurrency(keepTerm.total, 'EUR')}</dd>
-          <dt>Monthly reduction</dt><dd>${formatCurrency(current.total - keepTerm.total, 'EUR')}</dd>
-          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestKeepTerm, 'EUR')}</dd>
-          <dt>Total payments to end</dt><dd>${formatCurrency(keepTerm.total * months, 'EUR')}</dd>
-          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepTerm, 'EUR')}</dd>
+          <dt>New monthly payment</dt>
+          <dd>
+            ${formatCurrency(keepTerm.total, coin)}
+            <span class="detalhe-prestacao">${formatCurrency(keepTerm.interest, coin)} interest + ${formatCurrency(keepTerm.principal, coin)} amortization</span>
+          </dd>
+          <dt>Monthly reduction</dt><dd>${formatCurrency(current.total - keepTerm.total, coin)}</dd>
+          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestKeepTerm, coin)}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(keepTerm.total * months, coin)}</dd>
+          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepTerm, coin)}</dd>
         </dl>
       </section>
       <section class="loan-sim-section loan-sim-highlight">
         <h4>Amortize &amp; keep the payment</h4>
         <dl>
-          <dt>New estimated term</dt><dd>${newTerm.toFixed(1)} months (-${(months - newTerm).toFixed(1)})</dd>
-          <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, 'EUR')} interest + ${formatCurrency(principalKeepPayment, 'EUR')} amortization</dd>
-          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestTotalKeepPayment, 'EUR')}</dd>
-          <dt>Total payments to end</dt><dd>${formatCurrency(current.total * newTerm, 'EUR')}</dd>
-          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepPayment, 'EUR')}</dd>
+          <dt>New estimated term</dt><dd>${newTerm.toFixed(1)} months (${(months - newTerm).toFixed(1)} months less)</dd>
+          <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, coin)} interest + ${formatCurrency(principalKeepPayment, coin)} amortization</dd>
+          <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestTotalKeepPayment, coin)}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(current.total * newTerm, coin)}</dd>
+          <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepPayment, coin)}</dd>
         </dl>
       </section>
     </div>
+
+    <section class="loan-sim-table-section">
+      <h4>Month-by-month evolution with monthly amortization</h4>
+      <p>Simulates the "keep the term" scenario: in each month, the base payment is recalculated based on that month's balance and remaining months to original end date. Thus it decreases month by month whenever there is extra monthly amortization.</p>
+      <div class="loan-sim-table-scroll">
+        <table class="loan-sim-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Month</th>
+              <th>Remaining balance</th>
+              <th>Total payment</th>
+              <th>Base payment</th>
+              <th>Interest</th>
+              <th>Amortization</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRowsHtml || '<tr><td colspan="7" style="text-align:center;">Loan fully paid off</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <p class="loan-sim-note">The simulation is an approximate representation and does not include insurance, fees, or future rate changes.</p>
+    </section>
   `;
 }
 
@@ -3943,6 +4036,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeGoalModalBtn')?.addEventListener('click', () => closeModal('goalModalOverlay'));
   $('#goalSimForm')?.addEventListener('submit', event => { event.preventDefault(); runGoalSimulation(); });
   $('#loanSimForm')?.addEventListener('submit', event => { event.preventDefault(); runLoanSimulation(); });
+  $('#loanSimForm')?.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', runLoanSimulation);
+    input.addEventListener('change', runLoanSimulation);
+  });
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');

@@ -1629,6 +1629,29 @@ select {
   margin-top: 2px;
 }
 
+.loan-sim-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.loan-sim-inputs-grid .field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  margin-bottom: 0;
+  height: 100%;
+}
+
+.loan-sim-inputs-grid .field label {
+  display: flex;
+  align-items: flex-end;
+  min-height: 32px;
+  margin-bottom: 6px;
+  line-height: 1.25;
+}
+
 .loan-sim-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1663,8 +1686,119 @@ select {
   margin: 2px 0 0;
 }
 
+.detalhe-prestacao {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
 .loan-sim-highlight {
   border-color: var(--accent2);
+}
+
+.loan-sim-table-section {
+  margin-top: 24px;
+}
+
+.loan-sim-table-section h4 {
+  font-size: 16px;
+  margin: 0 0 6px 0;
+}
+
+.loan-sim-table-section p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 14px 0;
+  line-height: 1.4;
+}
+
+.loan-sim-table-scroll {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.loan-sim-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 680px;
+}
+
+.loan-sim-table thead th {
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.loan-sim-table thead th:first-child,
+.loan-sim-table thead th:nth-child(2) {
+  text-align: left;
+}
+
+.loan-sim-table tbody td {
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  padding: 9px 12px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.loan-sim-table tbody td:first-child,
+.loan-sim-table tbody td:nth-child(2) {
+  text-align: left;
+}
+
+.loan-sim-table tbody td.coluna-secundaria {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.loan-sim-table tbody tr:last-child td {
+  background: rgba(18, 110, 82, 0.15);
+  font-weight: 700;
+}
+
+.loan-sim-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.loan-sim-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 0 0;
+}
+
+@media (max-width: 840px) {
+  .loan-sim-inputs-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 650px) {
+  .loan-sim-inputs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .loan-sim-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .loan-sim-inputs-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .goal-details-summary {
