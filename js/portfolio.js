@@ -2729,7 +2729,8 @@ function blurNumbers(root) {
       frag.appendChild(document.createTextNode(symbolPart));
       const span = document.createElement('span');
       span.className = 'blur-num';
-      span.textContent = match[2];
+      span.dataset.orig = match[2];
+      span.textContent = '888';
       frag.appendChild(span);
       lastIndex = match.index + match[0].length;
     }
@@ -2740,7 +2741,8 @@ function blurNumbers(root) {
 
 function unblurNumbers(root) {
   root.querySelectorAll('.blur-num').forEach(span => {
-    const text = document.createTextNode(span.textContent);
+    const orig = span.dataset.orig || span.textContent;
+    const text = document.createTextNode(orig);
     span.parentNode.replaceChild(text, span);
   });
   // Merge adjacent text nodes so the currency symbol and amount are back in a
