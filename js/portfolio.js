@@ -3803,8 +3803,29 @@ function runLoanSimulation() {
   const totalKeepTerm = amortization + keepTerm.total * months;
   const totalKeepPayment = amortization + current.total * newTerm;
 
+  const currentInterestPct = current.total > 0 ? Math.round((current.interest / current.total) * 100) : 0;
+  const currentPrincipalPct = current.total > 0 ? Math.round((current.principal / current.total) * 100) : 0;
+
+  const keepTermInterestPct = keepTerm.total > 0 ? Math.round((keepTerm.interest / keepTerm.total) * 100) : 0;
+  const keepTermPrincipalPct = keepTerm.total > 0 ? Math.round((keepTerm.principal / keepTerm.total) * 100) : 0;
+
+  const keepPaymentInterestPct = current.total > 0 ? Math.round((interestKeepPayment / current.total) * 100) : 0;
+  const keepPaymentPrincipalPct = current.total > 0 ? Math.round((principalKeepPayment / current.total) * 100) : 0;
+
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const evolutionLines = gerarEvolucaoComAmortizacaoMensal(capital, rate, amortization, monthlyAmortization, months);
+
+  const lastEvolutionLine = evolutionLines[evolutionLines.length - 1];
+  const evolutionPayoffDateStr = lastEvolutionLine ? `${monthNames[lastEvolutionLine.mes - 1]} ${lastEvolutionLine.ano}` : '';
+  const evolutionMonthsCount = evolutionLines.length;
+  const evolutionMonthsSaved = months - evolutionMonthsCount;
+  const evolutionTotalInterest = evolutionLines.reduce((sum, line) => sum + line.juros, 0);
+  const evolutionInterestSaved = interestCurrent - evolutionTotalInterest;
+
+  const newEndDateObj = new Date();
+  newEndDateObj.setMonth(newEndDateObj.getMonth() + Math.round(newTerm));
+  const newEndDateStr = `${monthNames[newEndDateObj.getMonth()]} ${newEndDateObj.getFullYear()}`;
+  const monthsSavedStr = (months - newTerm).toFixed(1).replace(/\.0$/, '');
 
   let tableRowsHtml = '';
   evolutionLines.forEach(line => {
@@ -3827,8 +3848,8 @@ function runLoanSimulation() {
         <h4>Current scenario</h4>
         <dl>
           <dt>Payments remaining (calculated)</dt><dd>${months} months</dd>
-          <dt>Interest in next payment</dt><dd>${formatCurrency(current.interest, coin)}</dd>
-          <dt>Principal amortized</dt><dd>${formatCurrency(current.principal, coin)}</dd>
+          <dt>Interest in next payment</dt><dd>${formatCurrency(current.interest, coin)} (${currentInterestPct}%)</dd>
+          <dt>Principal amortized</dt><dd>${formatCurrency(current.principal, coin)} (${currentPrincipalPct}%)</dd>
           <dt>Monthly payment</dt><dd>${formatCurrency(current.total, coin)}</dd>
           <dt>Total payments to end</dt><dd>${formatCurrency(totalCurrent, coin)}</dd>
         </dl>
@@ -3836,12 +3857,12 @@ function runLoanSimulation() {
       <section class="loan-sim-section">
         <h4>Amortize &amp; keep the term</h4>
         <dl>
+          <dt>Monthly reduction</dt><dd>${formatCurrency(current.total - keepTerm.total, coin)}</dd>
           <dt>New monthly payment</dt>
           <dd>
             ${formatCurrency(keepTerm.total, coin)}
-            <span class="detalhe-prestacao">${formatCurrency(keepTerm.interest, coin)} interest + ${formatCurrency(keepTerm.principal, coin)} amortization</span>
+            <span class="detalhe-prestacao">${formatCurrency(keepTerm.interest, coin)} (${keepTermInterestPct}%) interest + ${formatCurrency(keepTerm.principal, coin)} (${keepTermPrincipalPct}%) amortization</span>
           </dd>
-          <dt>Monthly reduction</dt><dd>${formatCurrency(current.total - keepTerm.total, coin)}</dd>
           <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestKeepTerm, coin)}</dd>
           <dt>Total payments to end</dt><dd>${formatCurrency(keepTerm.total * months, coin)}</dd>
           <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepTerm, coin)}</dd>
@@ -3850,8 +3871,8 @@ function runLoanSimulation() {
       <section class="loan-sim-section loan-sim-highlight">
         <h4>Amortize &amp; keep the payment</h4>
         <dl>
-          <dt>New estimated term</dt><dd>${newTerm.toFixed(1)} months (${(months - newTerm).toFixed(1)} months less)</dd>
-          <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, coin)} interest + ${formatCurrency(principalKeepPayment, coin)} amortization</dd>
+          <dt>New estimated term</dt><dd>${newEndDateStr} (-${monthsSavedStr} months)</dd>
+          <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, coin)} (${keepPaymentInterestPct}%) interest + ${formatCurrency(principalKeepPayment, coin)} (${keepPaymentPrincipalPct}%) amortization</dd>
           <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestTotalKeepPayment, coin)}</dd>
           <dt>Total payments to end</dt><dd>${formatCurrency(current.total * newTerm, coin)}</dd>
           <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepPayment, coin)}</dd>
@@ -3862,6 +3883,21 @@ function runLoanSimulation() {
     <section class="loan-sim-table-section">
       <h4>Month-by-month evolution with monthly amortization</h4>
       <p>Simulates the "keep the term" scenario: in each month, the base payment is recalculated based on that month's balance and remaining months to original end date. Thus it decreases month by month whenever there is extra monthly amortization.</p>
+      
+      <div class="loan-sim-summary-chips" style="display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 16px 0;">
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; flex:1; min-width:140px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Estimated Payoff</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text); margin-top:2px;">${evolutionPayoffDateStr} ${evolutionMonthsSaved > 0 ? `<span style="font-size:12px; color:var(--accent); font-weight:normal;">(-${evolutionMonthsSaved} months)</span>` : ''}</div>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; flex:1; min-width:140px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Total Interest Paid</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text); margin-top:2px;">${formatCurrency(evolutionTotalInterest, coin)}</div>
+        </div>
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; flex:1; min-width:140px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Total Interest Saved</div>
+          <div style="font-size:15px; font-weight:600; color:var(--accent); margin-top:2px;">${formatCurrency(evolutionInterestSaved > 0 ? evolutionInterestSaved : 0, coin)}</div>
+        </div>
+      </div>
       <div class="loan-sim-table-scroll">
         <table class="loan-sim-table">
           <thead>
