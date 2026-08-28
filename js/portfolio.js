@@ -1194,9 +1194,17 @@ function renderAllTimeGrowthDashboardCard(currentNetWorth) {
 
   let paceHtml = '';
   if (growthCardMode === 'month') {
-    const perDayVal = diff / daysDiff;
+    // Current day of the month (1-indexed, e.g. 1st = 1, 15th = 15)
+    const currentDayOfMonth = Math.max(1, currentDate.getUTCDate());
+    const perDayVal = diff / currentDayOfMonth;
     const formattedPerDay = (perDayVal > 0 ? '+' : (perDayVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perDayVal));
     paceHtml = `${formattedPerDay} / day`;
+  } else if (growthCardMode === 'ytd') {
+    // Number of elapsed months in the year up to current month (1-indexed, e.g. Jan = 1, Feb = 2)
+    const elapsedMonthsYTD = Math.max(1, currentDate.getUTCMonth() + 1);
+    const perMonthVal = diff / elapsedMonthsYTD;
+    const formattedPerMonth = (perMonthVal > 0 ? '+' : (perMonthVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perMonthVal));
+    paceHtml = `${formattedPerMonth} / month`;
   } else {
     const monthsDiff = Math.max(1, daysDiff / 30.4375);
     const perMonthVal = diff / monthsDiff;
