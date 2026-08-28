@@ -858,8 +858,8 @@ function render() {
 
   const totalVal = totalPortfolioValue();
 
-  if ($('#providerCount')) $('#providerCount').textContent = state.providers.length;
-  if ($('#accountCount')) $('#accountCount').textContent = state.accounts.length;
+  renderTopGoalDashboardCard();
+  renderAllTimeGrowthDashboardCard(totalVal);
 
   // Global Value - color by sign (red negative, green positive, white zero)
   const prev = getPreviousSnapshotData();
@@ -1028,11 +1028,106 @@ function formatDelta(delta) {
   return `<span class="value-delta ${cls}"><span class="delta-sign">${sign}</span><span class="delta-num">${num}</span>)</span>`;
 }
 
+function renderTopGoalDashboardCard(snapshotAccounts) {
+  const topGoalValEl = $('#topGoalValue');
+  const topGoalSubEl = $('#topGoalSubtext');
+  if (!topGoalValEl || !topGoalSubEl) return;
+
+  const goals = state.goals || [];
+  if (!goals.length) {
+    topGoalValEl.textContent = '—';
+    topGoalSubEl.textContent = 'no active goals';
+    topGoalValEl.className = 'value';
+    return;
+  }
+
+  const sorted = goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
+  const topGoal = sorted[0];
+
+  let pct = 0;
+  if (snapshotAccounts && Array.isArray(snapshotAccounts)) {
+    const prog = goalProgressFromSnapshot(topGoal, snapshotAccounts);
+    pct = prog !== null ? prog : 0;
+  } else {
+    const current = goalCurrentValue(topGoal);
+    const target = Number(topGoal.value || 0);
+
+    if (target === 0) {
+      const currency = topGoal.coin || 'USD';
+      const linked = state.accounts.filter(a => (topGoal.account_ids || []).includes(a.id));
+      let posSum = 0, negSum = 0;
+      linked.forEach(acc => {
+        const val = accountValue(acc, false);
+        const rate = getExchangeRate(acc.coin || 'USD', currency);
+        const converted = rate ? val * rate : val;
+        if (converted > 0) posSum += converted; else negSum += converted;
+      });
+      const absNeg = Math.abs(negSum);
+      pct = absNeg > 0 ? Math.min(100, Math.max(0, (posSum / absNeg) * 100)) : 100;
+    } else {
+      pct = Math.min(100, Math.max(0, (current / target) * 100));
+    }
+  }
+
+  topGoalValEl.textContent = `${pct.toFixed(1)}%`;
+  topGoalValEl.className = 'value ' + (pct >= 100 ? 'pos' : '');
+  topGoalSubEl.textContent = topGoal.goal_name ? `🎯 ${topGoal.goal_name}` : 'Top Goal';
+}
+
+function renderAllTimeGrowthDashboardCard(currentNetWorth) {
+  const growthValEl = $('#allTimeGrowthValue');
+  const growthSubEl = $('#allTimeGrowthSubtext');
+  if (!growthValEl || !growthSubEl) return;
+
+  if (!timeTravelList || !timeTravelList.length) {
+    growthValEl.textContent = '—';
+    growthSubEl.textContent = 'no snapshot history';
+    growthValEl.className = 'value';
+    return;
+  }
+
+  // timeTravelList is sorted newest-first, so the oldest snapshot is the last item
+  const oldestSnapshot = timeTravelList[timeTravelList.length - 1];
+  const initialValue = Number(oldestSnapshot.data?.globalValue || 0);
+  const curValue = currentNetWorth !== undefined ? currentNetWorth : totalPortfolioValue();
+  const diff = curValue - initialValue;
+
+  const pct = initialValue !== 0 ? ((diff / Math.abs(initialValue)) * 100) : 0;
+  const formattedDiff = (diff > 0 ? '+' : (diff < 0 ? '−' : '')) + moneyEUR.format(Math.abs(diff));
+  const formattedPct = (pct > 0 ? '+' : (pct < 0 ? '−' : '')) + Math.abs(pct).toFixed(1) + '%';
+  const snapshotDate = oldestSnapshot.day ? formatSnapshotDay(oldestSnapshot.day) : formatDate(oldestSnapshot.created_at);
+
+  function parseSnapshotDateObj(day, createdAt) {
+    if (day && /^\d{8}$/.test(day)) {
+      const y = Number(day.slice(0, 4));
+      const m = Number(day.slice(4, 6)) - 1;
+      const d = Number(day.slice(6, 8));
+      return new Date(Date.UTC(y, m, d));
+    }
+    return createdAt ? new Date(createdAt) : new Date();
+  }
+
+  const baselineDate = parseSnapshotDateObj(oldestSnapshot.day, oldestSnapshot.created_at);
+  const currentDate = timeTravelActive() && timeTravelSnapshot
+    ? parseSnapshotDateObj(timeTravelSnapshot.day, timeTravelSnapshot.created_at)
+    : new Date();
+
+  const daysDiff = Math.max(1, (currentDate.getTime() - baselineDate.getTime()) / (1000 * 60 * 60 * 24));
+  const monthsDiff = Math.max(1, daysDiff / 30.4375);
+  const perMonthVal = diff / monthsDiff;
+  const formattedPerMonth = (perMonthVal > 0 ? '+' : (perMonthVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perMonthVal));
+
+  growthValEl.textContent = formattedDiff;
+  growthValEl.className = 'value ' + (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
+  growthSubEl.innerHTML = `${formattedPct} vs baseline (${snapshotDate})<br><span style="font-size:11px;opacity:0.85;">${formattedPerMonth} / month</span>`;
+}
+
 // Render the dashboard cards, charts and account overview from a snapshot payload.
 function renderDashboardFromSnapshot(data) {
   const d = data || {};
-  if ($('#providerCount')) $('#providerCount').textContent = d.providerCount ?? '—';
-  if ($('#accountCount')) $('#accountCount').textContent = d.accountCount ?? '—';
+  const v = Number(d.globalValue || 0);
+  renderTopGoalDashboardCard(d.accounts);
+  renderAllTimeGrowthDashboardCard(v);
   const prev = getPreviousSnapshotData();
   const portfolioValueEl = $('#portfolioValue');
   if (portfolioValueEl) {
