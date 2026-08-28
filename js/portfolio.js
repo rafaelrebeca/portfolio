@@ -169,6 +169,93 @@ async function request(path, options = {}) {
   return data;
 }
 
+const SNAPSHOT_CACHE_VERSION = 1;
+
+function snapshotCacheKey() {
+  const userKey = state.user?.id ?? state.user?.username;
+  return userKey == null ? null : `portfolio_snapshots_v${SNAPSHOT_CACHE_VERSION}_${userKey}`;
+}
+
+function readSnapshotCache() {
+  const key = snapshotCacheKey();
+  if (!key) return null;
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || 'null');
+    return cached?.version === SNAPSHOT_CACHE_VERSION && Array.isArray(cached.snapshots)
+      ? cached.snapshots
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSnapshotCache(snapshots = timeTravelList) {
+  const key = snapshotCacheKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ version: SNAPSHOT_CACHE_VERSION, snapshots }));
+  } catch (error) {
+    console.warn('Could not persist snapshot cache:', error);
+  }
+}
+
+function setSnapshotList(snapshots) {
+  const list = (Array.isArray(snapshots) ? snapshots : [])
+    .filter(snapshot => snapshot && snapshot.day)
+    .sort((a, b) => String(b.day).localeCompare(String(a.day)));
+  timeTravelList = list;
+  writeSnapshotCache(list);
+  if (historyData) historyData = list;
+  if (accountHistoryData) accountHistoryData = list;
+  if (goalHistoryData) goalHistoryData = list;
+}
+
+function hydrateSnapshotCache() {
+  const cached = readSnapshotCache();
+  if (!cached) return false;
+  setSnapshotList(cached);
+  return true;
+}
+
+function upsertSnapshot(snapshot) {
+  if (!snapshot?.day) return;
+  setSnapshotList([
+    snapshot,
+    ...timeTravelList.filter(item => item.day !== snapshot.day)
+  ]);
+}
+
+function removeSnapshot(day) {
+  setSnapshotList(timeTravelList.filter(snapshot => snapshot.day !== day));
+}
+
+function pruneSnapshotsLocally(mode) {
+  const now = new Date();
+  const currentPrefix = mode === 'months'
+    ? `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+    : String(now.getUTCFullYear());
+  const seen = new Set();
+  setSnapshotList(timeTravelList.filter(snapshot => {
+    const day = String(snapshot.day);
+    const prefix = mode === 'months' ? day.slice(0, 6) : day.slice(0, 4);
+    if (prefix === currentPrefix || seen.has(prefix)) return prefix === currentPrefix;
+    seen.add(prefix);
+    return true;
+  }));
+}
+
+async function refreshSnapshotList() {
+  try {
+    const { snapshots } = await request('/snapshots');
+    setSnapshotList(snapshots);
+    return true;
+  } catch (error) {
+    // Existing memory and local cache are deliberately retained on failure.
+    console.warn('Could not refresh snapshots:', error.message);
+    return false;
+  }
+}
+
 function toast(message) {
   const el = $('#toast');
   if (!el) return;
@@ -198,21 +285,18 @@ function gainLossValue(h) {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
-async function loadData() {
+async function loadData({ refreshSnapshots = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
     timeTravelList = [];
     render();
-    return;
+    return true;
   }
+  hydrateSnapshotCache();
   try {
     const [assets, providers, accounts, holdings, currencies, goals] = await Promise.all([
-      request('/assets').catch(() => ({ items: [] })),
-      request('/providers').catch(() => ({ items: [] })),
-      request('/accounts').catch(() => ({ items: [] })),
-      request('/holdings').catch(() => ({ items: [] })),
-      request('/currency').catch(() => ({ items: [] })),
-      request('/goals').catch(() => ({ items: [] }))
+      request('/assets'), request('/providers'), request('/accounts'),
+      request('/holdings'), request('/currency'), request('/goals')
     ]);
     Object.assign(state, {
       assets: assets?.items || [],
@@ -222,18 +306,25 @@ async function loadData() {
       currencies: currencies?.items || [],
       goals: goals?.items || []
     });
-    if (state.user && state.user.role === 'admin') {
-      try {
-        state.users = (await request('/admin/users')).items || [];
-      } catch {
-        state.users = [];
-      }
-    }
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
+    render();
+    return false;
+  }
+  let snapshotsFresh = true;
+  if (state.user && state.user.role === 'admin') {
+    try {
+      state.users = (await request('/admin/users')).items || [];
+    } catch (err) {
+      console.error('Failed to load admin users:', err);
+      render();
+      return false;
+    }
   }
   render();
-  loadTimeTravelList();
+  if (!refreshSnapshots) return true;
+  snapshotsFresh = await loadTimeTravelList();
+  return snapshotsFresh;
 }
 
 // Fetch the user's snapshot list (for the Time Travel arrows) without opening the modal.
@@ -242,15 +333,13 @@ async function loadTimeTravelList() {
     timeTravelList = [];
     snapshotsLoading = false;
     updateTimeTravelArrows();
-    return;
+    return true;
   }
   snapshotsLoading = true;
   updateTimeTravelArrows();
+  let refreshed = false;
   try {
-    const { snapshots } = await request('/snapshots');
-    timeTravelList = snapshots || [];
-  } catch {
-    timeTravelList = [];
+    refreshed = await refreshSnapshotList();
   } finally {
     snapshotsLoading = false;
   }
@@ -260,6 +349,7 @@ async function loadTimeTravelList() {
     renderDashboardAccounts();
     renderGrowthCard();
   }
+  return refreshed;
 }
 
 function renderDashboardSummaryCards() {
@@ -336,14 +426,14 @@ let currencyPage = 0; // current page index (0-based) of the currency list
 let calendarMonth = null; // { year, month } currently shown in the snapshot calendar (month is 0-based)
 let calendarPicker = false; // whether the calendar is showing the year/month picker instead of the day grid
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
-let historyData = null; // full snapshot data loaded for the history chart (cleared on modal close)
+let historyData = null; // full snapshot data loaded for the history chart
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
 let accountHistoryChartInstance = null; // Chart.js instance for the account history line chart
-let accountHistoryData = null; // full snapshot data loaded for the account history chart (cleared on modal close)
+let accountHistoryData = null; // full snapshot data loaded for the account history chart
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
 let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
-let goalHistoryData = null; // full snapshot data loaded for the goal history chart (cleared on modal close)
+let goalHistoryData = null; // full snapshot data loaded for the goal history chart
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
 let goalHistoryGoalId = null; // the goal id whose history is being shown
 
@@ -1389,25 +1479,11 @@ async function openTimeTravelModal() {
 async function loadSnapshotList() {
   const list = $('#snapshotList');
   if (!list) return;
-  list.innerHTML = 'Loading...';
-  snapshotsLoading = true;
+  hydrateSnapshotCache();
+  snapshotsLoading = false;
+  if (timeTravelList.length) renderSnapshotPage();
+  else list.innerHTML = '<div class="page-desc">No snapshots stored locally.</div>';
   updateTimeTravelArrows();
-  try {
-    const { snapshots } = await request('/snapshots');
-    timeTravelList = snapshots || [];
-    if (!snapshots.length) {
-      list.innerHTML = '<div class="page-desc">No snapshots yet. Save today\'s snapshot to get started.</div>';
-      const pagination = $('#snapshotPagination');
-      if (pagination) pagination.style.display = 'none';
-    } else {
-      renderSnapshotPage();
-    }
-  } catch (error) {
-    list.innerHTML = `<div class="page-desc">${esc(error.message)}</div>`;
-  } finally {
-    snapshotsLoading = false;
-    updateTimeTravelArrows();
-  }
 }
 
 // Render the current page of snapshots (SNAPSHOTS_PER_PAGE per page, newest first) plus pagination controls.
@@ -1549,9 +1625,10 @@ async function saveSnapshot() {
   if (btn) btn.disabled = true;
   try {
     const data = collectDashboardSnapshot();
-    await request('/snapshots', { method: 'POST', body: JSON.stringify({ data }) });
+    const result = await request('/snapshots', { method: 'POST', body: JSON.stringify({ data }) });
+    if (result.snapshot) upsertSnapshot(result.snapshot);
     toast('Today\'s snapshot saved.');
-    await loadSnapshotList();
+    renderSnapshotPage();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -1560,8 +1637,13 @@ async function saveSnapshot() {
 }
 
 async function viewSnapshot(day) {
+  hydrateSnapshotCache();
+  const snapshot = timeTravelList.find(item => item.day === day);
+  if (!snapshot) {
+    toast('Snapshot data is not available locally. Use Refresh while online first.');
+    return;
+  }
   try {
-    const { snapshot } = await request(`/snapshots/${day}`);
     timeTravelSnapshot = snapshot;
     closeModal('timeTravelModalOverlay');
     render();
@@ -1636,11 +1718,12 @@ async function deleteSnapshot(day) {
   if (!await confirmDialog(`Delete the snapshot from ${formatSnapshotDay(day)}?`)) return;
   try {
     await request(`/snapshots/${day}`, { method: 'DELETE' });
+    removeSnapshot(day);
     if (timeTravelActive() && timeTravelSnapshot.day === day) {
       timeTravelSnapshot = null;
     }
     toast('Snapshot deleted.');
-    await loadSnapshotList();
+    renderSnapshotPage();
     render();
   } catch (error) {
     toast(error.message);
@@ -1668,9 +1751,10 @@ async function cleanSnapshots(mode) {
   if (btn) btn.disabled = true;
   try {
     const { deleted } = await request(`/snapshots/clean-${isMonths ? 'months' : 'years'}`, { method: 'POST' });
+    pruneSnapshotsLocally(mode);
     if (timeTravelActive()) timeTravelSnapshot = null;
     toast(deleted > 0 ? `Cleaned ${deleted} snapshot${deleted === 1 ? '' : 's'}.` : 'Nothing to clean.');
-    await loadSnapshotList();
+    renderSnapshotPage();
     render();
   } catch (error) {
     toast(error.message);
@@ -1703,14 +1787,14 @@ async function openHistoryModal() {
 
 // Load the full data of every snapshot (newest first) into historyData.
 async function loadHistoryData() {
-  const { snapshots } = await request('/snapshots');
-  historyData = snapshots || [];
+  hydrateSnapshotCache();
+  historyData = timeTravelList;
+  if (!historyData.length) throw new Error('No snapshots to display.');
 }
 
-// Close the history modal and clear the loaded data + chart.
+// Close the history modal and clear the chart, retaining loaded snapshot data.
 function closeHistoryModal() {
   if (historyChartInstance) { historyChartInstance.destroy(); historyChartInstance = null; }
-  historyData = null;
   historyMaximized = false;
   const overlay = $('#historyModalOverlay');
   if (overlay) overlay.classList.remove('maximized');
@@ -1824,8 +1908,8 @@ async function openAccountHistoryModal(accountId) {
   if (chartWrap) chartWrap.style.display = 'none';
   if (empty) empty.style.display = 'none';
   try {
-    const { snapshots } = await request('/snapshots');
-    accountHistoryData = snapshots || [];
+    hydrateSnapshotCache();
+    accountHistoryData = timeTravelList;
     renderAccountHistoryChart();
   } catch (error) {
     if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
@@ -1834,10 +1918,9 @@ async function openAccountHistoryModal(accountId) {
   }
 }
 
-// Close the account history modal and clear the loaded data + chart.
+// Close the account history modal and clear the chart, retaining loaded snapshot data.
 function closeAccountHistoryModal() {
   if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
-  accountHistoryData = null;
   accountHistoryMaximized = false;
   accountHistoryAccountId = null;
   const overlay = $('#accountHistoryModalOverlay');
@@ -1930,8 +2013,8 @@ async function openGoalHistoryModal(goalId) {
   if (chartWrap) chartWrap.style.display = 'none';
   if (empty) empty.style.display = 'none';
   try {
-    const { snapshots } = await request('/snapshots');
-    goalHistoryData = snapshots || [];
+    hydrateSnapshotCache();
+    goalHistoryData = timeTravelList;
     renderGoalHistoryChart();
   } catch (error) {
     if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
@@ -1940,10 +2023,9 @@ async function openGoalHistoryModal(goalId) {
   }
 }
 
-// Close the goal history modal and clear the loaded data + chart.
+// Close the goal history modal and clear the chart, retaining loaded snapshot data.
 function closeGoalHistoryModal() {
   if (goalHistoryChartInstance) { goalHistoryChartInstance.destroy(); goalHistoryChartInstance = null; }
-  goalHistoryData = null;
   goalHistoryMaximized = false;
   goalHistoryGoalId = null;
   const overlay = $('#goalHistoryModalOverlay');
@@ -3234,7 +3316,7 @@ async function signIn(event) {
     state.user = (await request('/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) })).user;
     state.guest = state.user.role === 'guest';
     showApp();
-    await loadData();
+    await loadData({ refreshSnapshots: true });
     toast(`Signed in as ${state.user.username}`);
     maybeShowWelcomeModal();
 
@@ -5151,7 +5233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.user = me.user;
       state.guest = state.user.role === 'guest';
       showApp();
-      await loadData();
+      await loadData({ refreshSnapshots: true });
 
       // Update currency rates if admin
       if (state.user.role === 'admin') {
@@ -5174,7 +5256,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (refreshBtn.classList.contains('spinning')) return;
       refreshBtn.classList.add('spinning');
       try {
-        await loadData();
+        const refreshed = await loadData({ refreshSnapshots: true });
+        toast(refreshed ? 'All data refreshed.' : 'Could not fully refresh. Existing data was kept.');
       } finally {
         refreshBtn.classList.remove('spinning');
       }
@@ -5203,4 +5286,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 });
-
