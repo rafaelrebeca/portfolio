@@ -232,23 +232,33 @@ async function loadData() {
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
   }
-  await loadTimeTravelList();
   render();
+  loadTimeTravelList();
 }
 
 // Fetch the user's snapshot list (for the Time Travel arrows) without opening the modal.
 async function loadTimeTravelList() {
   if (state.guest || !state.user) {
     timeTravelList = [];
+    snapshotsLoading = false;
+    updateTimeTravelArrows();
     return;
   }
+  snapshotsLoading = true;
+  updateTimeTravelArrows();
   try {
     const { snapshots } = await request('/snapshots');
     timeTravelList = snapshots || [];
   } catch {
     timeTravelList = [];
+  } finally {
+    snapshotsLoading = false;
   }
   updateTimeTravelArrows();
+  if ($('#page-dashboard')?.classList.contains('active')) {
+    renderDashboardAccounts();
+    renderGrowthCard();
+  }
 }
 
 let allocationChartInstance = null;
@@ -270,6 +280,7 @@ let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
 let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
+let snapshotsLoading = false; // whether snapshots are currently loading from DB into memory
 let timeTravelPlayTimer = null; // timeout id for the "play through snapshots" playback
 let timeTravelPlayIndex = -1; // current index in timeTravelList during playback
 const SNAPSHOTS_PER_PAGE = 5; // snapshots shown per page in the Time Travel modal
@@ -1233,10 +1244,36 @@ function renderTimeTravelBanner() {
 // Enable/disable the prev/next arrows based on the current snapshot's position in the list.
 // timeTravelList is newest-first, so "previous" (older) is a higher index, "next" (newer) is a lower index.
 function updateTimeTravelArrows() {
+  const controls = document.querySelector('.time-travel-controls');
   const prevBtn = $('#timeTravelPrevBtn');
-  const nextBtn = $('#timeTravelNextBtn');
+  const mainBtn = $('#timeTravelBtn');
+  const saveBtn = $('#timeTravelSaveBtn');
+  const historyBtn = $('#timeTravelHistoryBtn');
+  const calendarBtn = $('#timeTravelCalendarBtn');
   const playBtn = $('#timeTravelPlayBtn');
-  if (!prevBtn || !nextBtn) return;
+  const nextBtn = $('#timeTravelNextBtn');
+  if (!prevBtn || !nextBtn || !controls) return;
+
+  if (snapshotsLoading) {
+    controls.classList.add('is-loading');
+    controls.setAttribute('title', 'Loading snapshots from database...');
+    if (prevBtn) prevBtn.disabled = true;
+    if (mainBtn) mainBtn.disabled = true;
+    if (saveBtn) saveBtn.disabled = true;
+    if (historyBtn) historyBtn.disabled = true;
+    if (calendarBtn) calendarBtn.disabled = true;
+    if (playBtn) playBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    return;
+  }
+
+  controls.classList.remove('is-loading');
+  controls.removeAttribute('title');
+  if (mainBtn) mainBtn.disabled = false;
+  if (saveBtn) saveBtn.disabled = false;
+  if (historyBtn) historyBtn.disabled = false;
+  if (calendarBtn) calendarBtn.disabled = false;
+
   if (playBtn) playBtn.disabled = timeTravelList.length === 0;
   if (!timeTravelActive()) {
     // Not viewing a snapshot: back is active if any snapshot exists (enters Time Travel), forward is disabled.
@@ -1262,10 +1299,11 @@ async function loadSnapshotList() {
   const list = $('#snapshotList');
   if (!list) return;
   list.innerHTML = 'Loading...';
+  snapshotsLoading = true;
+  updateTimeTravelArrows();
   try {
     const { snapshots } = await request('/snapshots');
-    timeTravelList = snapshots;
-    updateTimeTravelArrows();
+    timeTravelList = snapshots || [];
     if (!snapshots.length) {
       list.innerHTML = '<div class="page-desc">No snapshots yet. Save today\'s snapshot to get started.</div>';
       const pagination = $('#snapshotPagination');
@@ -1275,6 +1313,9 @@ async function loadSnapshotList() {
     }
   } catch (error) {
     list.innerHTML = `<div class="page-desc">${esc(error.message)}</div>`;
+  } finally {
+    snapshotsLoading = false;
+    updateTimeTravelArrows();
   }
 }
 

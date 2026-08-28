@@ -1962,6 +1962,33 @@ select {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.time-travel-controls.is-loading {
+  position: relative;
+  cursor: wait;
+  border-color: var(--accent);
+  animation: snapshotCardPulse 1.5s infinite ease-in-out;
+}
+
+.time-travel-controls.is-loading * {
+  pointer-events: none;
+}
+
+@keyframes snapshotCardPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3);
+    border-color: rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px rgba(99, 102, 241, 0.35);
+    border-color: var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3);
+    border-color: rgba(99, 102, 241, 0.4);
+  }
 }
 
 .time-travel-controls .btn-sm:disabled {
