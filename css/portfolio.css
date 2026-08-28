@@ -418,6 +418,16 @@ a {
   padding: 16px;
 }
 
+#growthCard {
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+#growthCard:hover {
+  border-color: var(--accent);
+}
+
 .card .label {
   font-size: 12px;
   color: var(--muted);

@@ -280,6 +280,22 @@ let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
 let timeTravelSnapshot = null; // active snapshot being viewed (null = live dashboard)
 let timeTravelList = []; // cached list of the user's snapshots (newest first), for prev/next navigation
+let growthCardMode = localStorage.getItem('portfolio_growth_card_mode') || 'all';
+
+function cycleGrowthCardMode() {
+  const modes = ['all', 'ytd', 'month'];
+  const curIdx = modes.indexOf(growthCardMode);
+  growthCardMode = modes[(curIdx + 1) % modes.length];
+  localStorage.setItem('portfolio_growth_card_mode', growthCardMode);
+  const currentNetWorth = timeTravelActive() && timeTravelSnapshot
+    ? Number(timeTravelSnapshot.data?.globalValue || 0)
+    : totalPortfolioValue();
+  renderAllTimeGrowthDashboardCard(currentNetWorth);
+}
+
+function renderGrowthCard() {
+  renderAllTimeGrowthDashboardCard(totalPortfolioValue());
+}
 let snapshotsLoading = false; // whether snapshots are currently loading from DB into memory
 let timeTravelPlayTimer = null; // timeout id for the "play through snapshots" playback
 let timeTravelPlayIndex = -1; // current index in timeTravelList during playback
@@ -1088,7 +1104,13 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
 function renderAllTimeGrowthDashboardCard(currentNetWorth) {
   const growthValEl = $('#allTimeGrowthValue');
   const growthSubEl = $('#allTimeGrowthSubtext');
+  const growthLabelEl = $('#growthCardLabel') || $('#growthCard')?.querySelector('.label');
   if (!growthValEl || !growthSubEl) return;
+
+  let labelText = 'All-Time Growth';
+  if (growthCardMode === 'ytd') labelText = 'YTD Growth';
+  else if (growthCardMode === 'month') labelText = 'Month Growth';
+  if (growthLabelEl) growthLabelEl.textContent = labelText;
 
   if (!timeTravelList || !timeTravelList.length) {
     growthValEl.textContent = '—';
@@ -1096,17 +1118,6 @@ function renderAllTimeGrowthDashboardCard(currentNetWorth) {
     growthValEl.className = 'value';
     return;
   }
-
-  // timeTravelList is sorted newest-first, so the oldest snapshot is the last item
-  const oldestSnapshot = timeTravelList[timeTravelList.length - 1];
-  const initialValue = Number(oldestSnapshot.data?.globalValue || 0);
-  const curValue = currentNetWorth !== undefined ? currentNetWorth : totalPortfolioValue();
-  const diff = curValue - initialValue;
-
-  const pct = initialValue !== 0 ? ((diff / Math.abs(initialValue)) * 100) : 0;
-  const formattedDiff = (diff > 0 ? '+' : (diff < 0 ? '−' : '')) + moneyEUR.format(Math.abs(diff));
-  const formattedPct = (pct > 0 ? '+' : (pct < 0 ? '−' : '')) + Math.abs(pct).toFixed(1) + '%';
-  const snapshotDate = oldestSnapshot.day ? formatSnapshotDay(oldestSnapshot.day) : formatDate(oldestSnapshot.created_at);
 
   function parseSnapshotDateObj(day, createdAt) {
     if (day && /^\d{8}$/.test(day)) {
@@ -1118,19 +1129,84 @@ function renderAllTimeGrowthDashboardCard(currentNetWorth) {
     return createdAt ? new Date(createdAt) : new Date();
   }
 
-  const baselineDate = parseSnapshotDateObj(oldestSnapshot.day, oldestSnapshot.created_at);
   const currentDate = timeTravelActive() && timeTravelSnapshot
     ? parseSnapshotDateObj(timeTravelSnapshot.day, timeTravelSnapshot.created_at)
     : new Date();
 
+  function getSnapshotYearMonth(s) {
+    if (s.day && /^\d{8}$/.test(s.day)) {
+      return {
+        year: Number(s.day.slice(0, 4)),
+        month: Number(s.day.slice(4, 6)) - 1
+      };
+    }
+    const dt = parseSnapshotDateObj(s.day, s.created_at);
+    return {
+      year: dt.getUTCFullYear(),
+      month: dt.getUTCMonth()
+    };
+  }
+
+  const targetYear = timeTravelActive() && timeTravelSnapshot && timeTravelSnapshot.day && /^\d{8}$/.test(timeTravelSnapshot.day)
+    ? Number(timeTravelSnapshot.day.slice(0, 4))
+    : currentDate.getUTCFullYear();
+
+  const targetMonth = timeTravelActive() && timeTravelSnapshot && timeTravelSnapshot.day && /^\d{8}$/.test(timeTravelSnapshot.day)
+    ? Number(timeTravelSnapshot.day.slice(4, 6)) - 1
+    : currentDate.getUTCMonth();
+
+  const validSnapshots = timeTravelList.filter(s => parseSnapshotDateObj(s.day, s.created_at) <= currentDate);
+  const pool = validSnapshots.length ? validSnapshots : timeTravelList;
+
+  let baselineSnapshot = pool[pool.length - 1]; // default oldest snapshot
+
+  if (growthCardMode === 'ytd') {
+    const yearSnapshots = pool.filter(s => getSnapshotYearMonth(s).year === targetYear);
+    if (yearSnapshots.length) {
+      baselineSnapshot = yearSnapshots[yearSnapshots.length - 1];
+    }
+  } else if (growthCardMode === 'month') {
+    const monthSnapshots = pool.filter(s => {
+      const ym = getSnapshotYearMonth(s);
+      return ym.year === targetYear && ym.month === targetMonth;
+    });
+    if (monthSnapshots.length) {
+      baselineSnapshot = monthSnapshots[monthSnapshots.length - 1];
+    } else {
+      const yearSnapshots = pool.filter(s => getSnapshotYearMonth(s).year === targetYear);
+      if (yearSnapshots.length) {
+        baselineSnapshot = yearSnapshots[yearSnapshots.length - 1];
+      }
+    }
+  }
+
+  const initialValue = Number(baselineSnapshot.data?.globalValue || 0);
+  const curValue = currentNetWorth !== undefined ? currentNetWorth : totalPortfolioValue();
+  const diff = curValue - initialValue;
+
+  const pct = initialValue !== 0 ? ((diff / Math.abs(initialValue)) * 100) : 0;
+  const formattedDiff = (diff > 0 ? '+' : (diff < 0 ? '−' : '')) + moneyEUR.format(Math.abs(diff));
+  const formattedPct = (pct > 0 ? '+' : (pct < 0 ? '−' : '')) + Math.abs(pct).toFixed(1) + '%';
+  const snapshotDate = baselineSnapshot.day ? formatSnapshotDay(baselineSnapshot.day) : formatDate(baselineSnapshot.created_at);
+
+  const baselineDate = parseSnapshotDateObj(baselineSnapshot.day, baselineSnapshot.created_at);
   const daysDiff = Math.max(1, (currentDate.getTime() - baselineDate.getTime()) / (1000 * 60 * 60 * 24));
-  const monthsDiff = Math.max(1, daysDiff / 30.4375);
-  const perMonthVal = diff / monthsDiff;
-  const formattedPerMonth = (perMonthVal > 0 ? '+' : (perMonthVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perMonthVal));
+
+  let paceHtml = '';
+  if (growthCardMode === 'month') {
+    const perDayVal = diff / daysDiff;
+    const formattedPerDay = (perDayVal > 0 ? '+' : (perDayVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perDayVal));
+    paceHtml = `${formattedPerDay} / day`;
+  } else {
+    const monthsDiff = Math.max(1, daysDiff / 30.4375);
+    const perMonthVal = diff / monthsDiff;
+    const formattedPerMonth = (perMonthVal > 0 ? '+' : (perMonthVal < 0 ? '−' : '')) + moneyEUR.format(Math.abs(perMonthVal));
+    paceHtml = `${formattedPerMonth} / month`;
+  }
 
   growthValEl.textContent = formattedDiff;
   growthValEl.className = 'value ' + (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
-  growthSubEl.innerHTML = `${formattedPct} vs baseline (${snapshotDate})<br><span style="font-size:11px;opacity:0.85;">${formattedPerMonth} / month</span>`;
+  growthSubEl.innerHTML = `${formattedPct} vs baseline (${snapshotDate})<br><span style="font-size:11px;opacity:0.85;">${paceHtml}</span>`;
 }
 
 // Render the dashboard cards, charts and account overview from a snapshot payload.
@@ -4063,6 +4139,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#loginForm')?.addEventListener('submit', signIn);
   $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); maybeShowWelcomeModal(); });
   $('#logoutButton')?.addEventListener('click', logout);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#growthCard')) {
+      cycleGrowthCardMode();
+    }
+  });
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
   $('#profileResetPasswordBtn')?.addEventListener('click', resetProfilePassword);
   $('#currencySearch')?.addEventListener('input', () => { currencyPage = 0; renderCurrency(); });

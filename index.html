@@ -112,8 +112,9 @@
               <div class="value" id="topGoalValue">—</div>
               <div class="delta" id="topGoalSubtext">no active goals</div>
             </div>
-            <div class="card">
-              <div class="label">All-Time Growth</div>
+            <div class="card" id="growthCard" style="cursor: pointer;"
+              title="Click to cycle growth period (All-Time → YTD → Month)">
+              <div class="label" id="growthCardLabel">All-Time Growth</div>
               <div class="value" id="allTimeGrowthValue">—</div>
               <div class="delta" id="allTimeGrowthSubtext">no snapshot history</div>
             </div>
@@ -908,7 +909,6 @@
             <input type="number" step="0.01" min="0" id="loanSimMonthlyAmount" name="monthly_amount" placeholder="0.00">
           </div>
         </div>
-
         <p class="form-error" style="margin-top:8px;"></p>
       </form>
       <div id="loanSimResult" style="margin-top:20px;"></div>
