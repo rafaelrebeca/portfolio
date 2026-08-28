@@ -256,8 +256,38 @@ async function loadTimeTravelList() {
   }
   updateTimeTravelArrows();
   if ($('#page-dashboard')?.classList.contains('active')) {
+    renderDashboardSummaryCards();
     renderDashboardAccounts();
     renderGrowthCard();
+  }
+}
+
+function renderDashboardSummaryCards() {
+  if (timeTravelActive() && timeTravelSnapshot) {
+    return;
+  }
+  const totalVal = totalPortfolioValue();
+  const prev = getPreviousSnapshotData();
+
+  const portfolioValueEl = $('#portfolioValue');
+  if (portfolioValueEl) {
+    const delta = prev ? formatDelta(totalVal - Number(prev.globalValue || 0)) : '';
+    portfolioValueEl.innerHTML = `${moneyEUR.format(totalVal)}${delta}`;
+    portfolioValueEl.className = 'value ' + (totalVal < 0 ? 'neg' : (totalVal > 0 ? 'pos' : ''));
+  }
+
+  let debit = 0;
+  let credit = 0;
+  state.accounts.forEach(acc => {
+    const val = accountValue(acc, true);
+    if (val > 0) debit += val;
+    else credit += val;
+  });
+  const debitCreditValue = $('#debitCreditValue');
+  if (debitCreditValue) {
+    const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
+    const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
+    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
   }
 }
 
@@ -887,30 +917,7 @@ function render() {
 
   renderTopGoalDashboardCard();
   renderAllTimeGrowthDashboardCard(totalVal);
-
-  // Global Value - color by sign (red negative, green positive, white zero)
-  const prev = getPreviousSnapshotData();
-  const portfolioValueEl = $('#portfolioValue');
-  if (portfolioValueEl) {
-    const delta = prev ? formatDelta(totalVal - Number(prev.globalValue || 0)) : '';
-    portfolioValueEl.innerHTML = `${moneyEUR.format(totalVal)}${delta}`;
-    portfolioValueEl.className = 'value ' + (totalVal < 0 ? 'neg' : (totalVal > 0 ? 'pos' : ''));
-  }
-
-  // Debit (sum of positive accounts) / Credit (sum of negative accounts)
-  let debit = 0;
-  let credit = 0;
-  state.accounts.forEach(acc => {
-    const val = accountValue(acc, true);
-    if (val > 0) debit += val;
-    else credit += val;
-  });
-  const debitCreditValue = $('#debitCreditValue');
-  if (debitCreditValue) {
-    const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
-    const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
-  }
+  renderDashboardSummaryCards();
 
   dashboardFilter = null;
   portfolioFilter = null;
