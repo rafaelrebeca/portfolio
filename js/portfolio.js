@@ -395,6 +395,9 @@ let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_pric
 let activeAssetTab = 'system'; // 'system' or 'personal' — which Assets page tab is shown
 let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
+let dashboardAccountOthers = [];
+let dashboardBreakdownMode = localStorage.getItem('portfolio_dashboard_breakdown_mode') || 'provider';
+let dashboardAccountsCollapsed = false;
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
 let collapsedProviders = new Set();
@@ -411,6 +414,18 @@ function cycleGrowthCardMode() {
     ? Number(timeTravelSnapshot.data?.globalValue || 0)
     : totalPortfolioValue();
   renderAllTimeGrowthDashboardCard(currentNetWorth);
+}
+
+function cycleDashboardBreakdownMode() {
+  dashboardBreakdownMode = dashboardBreakdownMode === 'provider' ? 'account' : 'provider';
+  localStorage.setItem('portfolio_dashboard_breakdown_mode', dashboardBreakdownMode);
+  dashboardFilter = null;
+  if (timeTravelActive()) {
+    renderDashboardFromSnapshot(timeTravelSnapshot.data);
+  } else {
+    renderCharts();
+    renderDashboardAccounts();
+  }
 }
 
 function renderGrowthCard() {
@@ -489,6 +504,15 @@ function renderDashboardAccounts() {
         }
       }
       filterLabel = `Provider: ${val}`;
+    } else if (dashboardFilter.source === 'account') {
+      const val = dashboardFilter.value;
+      if (val === 'Others') {
+        const accountIds = new Set(dashboardAccountOthers.map(Number));
+        accounts = state.accounts.filter(a => accountIds.has(Number(a.id)));
+      } else {
+        accounts = state.accounts.filter(a => a.name === val);
+      }
+      filterLabel = `Account: ${val}`;
     }
   }
 
@@ -502,6 +526,7 @@ function renderDashboardAccounts() {
 
   const hasSnapshots = timeTravelList.length > 0;
   const prevData = getPreviousSnapshotData();
+  renderDashboardAccountsSummary(accounts, prevData);
   container.innerHTML = filterBar + (accounts.length ? `
     <div class="dashboard-accounts-grid">
       ${accounts.map(a => {
@@ -520,6 +545,51 @@ function renderDashboardAccounts() {
   }).join('')}
     </div>
   ` : '<div class="page-desc">No accounts match this filter.</div>');
+  syncDashboardAccountsCollapsed();
+}
+
+function renderDashboardAccountsSummary(accounts, prevData) {
+  const summary = $('#dashboardAccountsSummary');
+  if (!summary) return;
+  let up = 0;
+  let down = 0;
+  let unchanged = 0;
+  const movers = [];
+  accounts.forEach(account => {
+    const current = account.valueEur !== undefined
+      ? Number(account.valueEur || 0)
+      : accountValue(account, true);
+    const previous = previousAccountValue(prevData, account.id);
+    if (previous !== null && current > previous) up += 1;
+    else if (previous !== null && current < previous) down += 1;
+    else unchanged += 1;
+    if (previous !== null && current !== previous) {
+      movers.push({ name: account.name || '—', delta: current - previous });
+    }
+  });
+  movers.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const moverText = movers.slice(0, 3).map(mover => {
+    const sign = mover.delta >= 0 ? '+' : '−';
+    return `${mover.name} ${sign}${moneyEUR.format(Math.abs(mover.delta))}`;
+  }).join(' / ');
+  const base = `${accounts.length} account${accounts.length === 1 ? '' : 's'} · ${up} up · ${down} down · ${unchanged} unchanged`;
+  summary.textContent = moverText ? `${base} · Top movers: ${moverText}` : base;
+}
+
+function syncDashboardAccountsCollapsed() {
+  const container = $('#dashboardAccounts');
+  const button = $('#toggleDashboardAccountsBtn');
+  if (container) container.style.display = dashboardAccountsCollapsed ? 'none' : '';
+  if (button) {
+    button.textContent = dashboardAccountsCollapsed ? '+' : '−';
+    button.title = dashboardAccountsCollapsed ? 'Expand Account Overview' : 'Collapse Account Overview';
+    button.setAttribute('aria-label', button.title);
+  }
+}
+
+function toggleDashboardAccounts() {
+  dashboardAccountsCollapsed = !dashboardAccountsCollapsed;
+  syncDashboardAccountsCollapsed();
 }
 
 function topNWithOthers(map, n) {
@@ -537,12 +607,22 @@ function topNWithOthers(map, n) {
   };
 }
 
+function renderDashboardBreakdownHeading() {
+  const title = $('#dashboardBreakdownTitle');
+  const subtitle = $('#dashboardBreakdownSubtitle');
+  const byAccount = dashboardBreakdownMode === 'account';
+  if (title) title.textContent = byAccount ? 'By Account' : 'By Provider';
+  if (subtitle) subtitle.textContent = byAccount ? 'Account value by account' : 'Account value by provider';
+}
+
 function renderCharts() {
   if (typeof Chart === 'undefined') return;
 
   const allocCtx = document.getElementById('allocationChart')?.getContext('2d');
   const typeCtx = document.getElementById('accountTypeChart')?.getContext('2d');
   if (!allocCtx || !typeCtx) return;
+
+  renderDashboardBreakdownHeading();
 
   if (allocationChartInstance) allocationChartInstance.destroy();
   if (accountTypeChartInstance) accountTypeChartInstance.destroy();
@@ -617,29 +697,37 @@ function renderCharts() {
   // Render allocation legend
   renderLegend('allocationLegend', allocLabels, allocData, allocColors, true);
 
-  // By Provider chart (pie/doughnut)
-  const providerMap = {};
-  state.providers.forEach(provider => {
-    const val = providerValue(provider);
-    if (val !== 0) {
-      providerMap[provider.name] = val;
-    }
-  });
+  // By Provider / By Account chart (pie/doughnut)
+  const breakdownMap = {};
+  if (dashboardBreakdownMode === 'account') {
+    state.accounts.forEach(account => {
+      const val = accountValue(account, true);
+      if (val !== 0) breakdownMap[account.name] = (breakdownMap[account.name] || 0) + val;
+    });
+  } else {
+    state.providers.forEach(provider => {
+      const val = providerValue(provider);
+      if (val !== 0) breakdownMap[provider.name] = val;
+    });
+  }
 
-  const providerTop = topNWithOthers(providerMap, 9);
-  const providerLabels = providerTop.labels;
-  const providerData = providerTop.data;
-  const providerDataAbs = providerData.map(v => Math.abs(v));
-  const providerColors = CHART_COLORS;
-  dashboardProviderOthers = providerTop.others;
+  const breakdownTop = topNWithOthers(breakdownMap, 9);
+  const breakdownLabels = breakdownTop.labels;
+  const breakdownData = breakdownTop.data;
+  const breakdownDataAbs = breakdownData.map(v => Math.abs(v));
+  const breakdownColors = CHART_COLORS;
+  dashboardProviderOthers = dashboardBreakdownMode === 'provider' ? breakdownTop.others : [];
+  dashboardAccountOthers = dashboardBreakdownMode === 'account'
+    ? state.accounts.filter(account => breakdownTop.others.includes(account.name)).map(account => account.id)
+    : [];
 
   accountTypeChartInstance = new Chart(typeCtx, {
     type: 'doughnut',
     data: {
-      labels: providerLabels.length ? providerLabels : ['No Data'],
+      labels: breakdownLabels.length ? breakdownLabels : ['No Data'],
       datasets: [{
-        data: providerDataAbs.length ? providerDataAbs : [1],
-        backgroundColor: providerDataAbs.length ? providerColors : ['#2a3550'],
+        data: breakdownDataAbs.length ? breakdownDataAbs : [1],
+        backgroundColor: breakdownDataAbs.length ? breakdownColors : ['#2a3550'],
         borderWidth: 0
       }]
     },
@@ -649,12 +737,13 @@ function renderCharts() {
       animation: false,
       plugins: { legend: { display: false } },
       onClick(event, elements) {
-        if (!elements.length || !providerLabels.length) return;
-        const clickedLabel = providerLabels[elements[0].index];
-        if (dashboardFilter && dashboardFilter.source === 'provider' && dashboardFilter.value === clickedLabel) {
+        if (!elements.length || !breakdownLabels.length) return;
+        const clickedLabel = breakdownLabels[elements[0].index];
+        const source = dashboardBreakdownMode === 'account' ? 'account' : 'provider';
+        if (dashboardFilter && dashboardFilter.source === source && dashboardFilter.value === clickedLabel) {
           dashboardFilter = null;
         } else {
-          dashboardFilter = { source: 'provider', value: clickedLabel };
+          dashboardFilter = { source, value: clickedLabel };
         }
         renderDashboardAccounts();
       },
@@ -665,7 +754,7 @@ function renderCharts() {
   });
 
   // Render provider legend
-  renderLegend('providerLegend', providerLabels, providerData, providerColors, true);
+  renderLegend('providerLegend', breakdownLabels, breakdownData, breakdownColors, true);
 }
 
 function renderLegend(elementId, labels, data, colors, onClick = null) {
@@ -1345,13 +1434,19 @@ function renderDashboardFromSnapshot(data) {
     if (accountTypeChartInstance) accountTypeChartInstance.destroy();
     allocationChartInstance = null;
     accountTypeChartInstance = null;
+    renderDashboardBreakdownHeading();
 
     const byType = d.byType || {};
     const byProvider = d.byProvider || {};
+    const byAccount = {};
+    (d.accounts || []).forEach(account => {
+      const name = account.name || '—';
+      byAccount[name] = (byAccount[name] || 0) + Number(account.valueEur || 0);
+    });
     const allocTop = topNWithOthers(byType, 9);
-    const providerTop = topNWithOthers(byProvider, 9);
+    const breakdownTop = topNWithOthers(dashboardBreakdownMode === 'account' ? byAccount : byProvider, 9);
     const allocDataAbs = allocTop.data.map(v => Math.abs(v));
-    const providerDataAbs = providerTop.data.map(v => Math.abs(v));
+    const breakdownDataAbs = breakdownTop.data.map(v => Math.abs(v));
 
     if (allocCtx) {
       allocationChartInstance = new Chart(allocCtx, {
@@ -1367,20 +1462,21 @@ function renderDashboardFromSnapshot(data) {
       accountTypeChartInstance = new Chart(typeCtx, {
         type: 'doughnut',
         data: {
-          labels: providerTop.labels.length ? providerTop.labels : ['No Data'],
-          datasets: [{ data: providerDataAbs.length ? providerDataAbs : [1], backgroundColor: providerDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
+          labels: breakdownTop.labels.length ? breakdownTop.labels : ['No Data'],
+          datasets: [{ data: breakdownDataAbs.length ? breakdownDataAbs : [1], backgroundColor: breakdownDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
         },
         options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
       });
     }
     renderLegend('allocationLegend', allocTop.labels, allocTop.data, CHART_COLORS, false);
-    renderLegend('providerLegend', providerTop.labels, providerTop.data, CHART_COLORS, false);
+    renderLegend('providerLegend', breakdownTop.labels, breakdownTop.data, CHART_COLORS, false);
   }
 
   // Account overview
   const container = $('#dashboardAccounts');
   if (container) {
     const accounts = d.accounts || [];
+    renderDashboardAccountsSummary(accounts, prev);
     container.innerHTML = accounts.length ? `
       <div class="dashboard-accounts-grid">
         ${accounts.map(a => {
@@ -1399,6 +1495,7 @@ function renderDashboardFromSnapshot(data) {
     }).join('')}
       </div>
     ` : '<div class="page-desc">No accounts in this snapshot.</div>';
+    syncDashboardAccountsCollapsed();
   }
 }
 
@@ -1879,13 +1976,28 @@ function buildHistoryDatasets(points, chartType) {
       { label: 'Credit', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false }
     ];
   }
-  const key = chartType === 'byType' ? 'byType' : 'byProvider';
-  // Collect all category names across snapshots.
-  const categories = [];
-  points.forEach(p => { Object.keys(p.data[key] || {}).forEach(c => { if (!categories.includes(c)) categories.push(c); }); });
+  const categoryMaps = points.map(p => {
+    if (chartType === 'byAccount') {
+      return (p.data.accounts || []).reduce((map, account) => {
+        const name = account.name || '—';
+        map[name] = (map[name] || 0) + Number(account.valueEur || 0);
+        return map;
+      }, {});
+    }
+    const key = chartType === 'byType' ? 'byType' : 'byProvider';
+    return p.data[key] || {};
+  });
+  const totals = {};
+  categoryMaps.forEach(map => Object.entries(map).forEach(([category, value]) => {
+    totals[category] = (totals[category] || 0) + Number(value || 0);
+  }));
+  const top = topNWithOthers(totals, 9);
+  const categories = top.labels;
   return categories.map((cat, i) => ({
     label: cat,
-    data: points.map(p => p.data[key]?.[cat] ?? 0),
+    data: categoryMaps.map(map => cat === 'Others'
+      ? top.others.reduce((sum, other) => sum + Number(map[other] || 0), 0)
+      : Number(map[cat] || 0)),
     borderColor: colors[i % colors.length],
     backgroundColor: colors[i % colors.length],
     tension: 0.3,
@@ -4239,6 +4351,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#growthCard')) {
       cycleGrowthCardMode();
+    } else if (e.target.closest('#dashboardBreakdownCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
+      cycleDashboardBreakdownMode();
     }
   });
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
@@ -4861,6 +4975,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Table Delegation (Edit/Delete Actions & Add to Account)
   document.addEventListener('click', async event => {
+    const toggleDashboardAccountsBtn = event.target.closest('[data-toggle-dashboard-accounts]');
+    if (toggleDashboardAccountsBtn) {
+      toggleDashboardAccounts();
+      return;
+    }
     // Account history (click an account card on the dashboard when snapshots exist)
     const accountHistoryCard = event.target.closest('[data-account-history]');
     if (accountHistoryCard) {
@@ -4880,10 +4999,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         renderDashboardAccounts();
       } else if (legendId === 'providerLegend') {
-        if (dashboardFilter && dashboardFilter.source === 'provider' && dashboardFilter.value === label) {
+        const source = dashboardBreakdownMode === 'account' ? 'account' : 'provider';
+        if (dashboardFilter && dashboardFilter.source === source && dashboardFilter.value === label) {
           dashboardFilter = null;
         } else {
-          dashboardFilter = { source: 'provider', value: label };
+          dashboardFilter = { source, value: label };
         }
         renderDashboardAccounts();
       } else if (legendId === 'portfolioAssetLegend') {

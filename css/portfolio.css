@@ -418,13 +418,15 @@ a {
   padding: 16px;
 }
 
-#growthCard {
+#growthCard,
+#dashboardBreakdownCard {
   cursor: pointer;
   user-select: none;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-#growthCard:hover {
+#growthCard:hover,
+#dashboardBreakdownCard:hover {
   border-color: var(--accent);
 }
 
@@ -975,6 +977,19 @@ select {
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   min-width: 0;
+}
+
+.dashboard-accounts-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-accounts-summary {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .dashboard-accounts-grid .account-card {

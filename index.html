@@ -137,17 +137,23 @@
               </div>
               <div class="chart-legend" id="allocationLegend"></div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card" id="dashboardBreakdownCard" style="cursor: pointer;" title="Click to switch between By Provider and By Account">
               <div style="flex-shrink:0;">
-                <h3>By Provider</h3>
-                <p class="page-desc" style="margin-bottom:12px;">Account value by provider</p>
+                <h3 id="dashboardBreakdownTitle">By Provider</h3>
+                <p class="page-desc" id="dashboardBreakdownSubtitle" style="margin-bottom:12px;">Account value by provider</p>
                 <div style="position:relative;height:200px;width:200px;"><canvas id="accountTypeChart"></canvas></div>
               </div>
               <div class="chart-legend" id="providerLegend"></div>
             </div>
           </div>
           <div style="margin-top:20px;">
-            <div class="page-title" style="font-size:16px;margin-bottom:12px;">Account Overview</div>
+            <div class="dashboard-accounts-head">
+              <div>
+                <div class="page-title" style="font-size:16px;margin-bottom:2px;">Account Overview</div>
+                <div class="dashboard-accounts-summary" id="dashboardAccountsSummary"></div>
+              </div>
+              <button class="btn-sm icon-btn" id="toggleDashboardAccountsBtn" type="button" data-toggle-dashboard-accounts title="Collapse Account Overview" aria-label="Collapse Account Overview">−</button>
+            </div>
             <div id="dashboardAccounts">Loading…</div>
           </div>
         </div>
@@ -1232,6 +1238,7 @@
             <option value="global">Global</option>
             <option value="byType">By Type</option>
             <option value="byProvider">By Provider</option>
+            <option value="byAccount">By Account</option>
           </select>
         </div>
         <div class="field">
