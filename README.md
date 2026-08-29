@@ -24,14 +24,16 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 - 🏦 **Accounts & Provider Management**: Supports bank accounts, brokerage accounts, high-yield interest accounts, and loan tracking with payoff dates and interest calculations.
 - 🎯 **Financial Goals Tracker**: Create multi-tiered financial goals linked directly to specific accounts or overall savings milestones.
 - 💰 **Dividends Engine**: Track yield percentages and payout schedules by month across all held assets.
-- 💱 **Multi-Currency & Exchange Rates**: Real-time conversion support (USD, EUR, GBP, etc.) powered by ExchangeRate-API.
+- 💱 **Multi-Currency & Exchange Rates**: Multi-currency conversion support (USD, EUR, GBP, etc.) using stored ExchangeRate-API rates refreshed at most once per UTC day.
 - 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar and timeline controls.
 - 👁 **Privacy Blur Mode**: Quick keyboard shortcut (`H` key or toggle button) to blur sensitive monetary figures when viewing the app in public spaces.
 - 👤 **Role-Based Access Control**:
   - **Admin**: User management, database tools, asset price refreshes, global configuration.
   - **User / Member**: Full CRUD over private portfolios, accounts, holdings, and goals.
-  - **Guest Mode**: Read-only interactive demo mode populated with sample data.
-- 📱 **Progressive Web App (PWA)**: Fully responsive mobile/desktop experience with offline service worker caching and installable app manifest.
+  - **Guest Mode**: Isolated interactive demo mode populated with sample data; changes remain local and are not persisted.
+- 📱 **Progressive Web App (PWA)**: Fully responsive mobile/desktop experience with an installable app manifest and service-worker caching for the application shell.
+
+Snapshot history is also cached per user in local browser storage. Normal navigation uses the retained snapshot list, while startup and explicit refresh can synchronize it with the server. This does not make the authenticated dashboard fully offline: authentication, live API data, and unsaved changes still require the application/backend environment.
 
 ---
 
@@ -41,7 +43,7 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 |---|---|
 | **Hosting** | Cloudflare Pages |
 | **Backend / API** | Cloudflare Pages Functions (Serverless Workers - Single catch-all route) |
-| **Database** | Cloudflare D1 (Serverless SQLite) |
+| **Database** | Cloudflare D1 (Serverless SQLite, binding `myd1db`) |
 | **Frontend** | Vanilla HTML5, CSS3 (Custom Variables & Responsive Design), JS (ES Modules) |
 | **Data Visualization** | Chart.js |
 | **Authentication** | Secure `HttpOnly` Session Cookies + `bcrypt` password hashing |
@@ -105,14 +107,14 @@ portfolio/
 
 ## 🔑 Environment Variables & Secrets
 
-For production deployments, the following secrets are configured in Cloudflare Pages:
+The live Cloudflare Pages deployment uses the following server-side secrets:
 
 | Secret | Description |
 |---|---|
-| `STOCK_API_KEY` | API Key for Massive.com (Live stock and market asset prices) |
-| `API_KEY` | API Key for ExchangeRate-API (Live currency conversion rates) |
+| `STOCK_API_KEY` | API key for Massive.com previous-trading-day US stock closes |
+| `API_KEY` | API key for ExchangeRate-API exchange-rate data |
 
-For local development, these environment variables can be specified in your local `wrangler.toml` file under the `[vars]` block.
+For local development, provide these values through local Wrangler configuration or another local secret mechanism. Never commit real API keys or other credentials to the repository.
 
 ---
 
