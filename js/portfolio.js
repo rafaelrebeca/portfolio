@@ -1930,7 +1930,30 @@ function applyHistoryZoom(snapshots, zoom) {
   return result;
 }
 
-// Draw the line chart from historyData based on the selected chart type and zoom.
+// Calculate snapshot-to-snapshot Global Value changes, aggregating all changes in each zoom period.
+function buildHistoryGrowthValues(points, zoom) {
+  if (zoom === 'all') {
+    return points.map((point, index) => {
+      if (index === 0) return null;
+      return Number(point.data?.globalValue || 0) - Number(points[index - 1].data?.globalValue || 0);
+    });
+  }
+
+  const sourcePoints = historyData.slice().reverse(); // oldest -> newest
+  const totalsByPeriod = {};
+  for (let index = 1; index < sourcePoints.length; index++) {
+    const point = sourcePoints[index];
+    const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
+    const delta = Number(point.data?.globalValue || 0) - Number(sourcePoints[index - 1].data?.globalValue || 0);
+    totalsByPeriod[period] = (totalsByPeriod[period] || 0) + delta;
+  }
+  return points.map(point => {
+    const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
+    return totalsByPeriod[period] ?? null;
+  });
+}
+
+// Draw the history chart from historyData based on the selected chart type and zoom.
 function renderHistoryChart() {
   const chartType = $('#historyChartType')?.value || 'global';
   const zoom = $('#historyZoom')?.value || 'all';
@@ -1943,7 +1966,8 @@ function renderHistoryChart() {
   }
   const points = applyHistoryZoom(historyData, zoom).slice().reverse(); // oldest -> newest for the x-axis
   const labels = points.map(p => formatSnapshotDay(p.day));
-  const datasets = buildHistoryDatasets(points, chartType);
+  const growthValues = chartType === 'byGrowth' ? buildHistoryGrowthValues(points, zoom) : null;
+  const datasets = buildHistoryDatasets(points, chartType, growthValues);
   if (chartWrap) chartWrap.style.display = 'block';
   if (empty) empty.style.display = 'none';
 
@@ -1951,24 +1975,47 @@ function renderHistoryChart() {
   if (!ctx) return;
   if (historyChartInstance) historyChartInstance.destroy();
   historyChartInstance = new Chart(ctx, {
-    type: 'line',
+    type: chartType === 'byGrowth' ? 'bar' : 'line',
     data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } } },
+      plugins: {
+        legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } },
+        tooltip: {
+          callbacks: {
+            label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}`
+          }
+        }
+      },
       scales: {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { ticks: { color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } }
+        y: {
+          ticks: { color: '#e6ebf5', callback: value => moneyEUR.format(Number(value || 0)) },
+          grid: { color: 'rgba(255,255,255,.05)' }
+        }
       }
     }
   });
 }
 
 // Build the datasets for the selected chart type.
-function buildHistoryDatasets(points, chartType) {
+function buildHistoryDatasets(points, chartType, growthValues = null) {
   const colors = CHART_COLORS;
+  if (chartType === 'byGrowth') {
+    const growth = growthValues || buildHistoryGrowthValues(points, 'all');
+    return [{
+      label: 'Growth',
+      data: growth,
+      borderColor: growth.map(value => value > 0 ? '#3fd0a3' : value < 0 ? '#ff5c72' : '#8b95a8'),
+      backgroundColor: growth.map(value => value > 0 ? '#3fd0a3' : value < 0 ? '#ff5c72' : '#8b95a8'),
+      borderWidth: 1,
+      borderRadius: 8,
+      borderSkipped: false,
+      maxBarThickness: 48
+    }];
+  }
   if (chartType === 'global') {
     return [
       { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false },
