@@ -61,6 +61,7 @@
         <div class="nav-item" id="navGoals" data-page="goals">🎯 Goals</div>
         <div class="nav-item" id="navPortfolio" data-page="portfolio">💼 My Portfolio</div>
         <div class="nav-item" id="navAccounts" data-page="accounts">🏦 My Accounts</div>
+        <div class="nav-item" id="navSimulation" data-page="simulation">📉 Simulation</div>
 
         <div class="nav-section-label">System</div>
         <div class="nav-item" id="navAssets" data-page="assets">📈 Assets</div>
@@ -288,6 +289,46 @@
             </div>
           </div>
           <div id="accountsList"></div>
+        </div>
+
+        <!-- SIMULATION -->
+        <div class="page" id="page-simulation">
+          <div class="page-title">Simulation</div>
+          <div class="page-desc">A principal-only projection based on your historical Global Value growth.</div>
+          <div class="banner simulation-assumption">
+            This is a simple trend projection: it uses the average monthly change between your oldest snapshot and today. It ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
+          </div>
+          <div class="grid-cards simulation-summary-cards">
+            <div class="card">
+              <div class="label">Current Global Value</div>
+              <div class="value" id="simulationCurrentValue">—</div>
+              <div class="delta" id="simulationCurrentSubtext">live value</div>
+            </div>
+            <div class="card">
+              <div class="label">Growth Rate Used</div>
+              <div class="value" id="simulationMonthlyChange">—</div>
+              <div class="delta" id="simulationMonthlySubtext">same pace shown on Dashboard</div>
+            </div>
+            <div class="card">
+              <div class="label">Path to €0</div>
+              <div class="value" id="simulationZeroValue">—</div>
+              <div class="delta" id="simulationZeroSubtext">only relevant when global value is negative</div>
+            </div>
+          </div>
+          <div class="charts-row simulation-charts-row">
+            <div class="chart-card simulation-chart-card">
+              <h3>Historical &amp; Projected Global Value</h3>
+              <p class="page-desc">First snapshot, latest snapshot per year, then a linear 20-year projection</p>
+              <div class="simulation-chart-wrap"><canvas id="simulationTrendChart"></canvas></div>
+            </div>
+            <div class="chart-card simulation-chart-card simulation-growth-card">
+              <h3>Growth Contribution by Account</h3>
+              <p class="page-desc">Monthly change during each account's known lifetime</p>
+              <div class="simulation-chart-wrap simulation-doughnut-wrap"><canvas id="simulationGrowthChart"></canvas></div>
+              <div class="chart-legend simulation-growth-legend" id="simulationGrowthLegend"></div>
+            </div>
+          </div>
+          <div class="simulation-note" id="simulationDataNote"></div>
         </div>
 
         <!-- PORTFOLIO -->

@@ -221,6 +221,10 @@ My Accounts combines providers and nested accounts. Provider cards show provider
 
 Provider and account detail charts convert values to EUR. Their Others tables list the individual rows included in the aggregate.
 
+### Simulation
+
+Simulation is a read-only, principal-only projection of Global Value. It uses the same All-Time Growth monthly pace shown on the Dashboard, calculated with elapsed days so an incomplete calendar month is included, then shows the implied value today, in 1, 5, 10, and 20 years. The historical chart displays the first snapshot and the latest snapshot available for each calendar year, while all snapshots remain available for the growth calculation. A Growth Contribution by Account doughnut scans all snapshots to build a distinct account history, then calculates each account's monthly change as `(latest known value - first known value) / months existed`; live values are used as the latest point for existing accounts and deleted accounts end at their last snapshot. It uses top-9-plus-Others grouping; positive and negative changes are shown as separate doughnut datasets, with negative changes represented by absolute values. When the current Global Value is negative and the historical pace is positive, it also estimates the month and year in which the value reaches €0. The projection ignores interest, dividends, market returns, inflation, and future deposits or withdrawals; a dated snapshot baseline is required for a growth rate.
+
 ### My Portfolio
 
 My Portfolio lists holdings assigned to asset accounts. It shows asset, account, quantity, purchase price, market value, gain percentage, and gain value. Every displayed column except Action is sortable. Sorting respects the active asset/type filter and persists through re-renders. Asset and account names resolve platform/personal IDs with the personal flag.

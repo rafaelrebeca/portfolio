@@ -913,6 +913,58 @@ select {
   margin-bottom: 24px;
 }
 
+.simulation-assumption {
+  margin-bottom: 20px;
+}
+
+.simulation-summary-cards {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.chart-card.simulation-chart-card {
+  flex: 1 1 420px;
+  min-width: 0;
+  display: block;
+}
+
+.simulation-chart-card .page-desc {
+  margin-bottom: 12px;
+}
+
+.simulation-chart-wrap {
+  position: relative;
+  height: 300px;
+}
+
+.simulation-doughnut-wrap {
+  flex: 1 1 280px;
+  width: min(100%, 320px);
+  max-width: 320px;
+  margin: 0;
+}
+
+.simulation-growth-legend {
+  flex: 1 1 240px;
+  width: auto;
+  min-width: 0;
+}
+
+.chart-card.simulation-growth-card {
+  display: flex;
+  align-items: center;
+}
+
+.simulation-growth-card > h3,
+.simulation-growth-card > .page-desc {
+  flex: 0 0 100%;
+}
+
+.simulation-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 14px;
+}
+
 .chart-card {
   background: var(--panel);
   border: 1px solid var(--border);

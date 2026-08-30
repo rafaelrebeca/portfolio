@@ -349,6 +349,7 @@ async function loadTimeTravelList() {
     renderDashboardAccounts();
     renderGrowthCard();
   }
+  if ($('#page-simulation')?.classList.contains('active')) renderSimulation();
   return refreshed;
 }
 
@@ -389,6 +390,8 @@ let goalDetailsChartInstance = null;
 let goalDetailsGoalId = null;
 let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
+let simulationTrendChartInstance = null;
+let simulationGrowthChartInstance = null;
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
@@ -430,6 +433,178 @@ function cycleDashboardBreakdownMode() {
 
 function renderGrowthCard() {
   renderAllTimeGrowthDashboardCard(totalPortfolioValue());
+}
+
+function simulationSnapshotDate(snapshot) {
+  if (snapshot?.day && /^\d{8}$/.test(snapshot.day)) {
+    return new Date(Date.UTC(Number(snapshot.day.slice(0, 4)), Number(snapshot.day.slice(4, 6)) - 1, Number(snapshot.day.slice(6, 8))));
+  }
+  return snapshot?.created_at ? new Date(snapshot.created_at) : null;
+}
+
+// Keep Simulation aligned with the dashboard's All-Time Growth pace. This is
+// deliberately based on elapsed days, so an incomplete calendar month is not
+// treated as zero months.
+function dashboardAllTimeMonthlyGrowth(currentValue = totalPortfolioValue()) {
+  if (!timeTravelList || !timeTravelList.length) return null;
+  const snapshots = timeTravelList
+    .filter(snapshot => Number.isFinite(Number(snapshot?.data?.globalValue)) && simulationSnapshotDate(snapshot))
+    .slice()
+    .sort((a, b) => simulationSnapshotDate(a) - simulationSnapshotDate(b));
+  const baseline = snapshots[0];
+  if (!baseline) return null;
+  const baselineDate = simulationSnapshotDate(baseline);
+  const daysDiff = Math.max(1, (new Date().getTime() - baselineDate.getTime()) / (1000 * 60 * 60 * 24));
+  const monthsDiff = Math.max(1, daysDiff / 30.4375);
+  return (Number(currentValue || 0) - Number(baseline.data.globalValue || 0)) / monthsDiff;
+}
+
+function simulationProjection() {
+  const current = totalPortfolioValue();
+  const snapshots = (timeTravelList || [])
+    .filter(snapshot => Number.isFinite(Number(snapshot?.data?.globalValue)) && simulationSnapshotDate(snapshot))
+    .slice()
+    .sort((a, b) => simulationSnapshotDate(a) - simulationSnapshotDate(b));
+  const oldest = snapshots[0];
+  const oldestDate = oldest ? simulationSnapshotDate(oldest) : null;
+  const monthlyChange = dashboardAllTimeMonthlyGrowth(current);
+  const milestones = [0, 12, 60, 120, 240].map(month => ({
+    month,
+    value: monthlyChange === null ? null : current + monthlyChange * month
+  }));
+  let zeroMonths = null;
+  if (current < 0 && monthlyChange > 0) zeroMonths = Math.ceil(Math.abs(current) / monthlyChange);
+  return { current, snapshots, monthlyChange, milestones, zeroMonths, oldestDate };
+}
+
+function formatSimulationDate(date) {
+  return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function renderSimulation() {
+  const currentEl = $('#simulationCurrentValue');
+  if (!currentEl) return;
+  const projection = simulationProjection();
+  const monthlyEl = $('#simulationMonthlyChange');
+  const zeroEl = $('#simulationZeroValue');
+  const zeroSubEl = $('#simulationZeroSubtext');
+  currentEl.textContent = moneyEUR.format(projection.current);
+  currentEl.className = 'value ' + (projection.current < 0 ? 'neg' : projection.current > 0 ? 'pos' : '');
+  if (monthlyEl) {
+    monthlyEl.textContent = projection.monthlyChange === null ? '—' : `${projection.monthlyChange >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(projection.monthlyChange))}`;
+    monthlyEl.className = 'value ' + (projection.monthlyChange < 0 ? 'neg' : projection.monthlyChange > 0 ? 'pos' : '');
+  }
+  const monthlySub = $('#simulationMonthlySubtext');
+  if (monthlySub) monthlySub.textContent = projection.oldestDate
+    ? `oldest snapshot: ${formatSimulationDate(projection.oldestDate)}`
+    : 'need two dated snapshots';
+  if (zeroEl && zeroSubEl) {
+    if (projection.current >= 0) {
+      zeroEl.textContent = 'Already above €0';
+      zeroSubEl.textContent = 'current global value is not negative';
+    } else if (projection.zeroMonths !== null) {
+      const date = new Date();
+      date.setUTCMonth(date.getUTCMonth() + projection.zeroMonths);
+      zeroEl.textContent = formatSimulationDate(date);
+      zeroSubEl.textContent = `about ${projection.zeroMonths} month${projection.zeroMonths === 1 ? '' : 's'} at this pace`;
+    } else {
+      zeroEl.textContent = 'Not reached';
+      zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
+    }
+  }
+
+  const note = $('#simulationDataNote');
+  if (note) note.textContent = projection.monthlyChange === null
+    ? 'Add at least two snapshots on different dates to unlock the projection.'
+    : `Uses the dashboard All-Time Growth pace from ${formatSimulationDate(projection.oldestDate)} (${projection.snapshots.length} snapshot${projection.snapshots.length === 1 ? '' : 's'} available). Values are linear estimates, not forecasts.`;
+  if (typeof Chart === 'undefined') return;
+  const trendCtx = document.getElementById('simulationTrendChart')?.getContext('2d');
+  const growthCtx = document.getElementById('simulationGrowthChart')?.getContext('2d');
+  if (!trendCtx || !growthCtx) return;
+  if (simulationTrendChartInstance) simulationTrendChartInstance.destroy();
+  if (simulationGrowthChartInstance) simulationGrowthChartInstance.destroy();
+  // Keep the full snapshot set for calculating the growth rate, but show only
+  // the first snapshot and the latest available snapshot for each year so the
+  // historical part remains readable as snapshot history grows.
+  const latestSnapshotIndexByYear = new Map();
+  projection.snapshots.forEach((snapshot, index) => {
+    latestSnapshotIndexByYear.set(simulationSnapshotDate(snapshot).getUTCFullYear(), index);
+  });
+  const chartSnapshots = projection.snapshots.filter((snapshot, index) => {
+    const year = simulationSnapshotDate(snapshot).getUTCFullYear();
+    return index === 0 || latestSnapshotIndexByYear.get(year) === index;
+  });
+  const historical = chartSnapshots.map(snapshot => ({ label: formatSimulationDate(simulationSnapshotDate(snapshot)), value: Number(snapshot.data.globalValue || 0) }));
+  const labels = [...historical.map(point => point.label), 'Today', '1 year', '5 years', '10 years', '20 years'];
+  const historicalData = [...historical.map(point => point.value), ...Array(5).fill(null)];
+  const projectedData = [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => point.value)];
+  simulationTrendChartInstance = new Chart(trendCtx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
+      { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}` } } },
+      scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: value => moneyEUR.format(Number(value || 0)) }, grid: { color: 'rgba(255,255,255,.05)' } } } }
+  });
+  // Build each account's own lifetime from all snapshots. An account that was
+  // created later starts at its first known snapshot; a deleted account ends
+  // at its last known snapshot instead of being incorrectly forced to zero.
+  const accountHistory = new Map();
+  projection.snapshots.forEach(snapshot => {
+    const snapshotDate = simulationSnapshotDate(snapshot);
+    (snapshot.data?.accounts || []).forEach(account => {
+      const id = String(account.id);
+      if (!accountHistory.has(id)) accountHistory.set(id, { name: account.name || `Account ${id}`, observations: [] });
+      const history = accountHistory.get(id);
+      history.name = account.name || history.name;
+      history.observations.push({ date: snapshotDate, value: Number(account.valueEur || 0) });
+    });
+  });
+  const liveDate = new Date();
+  state.accounts.forEach(account => {
+    const id = String(account.id);
+    if (!accountHistory.has(id)) accountHistory.set(id, { name: account.name || `Account ${id}`, observations: [] });
+    const history = accountHistory.get(id);
+    history.name = account.name || history.name;
+    history.observations.push({ date: liveDate, value: accountValue(account, true) });
+  });
+  const accountGrowth = [...accountHistory.values()].map(history => {
+    const first = history.observations[0];
+    const latest = history.observations[history.observations.length - 1];
+    const daysExisted = Math.max(1, (latest.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24));
+    const monthsExisted = Math.max(1, daysExisted / 30.4375);
+    return { name: history.name, delta: (latest.value - first.value) / monthsExisted };
+  });
+  const growthMap = {};
+  accountGrowth.forEach(account => { growthMap[account.name] = (growthMap[account.name] || 0) + account.delta; });
+  const growthTop = topNWithOthers(Object.fromEntries(Object.entries(growthMap).map(([name, value]) => [name, Math.abs(value)])), 9);
+  const growthLabels = growthTop.labels;
+  const displayedGrowthMap = {};
+  growthLabels.forEach(label => {
+    displayedGrowthMap[label] = label === 'Others'
+      ? growthTop.others.reduce((sum, name) => sum + Number(growthMap[name] || 0), 0)
+      : Number(growthMap[label] || 0);
+  });
+  const positiveGrowth = growthLabels.map(label => Math.max(0, displayedGrowthMap[label] || 0));
+  const negativeGrowth = growthLabels.map(label => Math.max(0, -(displayedGrowthMap[label] || 0)));
+  const growthColors = growthLabels.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]);
+  simulationGrowthChartInstance = new Chart(growthCtx, {
+    type: 'doughnut',
+    data: { labels: growthLabels.length ? growthLabels : ['No growth data'], datasets: [
+      { label: 'Positive growth', data: positiveGrowth.length ? positiveGrowth : [1], backgroundColor: positiveGrowth.length ? growthColors : '#2a3550', borderWidth: 0 },
+      { label: 'Negative growth', data: negativeGrowth.length ? negativeGrowth : [0], backgroundColor: negativeGrowth.length ? growthColors : 'transparent', borderWidth: 0 }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '42%', plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}` } }
+    } }
+  });
+  // Use the same account legend format as the other doughnut charts. Negative
+  // rows are marked as negative by the shared renderer and remain signed in
+  // the data passed to it, while the chart datasets use absolute slice sizes.
+  renderLegend('simulationGrowthLegend', growthLabels, growthLabels.map(label => displayedGrowthMap[label] || 0), growthColors);
 }
 let snapshotsLoading = false; // whether snapshots are currently loading from DB into memory
 let timeTravelPlayTimer = null; // timeout id for the "play through snapshots" playback
@@ -1117,6 +1292,7 @@ function render() {
   renderCharts();
   renderPortfolioCards();
   renderPortfolioCharts();
+  renderSimulation();
 
   const write = isWriteAllowed();
   const admin = isAdminUser();
@@ -3124,6 +3300,7 @@ function showPage(page) {
   // Re-render the currency pagination once the page is visible, so it adapts to the
   // real available width (it can't be measured correctly while the page is hidden).
   if (page === 'currency') renderCurrency();
+  if (page === 'simulation') renderSimulation();
   applyBlur();
 }
 
@@ -5435,7 +5612,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const blurBtn = $('#blurButton');
   if (blurBtn) blurBtn.addEventListener('click', toggleBlur);
   document.addEventListener('keydown', event => {
-    if (event.key.toLowerCase() === 'h' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (typeof event.key === 'string' && event.key.toLowerCase() === 'h' && !event.ctrlKey && !event.metaKey && !event.altKey) {
       const target = event.target;
       const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       if (!typing) toggleBlur();
