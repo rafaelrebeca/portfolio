@@ -419,14 +419,16 @@ a {
 }
 
 #growthCard,
-#dashboardBreakdownCard {
+#dashboardBreakdownCard,
+#portfolioAssetCard {
   cursor: pointer;
   user-select: none;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 #growthCard:hover,
-#dashboardBreakdownCard:hover {
+#dashboardBreakdownCard:hover,
+#portfolioAssetCard:hover {
   border-color: var(--accent);
 }
 

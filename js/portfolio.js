@@ -394,6 +394,13 @@ let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
 let simulationGrowthChartInstance = null;
 let simulationGrowthMode = localStorage.getItem('portfolio_simulation_growth_mode') || 'all';
+let portfolioAssetMode = localStorage.getItem('portfolio_asset_chart_mode') || 'asset';
+
+function cyclePortfolioAssetMode() {
+  portfolioAssetMode = portfolioAssetMode === 'asset' ? 'gain' : 'asset';
+  localStorage.setItem('portfolio_asset_chart_mode', portfolioAssetMode);
+  renderPortfolioCharts(true);
+}
 
 function cycleSimulationGrowthMode() {
   const modes = ['all', 'ytd', 'month'];
@@ -1104,7 +1111,7 @@ function renderPortfolioCards() {
   }
 }
 
-function renderPortfolioCharts() {
+function renderPortfolioCharts(assetOnly = false) {
   if (typeof Chart === 'undefined') return;
 
   const assetCtx = document.getElementById('portfolioAssetChart')?.getContext('2d');
@@ -1112,41 +1119,64 @@ function renderPortfolioCharts() {
   if (!assetCtx || !typeCtx) return;
 
   if (portfolioAssetChartInstance) portfolioAssetChartInstance.destroy();
-  if (portfolioTypeChartInstance) portfolioTypeChartInstance.destroy();
+  if (!assetOnly && portfolioTypeChartInstance) portfolioTypeChartInstance.destroy();
 
   const colors = CHART_COLORS;
 
-  // By Asset: market value per individual asset
+  const assetTitle = $('#portfolioAssetChartTitle');
+  const assetSubtitle = $('#portfolioAssetChartSubtitle');
+  const showingGain = portfolioAssetMode === 'gain';
+  if (assetTitle) assetTitle.textContent = showingGain ? 'By Gain' : 'By Asset';
+  if (assetSubtitle) assetSubtitle.textContent = showingGain ? 'Positive and negative gain per asset' : 'Market value per asset';
+
+  // By Asset / By Gain: aggregate the selected metric per individual asset.
   const assetMap = {};
   state.holdings.forEach(h => {
     const asset = findAsset(h.asset_id, h.is_personal);
     if (asset) {
-      const val = Number(asset.price || 0) * Number(h.quantity || 0);
-      const valInEur = convertToEUR(val, asset.coin || 'USD');
+      const quantity = Number(h.quantity || 0);
+      const marketValue = Number(asset.price || 0) * quantity;
+      const value = showingGain && h.purchase_price != null && Number(h.purchase_price) > 0
+        ? marketValue - Number(h.purchase_price) * quantity
+        : showingGain ? 0 : marketValue;
+      const valInEur = convertToEUR(value, asset.coin || 'USD');
       const label = h.symbol || asset.symbol || asset.name || 'Unknown';
       assetMap[label] = (assetMap[label] || 0) + valInEur;
     }
   });
 
-  const assetTop = topNWithOthers(assetMap, 9);
+  const assetTop = showingGain
+    ? topNWithOthers(Object.fromEntries(Object.entries(assetMap).map(([label, value]) => [label, Math.abs(value)])), 9)
+    : topNWithOthers(assetMap, 9);
   const assetLabels = assetTop.labels;
-  const assetData = assetTop.data;
+  const assetData = showingGain
+    ? assetLabels.map(label => label === 'Others'
+      ? assetTop.others.reduce((sum, name) => sum + Number(assetMap[name] || 0), 0)
+      : Number(assetMap[label] || 0))
+    : assetTop.data;
   const assetDataAbs = assetData.map(v => Math.abs(v));
   portfolioAssetOthers = assetTop.others;
+  const assetColors = assetLabels.map((_, index) => colors[index % colors.length]);
+  const positiveAssetData = assetData.map(value => Math.max(0, value));
+  const negativeAssetData = assetData.map(value => Math.max(0, -value));
+  const assetDatasets = showingGain
+    ? [
+      { label: 'Positive gain', data: positiveAssetData.length ? positiveAssetData : [1], backgroundColor: positiveAssetData.length ? assetColors : ['#2a3550'], borderWidth: 0 },
+      { label: 'Negative gain', data: negativeAssetData.length ? negativeAssetData : [0], backgroundColor: negativeAssetData.length ? assetColors : ['transparent'], borderWidth: 0 }
+    ]
+    : [{ data: assetDataAbs.length ? assetDataAbs : [1], backgroundColor: assetDataAbs.length ? assetColors : ['#2a3550'], borderWidth: 0 }];
 
   portfolioAssetChartInstance = new Chart(assetCtx, {
     type: 'doughnut',
     data: {
       labels: assetLabels.length ? assetLabels : ['No Data'],
-      datasets: [{
-        data: assetDataAbs.length ? assetDataAbs : [1],
-        backgroundColor: assetDataAbs.length ? colors : ['#2a3550'],
-        borderWidth: 0
-      }]
+      datasets: assetDatasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      cutout: showingGain ? '42%' : '50%',
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !assetLabels.length) return;
@@ -1164,7 +1194,11 @@ function renderPortfolioCharts() {
     }
   });
 
-  renderLegend('portfolioAssetLegend', assetLabels, assetData, colors, true);
+  renderLegend('portfolioAssetLegend', assetLabels, assetData, assetColors, true);
+
+  // Switching between By Asset and By Gain does not change the asset-type
+  // chart, so keep its existing Chart.js instance and avoid a visual refresh.
+  if (assetOnly) return;
 
   // By Asset Type: allocation by asset type
   const typeMap = {};
@@ -4695,6 +4729,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#growthCard')) {
       cycleGrowthCardMode();
+    } else if (e.target.closest('#portfolioAssetCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
+      cyclePortfolioAssetMode();
     } else if (e.target.closest('#simulationGrowthCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleSimulationGrowthMode();
     } else if (e.target.closest('#dashboardBreakdownCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
