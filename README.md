@@ -27,12 +27,12 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 - 💰 **Dividends Engine**: Track yield percentages and payout schedules by month across all held assets.
 - 💱 **Multi-Currency & Exchange Rates**: Multi-currency conversion support (USD, EUR, GBP, etc.) using stored ExchangeRate-API rates refreshed at most once per UTC day.
 - 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar, timeline, and playback controls. History supports Global, By Type, By Provider, By Account, and By Growth charts, with cleanup tools to retain the latest snapshot per historical month or year.
-- 📈 **Simulation**: Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, dynamic paths to €0 or the next power-of-ten milestone, and an optional +5% annual-growth scenario.
+- 📈 **Simulation**: Available once at least one account exists. Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, dynamic paths to €0 or the next power-of-ten milestone, and an optional +5% annual-growth scenario.
 - 👁 **Privacy Blur Mode**: Quick keyboard shortcut (`H` key or toggle button) to blur sensitive monetary figures when viewing the app in public spaces; monetary chart axes are hidden and tooltip values show `hidden` while visuals remain sharp.
-- 👤 **Role-Based Access Control**:
+- 👤 **Access Control**:
   - **Admin**: User management, database tools, asset price refreshes, global configuration.
-  - **User / Member**: Full CRUD over private portfolios, accounts, holdings, and goals.
-  - **Guest Mode**: Isolated interactive demo mode populated with sample data; changes remain local and are not persisted.
+  - **User / Member**: Full CRUD over private portfolios, accounts, holdings, and goals. Admin-created accounts can only be `user` or `admin`.
+  - **Guest Mode**: A temporary, isolated interactive demo available only from the login screen; it is not a stored user role, and changes remain local and are not persisted.
 - 📱 **Progressive Web App (PWA)**: Fully responsive mobile/desktop experience with an installable app manifest and service-worker caching for the application shell. Snapshot history is cached per user and navigation can use retained data, but authentication, live API data, and unsaved changes still require the application/backend environment.
 - 📄 **Adaptive Pagination**: Currency and snapshot lists adapt their pagination controls to the available screen width for a usable desktop and mobile layout.
 
