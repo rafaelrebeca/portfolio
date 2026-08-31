@@ -278,11 +278,12 @@ function gainLoss(h) {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
-function gainLossValue(h) {
+function gainLossValue(h, currency = 'USD') {
   if (h.purchase_price == null || Number(h.purchase_price) <= 0 || h.price == null) return '—';
   const diff = (Number(h.price) - Number(h.purchase_price)) * Number(h.quantity || 0);
-  const formatted = `${diff >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(diff))}`;
-  const className = diff >= 0 ? 'pos' : 'neg';
+  const diffEur = convertToEUR(diff, currency);
+  const formatted = `${diffEur >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(diffEur))}`;
+  const className = diffEur >= 0 ? 'pos' : 'neg';
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
@@ -2857,7 +2858,7 @@ function holdingSortRow(h) {
     ? ((price - purchasePrice) / purchasePrice) * 100
     : null;
   const gainValue = (purchasePrice != null && purchasePrice > 0 && price != null)
-    ? (price - purchasePrice) * quantity
+    ? convertToEUR((price - purchasePrice) * quantity, asset?.coin || h.coin || 'USD')
     : null;
   return {
     asset: symbol.toLowerCase(),
@@ -2987,7 +2988,7 @@ function renderHoldings() {
       <td>${h.purchase_price == null ? '—' : formatCurrency(h.purchase_price, currency)}</td>
       <td>${formatCurrency(value, currency)}</td>
       <td>${gainLoss({ price, purchase_price: h.purchase_price })}</td>
-      <td>${gainLossValue({ price, purchase_price: h.purchase_price, quantity: h.quantity })}</td>
+      <td>${gainLossValue({ price, purchase_price: h.purchase_price, quantity: h.quantity }, currency)}</td>
       <td>
         <div style="display:flex;gap:6px;">
           <button class="btn-sm action-icon-btn" data-edit-holding="${h.id}" title="Edit">✏️</button>
