@@ -19,22 +19,22 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 
 ## ✨ Key Features
 
-- 📊 **Interactive Dashboard**: Real-time visual overview of net worth, total investments, cash reserves, loan balances, asset allocations, and projected monthly/annual dividend income.
-- 💼 **My Portfolio & Holdings**: Detailed view of stock, bond, ETF, CFD, and commodity positions linked to specific accounts. Calculates gain/loss percentage, invested value, and market value.
-- 🏦 **Accounts & Provider Management**: Supports bank accounts, brokerage accounts, high-yield interest accounts, and loan tracking with payoff dates and interest calculations.
-- 🎯 **Financial Goals Tracker**: Create multi-tiered financial goals linked directly to specific accounts or overall savings milestones.
+- 📊 **Interactive Dashboard**: Real-time visual overview of net worth, total investments, cash reserves, loan balances, asset allocations, and projected monthly/annual dividend income. The Growth card cycles through All-Time, YTD, and Month views; account cards show up/down/unchanged indicators and top movers; breakdown charts switch between Provider and Account views.
+- 💼 **My Portfolio & Holdings**: Detailed view of stock, bond, ETF, CFD, and commodity positions linked to specific accounts. Calculates gain/loss percentage, invested value, and market value, with sortable holdings columns and separate System Assets and Personal Assets sections.
+- 🏦 **Accounts & Provider Management**: Supports bank accounts, brokerage accounts, high-yield interest accounts, and loan tracking with payoff dates and interest calculations. Account History charts show account values over time.
+- 🧮 **Loan Simulator**: Compare three principal-amortization scenarios—current payments, keeping the original term, and reducing the term—with payment, interest, principal, total-cost, and month-by-month comparisons.
+- 🎯 **Financial Goals Tracker**: Create multi-tiered financial goals linked directly to specific accounts or overall savings milestones. Goals support ordering, up to three milestones, Goal History charts, and goal simulations.
 - 💰 **Dividends Engine**: Track yield percentages and payout schedules by month across all held assets.
 - 💱 **Multi-Currency & Exchange Rates**: Multi-currency conversion support (USD, EUR, GBP, etc.) using stored ExchangeRate-API rates refreshed at most once per UTC day.
-- 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar and timeline controls.
+- 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar, timeline, and playback controls. History supports Global, By Type, By Provider, By Account, and By Growth charts, with cleanup tools to retain the latest snapshot per historical month or year.
 - 📈 **Simulation**: Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, dynamic paths to €0 or the next power-of-ten milestone, and an optional +5% annual-growth scenario.
 - 👁 **Privacy Blur Mode**: Quick keyboard shortcut (`H` key or toggle button) to blur sensitive monetary figures when viewing the app in public spaces.
 - 👤 **Role-Based Access Control**:
   - **Admin**: User management, database tools, asset price refreshes, global configuration.
   - **User / Member**: Full CRUD over private portfolios, accounts, holdings, and goals.
   - **Guest Mode**: Isolated interactive demo mode populated with sample data; changes remain local and are not persisted.
-- 📱 **Progressive Web App (PWA)**: Fully responsive mobile/desktop experience with an installable app manifest and service-worker caching for the application shell.
-
-Snapshot history is also cached per user in local browser storage. Normal navigation uses the retained snapshot list, while startup and explicit refresh can synchronize it with the server. This does not make the authenticated dashboard fully offline: authentication, live API data, and unsaved changes still require the application/backend environment.
+- 📱 **Progressive Web App (PWA)**: Fully responsive mobile/desktop experience with an installable app manifest and service-worker caching for the application shell. Snapshot history is cached per user and navigation can use retained data, but authentication, live API data, and unsaved changes still require the application/backend environment.
+- 📄 **Adaptive Pagination**: Currency and snapshot lists adapt their pagination controls to the available screen width for a usable desktop and mobile layout.
 
 ---
 
