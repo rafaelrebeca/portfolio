@@ -279,7 +279,7 @@ Separate Account History and Goal History modals provide focused per-account and
 
 ## 10. Privacy and first-run UX
 
-The topbar provides navigation, refresh, help, logout, and the privacy toggle. Pressing `H` toggles privacy while not typing. Privacy mode blurs currency amounts only, preserving symbols, percentages, quantities, and dates. It is excluded from the Assets page and reapplied after re-renders through a MutationObserver.
+The topbar provides navigation, refresh, help, logout, and the privacy toggle. Pressing `H` toggles privacy while not typing. Privacy mode blurs currency amounts only, preserving symbols, percentages, and dates. While active, monetary chart axis labels are hidden and monetary tooltip values show `hidden`; chart visuals remain sharp. It is excluded from the Assets page and reapplied after re-renders through a MutationObserver.
 
 The welcome modal provides a two-page guide. Regular users see it on first use when they have no providers; guests see an isolated demo guide on every guest login. The guide explains providers, accounts, holdings, goals, personal assets, privacy, and Time Travel.
 

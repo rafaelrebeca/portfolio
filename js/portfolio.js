@@ -587,8 +587,8 @@ function renderSimulation() {
       { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 }
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}` } } },
-      scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: value => moneyEUR.format(Number(value || 0)) }, grid: { color: 'rgba(255,255,255,.05)' } } } }
+      plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
+      scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } } } }
   });
   // Build each account's own lifetime from all snapshots. An account that was
   // created later starts at its first known snapshot; a deleted account ends
@@ -653,6 +653,7 @@ function renderSimulation() {
     options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '42%', plugins: {
       legend: { display: false },
       tooltip: { callbacks: { label: context => {
+        if (blurActive()) return `${context.dataset.label}: hidden`;
         const label = growthLabels[context.dataIndex];
         const total = Number(displayedGrowthMap[label] || 0);
         const base = `${context.dataset.label}: ${moneyEUR.format(Math.abs(Number(context.raw || 0)))}`;
@@ -2225,14 +2226,14 @@ function renderHistoryChart() {
         legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } },
         tooltip: {
           callbacks: {
-            label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}`
+            label: privacyMoneyTooltipLabel
           }
         }
       },
       scales: {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
         y: {
-          ticks: { color: '#e6ebf5', callback: value => moneyEUR.format(Number(value || 0)) },
+          ticks: { color: '#e6ebf5', callback: privacyMoneyTick },
           grid: { color: 'rgba(255,255,255,.05)' }
         }
       }
@@ -2388,10 +2389,10 @@ function renderAccountHistoryChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
       scales: {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { ticks: { color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } }
+        y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } }
       }
     }
   });
@@ -2523,7 +2524,7 @@ function renderGoalHistoryChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${Number(context.raw || 0).toFixed(1)}%` } } },
       scales: {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
         y: {
@@ -3412,6 +3413,46 @@ function applyBlur() {
 function toggleBlur() {
   blurMode = !blurMode;
   applyBlur();
+  if (currentPage === 'simulation') {
+    renderSimulation();
+    applyBlur();
+  }
+  refreshChartPrivacy();
+}
+
+function privacyMoneyTick(value) {
+  return blurActive() ? '' : moneyEUR.format(Number(value || 0));
+}
+
+function privacyMoneyTooltipLabel(context) {
+  const label = context.dataset?.label || context.label || 'Value';
+  return blurActive()
+    ? `${label}: hidden`
+    : `${label}: ${moneyEUR.format(Number(context.raw || 0))}`;
+}
+
+function configureChartPrivacyDefaults() {
+  if (typeof Chart === 'undefined' || !Chart.defaults?.plugins?.tooltip?.callbacks) return;
+  Chart.defaults.plugins.tooltip.callbacks.label = privacyMoneyTooltipLabel;
+}
+
+function refreshChartPrivacy() {
+  const charts = [
+    allocationChartInstance,
+    accountTypeChartInstance,
+    portfolioAssetChartInstance,
+    portfolioTypeChartInstance,
+    simulationTrendChartInstance,
+    simulationGrowthChartInstance,
+    historyChartInstance,
+    accountHistoryChartInstance,
+    goalHistoryChartInstance,
+    accountDetailsChartInstance,
+    providerDetailsChartInstance,
+    goalDetailsChartInstance,
+    goalSimChartInstance
+  ];
+  charts.filter(Boolean).forEach(chart => chart.update('none'));
 }
 
 function blurNumbers(root) {
@@ -4361,9 +4402,9 @@ function runGoalSimulation() {
           maintainAspectRatio: false,
           scales: {
             x: { ticks: { maxTicksLimit: 8, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
-            y: { ticks: { color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } }
+            y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } }
           },
-          plugins: { legend: { display: false } }
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } }
         }
       });
     }
@@ -4633,6 +4674,7 @@ function runLoanSimulation() {
 /* ================= EVENT LISTENERS ================= */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  configureChartPrivacyDefaults();
   $('#loginForm')?.addEventListener('submit', signIn);
   $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); maybeShowWelcomeModal(); });
   $('#logoutButton')?.addEventListener('click', logout);
