@@ -952,6 +952,13 @@ select {
 .chart-card.simulation-growth-card {
   display: flex;
   align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.chart-card.simulation-growth-card:hover {
+  border-color: var(--accent);
 }
 
 .simulation-growth-card > h3,

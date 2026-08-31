@@ -321,9 +321,9 @@
               <p class="page-desc">First snapshot, latest snapshot per year, then a linear 20-year projection</p>
               <div class="simulation-chart-wrap"><canvas id="simulationTrendChart"></canvas></div>
             </div>
-            <div class="chart-card simulation-chart-card simulation-growth-card">
-              <h3>Growth Contribution by Account</h3>
-              <p class="page-desc">Monthly change during each account's known lifetime</p>
+            <div class="chart-card simulation-chart-card simulation-growth-card" id="simulationGrowthCard" title="Click to switch between All-Time, YTD, and Month">
+              <h3 id="simulationGrowthTitle">Growth Contribution by Account</h3>
+              <p class="page-desc" id="simulationGrowthSubtitle">Monthly change during each account's known lifetime</p>
               <div class="simulation-chart-wrap simulation-doughnut-wrap"><canvas id="simulationGrowthChart"></canvas></div>
               <div class="chart-legend simulation-growth-legend" id="simulationGrowthLegend"></div>
             </div>

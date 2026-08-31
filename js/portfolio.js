@@ -392,6 +392,15 @@ let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
 let simulationGrowthChartInstance = null;
+let simulationGrowthMode = localStorage.getItem('portfolio_simulation_growth_mode') || 'all';
+
+function cycleSimulationGrowthMode() {
+  const modes = ['all', 'ytd', 'month'];
+  const currentIndex = modes.indexOf(simulationGrowthMode);
+  simulationGrowthMode = modes[(currentIndex + 1) % modes.length];
+  localStorage.setItem('portfolio_simulation_growth_mode', simulationGrowthMode);
+  renderSimulation();
+}
 let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
@@ -485,6 +494,15 @@ function renderSimulation() {
   const currentEl = $('#simulationCurrentValue');
   if (!currentEl) return;
   const projection = simulationProjection();
+  const growthTitle = $('#simulationGrowthTitle');
+  const growthSubtitle = $('#simulationGrowthSubtitle');
+  const growthPeriodLabel = simulationGrowthMode === 'ytd' ? 'YTD' : simulationGrowthMode === 'month' ? 'Month' : '';
+  if (growthTitle) growthTitle.textContent = `Growth Contribution by Account${growthPeriodLabel ? ` ${growthPeriodLabel}` : ''}`;
+  if (growthSubtitle) growthSubtitle.textContent = simulationGrowthMode === 'ytd'
+    ? "Monthly change during each account's known lifetime on current year"
+    : simulationGrowthMode === 'month'
+      ? "Monthly change during each account's known lifetime on the current month"
+      : "Monthly change during each account's known lifetime";
   const monthlyEl = $('#simulationMonthlyChange');
   const zeroEl = $('#simulationZeroValue');
   const zeroSubEl = $('#simulationZeroSubtext');
@@ -570,13 +588,25 @@ function renderSimulation() {
     history.name = account.name || history.name;
     history.observations.push({ date: liveDate, value: accountValue(account, true) });
   });
+  const periodStart = new Date(Date.UTC(liveDate.getUTCFullYear(), simulationGrowthMode === 'month' ? liveDate.getUTCMonth() : 0, 1));
   const accountGrowth = [...accountHistory.values()].map(history => {
-    const first = history.observations[0];
-    const latest = history.observations[history.observations.length - 1];
-    const daysExisted = Math.max(1, (latest.date.getTime() - first.date.getTime()) / (1000 * 60 * 60 * 24));
+    const observations = history.observations;
+    let first = observations[0];
+    if (simulationGrowthMode !== 'all') {
+      const beforePeriod = observations.filter(observation => observation.date <= periodStart);
+      const duringPeriod = observations.filter(observation => observation.date >= periodStart && observation.date <= liveDate);
+      first = beforePeriod[beforePeriod.length - 1] || duringPeriod[0];
+      if (!first || observations[observations.length - 1].date < periodStart) return null;
+    }
+    const latest = observations[observations.length - 1];
+    if (!first || !latest) return null;
+    const calculationStart = simulationGrowthMode === 'all'
+      ? first.date
+      : (first.date < periodStart ? periodStart : first.date);
+    const daysExisted = Math.max(1, (latest.date.getTime() - calculationStart.getTime()) / (1000 * 60 * 60 * 24));
     const monthsExisted = Math.max(1, daysExisted / 30.4375);
     return { name: history.name, delta: (latest.value - first.value) / monthsExisted };
-  });
+  }).filter(Boolean);
   const growthMap = {};
   accountGrowth.forEach(account => { growthMap[account.name] = (growthMap[account.name] || 0) + account.delta; });
   const growthTop = topNWithOthers(Object.fromEntries(Object.entries(growthMap).map(([name, value]) => [name, Math.abs(value)])), 9);
@@ -598,7 +628,17 @@ function renderSimulation() {
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '42%', plugins: {
       legend: { display: false },
-      tooltip: { callbacks: { label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}` } }
+      tooltip: { callbacks: { label: context => {
+        const label = growthLabels[context.dataIndex];
+        const total = Number(displayedGrowthMap[label] || 0);
+        const base = `${context.dataset.label}: ${moneyEUR.format(Math.abs(Number(context.raw || 0)))}`;
+        if (label !== 'Others' || !growthTop.others.length) return base;
+        const detail = growthTop.others.map(name => {
+          const value = Number(growthMap[name] || 0);
+          return `  ${name}: ${value >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(value))}`;
+        });
+        return [`Others total: ${total >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(total))}`, 'Included accounts:', ...detail];
+      } } }
     } }
   });
   // Use the same account legend format as the other doughnut charts. Negative
@@ -4575,6 +4615,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#growthCard')) {
       cycleGrowthCardMode();
+    } else if (e.target.closest('#simulationGrowthCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
+      cycleSimulationGrowthMode();
     } else if (e.target.closest('#dashboardBreakdownCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleDashboardBreakdownMode();
     }
