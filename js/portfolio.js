@@ -490,6 +490,17 @@ function formatSimulationDate(date) {
   return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
+function simulationNextTarget(value) {
+  if (value < 0) return 0;
+  let target = 10;
+  while (target <= value && target < Number.MAX_SAFE_INTEGER / 10) target *= 10;
+  return target;
+}
+
+function formatSimulationTarget(value) {
+  return value.toLocaleString(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+}
+
 function renderSimulation() {
   const currentEl = $('#simulationCurrentValue');
   if (!currentEl) return;
@@ -504,6 +515,7 @@ function renderSimulation() {
       ? "Monthly change during each account's known lifetime on the current month"
       : "Monthly change during each account's known lifetime";
   const monthlyEl = $('#simulationMonthlyChange');
+  const targetLabelEl = $('#simulationTargetLabel');
   const zeroEl = $('#simulationZeroValue');
   const zeroSubEl = $('#simulationZeroSubtext');
   currentEl.textContent = moneyEUR.format(projection.current);
@@ -516,15 +528,17 @@ function renderSimulation() {
   if (monthlySub) monthlySub.textContent = projection.oldestDate
     ? `oldest snapshot: ${formatSimulationDate(projection.oldestDate)}`
     : 'need two dated snapshots';
+  const target = simulationNextTarget(projection.current);
+  if (targetLabelEl) targetLabelEl.textContent = `Path to ${formatSimulationTarget(target)}`;
   if (zeroEl && zeroSubEl) {
-    if (projection.current >= 0) {
-      zeroEl.textContent = 'Already above €0';
-      zeroSubEl.textContent = 'current global value is not negative';
-    } else if (projection.zeroMonths !== null) {
+    const targetMonths = projection.monthlyChange > 0 && projection.current < target
+      ? Math.ceil((target - projection.current) / projection.monthlyChange)
+      : null;
+    if (targetMonths !== null) {
       const date = new Date();
-      date.setUTCMonth(date.getUTCMonth() + projection.zeroMonths);
+      date.setUTCMonth(date.getUTCMonth() + targetMonths);
       zeroEl.textContent = formatSimulationDate(date);
-      zeroSubEl.textContent = `about ${projection.zeroMonths} month${projection.zeroMonths === 1 ? '' : 's'} at this pace`;
+      zeroSubEl.textContent = `about ${targetMonths} month${targetMonths === 1 ? '' : 's'} at this pace`;
     } else {
       zeroEl.textContent = 'Not reached';
       zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
