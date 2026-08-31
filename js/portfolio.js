@@ -617,7 +617,9 @@ function renderSimulation() {
     const observations = history.observations;
     let first = observations[0];
     if (simulationGrowthMode !== 'all') {
-      const beforePeriod = observations.filter(observation => observation.date <= periodStart);
+      // Compare the period with the most recent record before it. A record on
+      // the first day belongs to the period and must not become its baseline.
+      const beforePeriod = observations.filter(observation => observation.date < periodStart);
       const duringPeriod = observations.filter(observation => observation.date >= periodStart && observation.date <= liveDate);
       first = beforePeriod[beforePeriod.length - 1] || duringPeriod[0];
       if (!first || observations[observations.length - 1].date < periodStart) return null;
@@ -1588,23 +1590,18 @@ function renderAllTimeGrowthDashboardCard(currentNetWorth) {
   let baselineSnapshot = pool[pool.length - 1]; // default oldest snapshot
 
   if (growthCardMode === 'ytd') {
+    const periodStart = new Date(Date.UTC(targetYear, 0, 1));
+    const beforePeriod = pool.filter(s => parseSnapshotDateObj(s.day, s.created_at) < periodStart);
     const yearSnapshots = pool.filter(s => getSnapshotYearMonth(s).year === targetYear);
-    if (yearSnapshots.length) {
-      baselineSnapshot = yearSnapshots[yearSnapshots.length - 1];
-    }
+    baselineSnapshot = beforePeriod[0] || yearSnapshots[yearSnapshots.length - 1] || baselineSnapshot;
   } else if (growthCardMode === 'month') {
+    const periodStart = new Date(Date.UTC(targetYear, targetMonth, 1));
     const monthSnapshots = pool.filter(s => {
       const ym = getSnapshotYearMonth(s);
       return ym.year === targetYear && ym.month === targetMonth;
     });
-    if (monthSnapshots.length) {
-      baselineSnapshot = monthSnapshots[monthSnapshots.length - 1];
-    } else {
-      const yearSnapshots = pool.filter(s => getSnapshotYearMonth(s).year === targetYear);
-      if (yearSnapshots.length) {
-        baselineSnapshot = yearSnapshots[yearSnapshots.length - 1];
-      }
-    }
+    const beforePeriod = pool.filter(s => parseSnapshotDateObj(s.day, s.created_at) < periodStart);
+    baselineSnapshot = beforePeriod[0] || monthSnapshots[monthSnapshots.length - 1] || baselineSnapshot;
   }
 
   const initialValue = Number(baselineSnapshot.data?.globalValue || 0);
