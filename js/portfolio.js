@@ -556,11 +556,21 @@ function renderSimulation() {
   const labels = [...historical.map(point => point.label), 'Today', '1 year', '5 years', '10 years', '20 years'];
   const historicalData = [...historical.map(point => point.value), ...Array(5).fill(null)];
   const projectedData = [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => point.value)];
+  const annualFivePercentValues = projection.monthlyChange === null ? Array(5).fill(null) : projection.milestones.map(point => {
+    if (point.month === 0) return projection.current;
+    let value = projection.current;
+    for (let year = 1; year <= Math.floor(point.month / 12); year++) {
+      value = (value + projection.monthlyChange * 12) * 1.05;
+    }
+    return value;
+  });
+  const annualFivePercentData = [...Array(historical.length).fill(null), ...annualFivePercentValues];
   simulationTrendChartInstance = new Chart(trendCtx, {
     type: 'line',
     data: { labels, datasets: [
       { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
-      { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 }
+      { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 },
+      { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 }
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${moneyEUR.format(Number(context.raw || 0))}` } } },
