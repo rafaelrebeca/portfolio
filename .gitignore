@@ -7,4 +7,6 @@ wrangler.toml
 refresh-local-db.sh
 TESTING.md
 *.sql
+css/.DS_Store
 functions/.DS_Store
+js/.DS_Store
