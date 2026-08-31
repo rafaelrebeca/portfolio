@@ -10,7 +10,8 @@ const guestData = {
     { id: 2, symbol: 'VYM', name: 'Vanguard Dividend ETF', type: 'etf', price: 114.00, coin: 'USD', dividend_yield: 3.10, payment_months: [3, 6, 9, 12] },
     { id: 3, symbol: 'TLT', name: 'US Treasury Bond 10Y', type: 'bond', price: 99.25, coin: 'USD', dividend_yield: 4.20, payment_months: [5, 11] },
     { id: 4, symbol: 'MSFT', name: 'Microsoft Corp.', type: 'stock', price: 452.30, coin: 'USD', dividend_yield: 0.78, payment_months: [3, 6, 9, 12] },
-    { id: 5, symbol: 'XAUUSD', name: 'Gold CFD', type: 'cfd', price: 2350.00, coin: 'USD', dividend_yield: 0.00, payment_months: [] }
+    { id: 5, symbol: 'XAUUSD', name: 'Gold CFD', type: 'cfd', price: 2350.00, coin: 'USD', dividend_yield: 0.00, payment_months: [] },
+    { id: 6, symbol: 'HOME', name: 'Home Equity', type: 'commodity', price: 150000.00, coin: 'EUR', dividend_yield: 0.00, payment_months: [], is_personal: 1 }
   ],
   providers: [
     { id: 1, name: 'Revolut', type: 'bank' },
@@ -19,11 +20,15 @@ const guestData = {
   accounts: [
     { id: 1, provider_id: 1, provider_name: 'Revolut', name: 'Main Checking', type: 'bank_account', balance: 5000.00, coin: 'USD', interest_rate: null },
     { id: 2, provider_id: 1, provider_name: 'Revolut', name: 'Savings Account', type: 'interest_account', balance: 10000.00, coin: 'USD', interest_rate: 2.80 },
-    { id: 3, provider_id: 2, provider_name: 'Trading 212', name: 'Investment ISA', type: 'asset_account', balance: null, coin: 'USD', interest_rate: null }
+    { id: 3, provider_id: 2, provider_name: 'Trading 212', name: 'Investment ISA', type: 'asset_account', balance: null, coin: 'USD', interest_rate: null },
+    { id: 4, provider_id: 1, provider_name: 'Revolut', name: 'Home Loan', type: 'loan', balance: -180000.00, coin: 'EUR', interest_rate: 3.75, finish_date: '20450615' }
   ],
   holdings: [
     { id: 1, account_id: 3, asset_id: 1, quantity: 10, purchase_price: 170.00, price: 179.62, coin: 'USD', symbol: 'AAPL', asset_name: 'Apple Inc.', account_name: 'Investment ISA' },
-    { id: 2, account_id: 3, asset_id: 2, quantity: 25, purchase_price: 110.00, price: 114.00, coin: 'USD', symbol: 'VYM', asset_name: 'Vanguard Dividend ETF', account_name: 'Investment ISA' }
+    { id: 2, account_id: 3, asset_id: 2, quantity: 25, purchase_price: 110.00, price: 114.00, coin: 'USD', symbol: 'VYM', asset_name: 'Vanguard Dividend ETF', account_name: 'Investment ISA' },
+    { id: 3, account_id: 3, asset_id: 3, quantity: 15, purchase_price: 97.00, price: 99.25, coin: 'USD', symbol: 'TLT', asset_name: 'US Treasury Bond 10Y', account_name: 'Investment ISA' },
+    { id: 4, account_id: 3, asset_id: 4, quantity: 4, purchase_price: 430.00, price: 452.30, coin: 'USD', symbol: 'MSFT', asset_name: 'Microsoft Corp.', account_name: 'Investment ISA' },
+    { id: 5, account_id: 3, asset_id: 6, is_personal: 1, quantity: 1, purchase_price: 135000.00, price: 150000.00, coin: 'EUR', symbol: 'HOME', asset_name: 'Home Equity', account_name: 'Investment ISA' }
   ],
   currencies: [
     { coin: 'USD', value: 1 },
@@ -35,11 +40,7 @@ const guestData = {
     { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', sub1: 10000, sub2: 15000, sub3: null, account_ids: [1, 2], order_by: 1 },
     { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', sub1: null, sub2: null, sub3: null, account_ids: [3], order_by: 2 }
   ],
-  users: [
-    { id: 1, username: 'admin_user', role: 'admin', created_at: '2026-01-12', last_login: '2026-08-09' },
-    { id: 2, username: 'john_doe', role: 'user', created_at: '2026-02-03', last_login: '2026-08-08' },
-    { id: 3, username: 'demo_guest', role: 'guest', created_at: '2026-01-12', last_login: '2026-08-09' }
-  ]
+  users: []
 };
 
 const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [] };
@@ -1271,20 +1272,35 @@ function showWelcomeModal(isGuest) {
   openModal('welcomeModalOverlay');
 }
 
-// Switch the welcome/help modal between its pages (1 = getting started, 2 = privacy & time travel).
+// Switch the welcome/help modal between its focused feature pages.
 function setWelcomePage(page) {
+  const totalPages = document.querySelectorAll('.welcome-page').length;
+  const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   document.querySelectorAll('.welcome-page').forEach(el => {
-    el.style.display = Number(el.dataset.welcomePage) === page ? 'block' : 'none';
+    const isActive = Number(el.dataset.welcomePage) === safePage;
+    el.style.display = isActive ? 'block' : 'none';
+    el.setAttribute('aria-hidden', String(!isActive));
   });
   document.querySelectorAll('.welcome-tab').forEach(tab => {
-    tab.classList.toggle('active', Number(tab.dataset.welcomePage) === page);
+    const isActive = Number(tab.dataset.welcomePage) === safePage;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
   });
   const prev = $('#welcomeModalPrev');
   const next = $('#welcomeModalNext');
   const ok = $('#welcomeModalOk');
-  if (prev) prev.style.display = page === 1 ? 'none' : '';
-  if (next) next.style.display = page === 2 ? 'none' : '';
-  if (ok) ok.style.display = page === 2 ? '' : 'none';
+  if (prev) prev.style.display = safePage === 1 ? 'none' : '';
+  if (next) {
+    next.style.display = safePage === totalPages ? 'none' : '';
+    next.textContent = safePage === totalPages - 1 ? 'Finish →' : 'Next →';
+  }
+  if (ok) ok.style.display = safePage === totalPages ? '' : 'none';
+}
+
+function moveWelcomePage(delta) {
+  const activeTab = document.querySelector('.welcome-tab[aria-selected="true"]');
+  setWelcomePage(Number(activeTab?.dataset.welcomePage || 1) + delta);
 }
 
 function updateNavVisibility() {
@@ -1296,6 +1312,8 @@ function updateNavVisibility() {
   set('#navAssets', hasAssetAccounts);
   set('#navDividends', hasAssetAccounts);
   set('#navGoals', hasAnyAccounts);
+  set('#navSimulation', hasAnyAccounts);
+  if (!hasAnyAccounts && currentPage === 'simulation') showPage('dashboard');
   const newAccountBtn = $('#newAccountBtn');
   if (newAccountBtn) {
     newAccountBtn.disabled = !hasProviders;
@@ -3280,7 +3298,6 @@ function renderUsers() {
       <td>${esc(u.username)}</td>
       <td>
         <select class="role-select-inline" data-role-user="${u.id}" ${u.id === currentUserId ? 'disabled' : ''}>
-          <option value="guest" ${u.role === 'guest' ? 'selected' : ''}>guest</option>
           <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
           <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
         </select>
@@ -3752,7 +3769,7 @@ async function signIn(event) {
   const form = new FormData(event.currentTarget);
   try {
     state.user = (await request('/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) })).user;
-    state.guest = state.user.role === 'guest';
+    state.guest = false;
     showApp();
     await loadData({ refreshSnapshots: true });
     toast(`Signed in as ${state.user.username}`);
@@ -4755,10 +4772,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#currencyTestConvertBtn')?.addEventListener('click', runCurrencyTest);
   $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
   $('#closeWelcomeBtn')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
-  $('#welcomeModalNext')?.addEventListener('click', () => setWelcomePage(2));
-  $('#welcomeModalPrev')?.addEventListener('click', () => setWelcomePage(1));
+  $('#welcomeModalNext')?.addEventListener('click', () => moveWelcomePage(1));
+  $('#welcomeModalPrev')?.addEventListener('click', () => moveWelcomePage(-1));
   document.querySelectorAll('.welcome-tab').forEach(tab => {
     tab.addEventListener('click', () => setWelcomePage(Number(tab.dataset.welcomePage)));
+    tab.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = [...document.querySelectorAll('.welcome-tab')];
+      const current = tabs.indexOf(tab);
+      const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[nextIndex].focus();
+      setWelcomePage(Number(tabs[nextIndex].dataset.welcomePage));
+    });
   });
   // Time Travel
   $('#timeTravelBtn')?.addEventListener('click', openTimeTravelModal);
@@ -5141,14 +5167,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const values = Object.fromEntries(new FormData(event.currentTarget));
     if (values.password !== values.confirm_password) {
       if (err) err.textContent = 'Passwords do not match.';
-      return;
-    }
-    if (state.guest) {
-      const newId = Math.max(...guestData.users.map(u => u.id), 0) + 1;
-      guestData.users.push({ id: newId, username: values.username, role: values.role, created_at: new Date().toISOString().slice(0, 10), last_login: null });
-      closeModal('userModalOverlay');
-      await loadData();
-      toast(`User "${values.username}" created (Guest mode).`);
       return;
     }
     try {
@@ -5644,12 +5662,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (deleteUserBtn) {
       const id = Number(deleteUserBtn.dataset.deleteUser);
       if (!await confirmDialog('Delete this user?')) return;
-      if (state.guest) {
-        guestData.users = guestData.users.filter(u => u.id !== id);
-        await loadData();
-        toast('User deleted.');
-        return;
-      }
       toast('User deletion simulated.');
     }
   });
@@ -5660,12 +5672,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!select) return;
     const userId = Number(select.dataset.roleUser);
     const newRole = select.value;
-    if (state.guest) {
-      const u = guestData.users.find(item => item.id === userId);
-      if (u) u.role = newRole;
-      toast('Role updated (Guest mode).');
-      return;
-    }
     try {
       await request(`/admin/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role: newRole }) });
       toast('Role updated.');
@@ -5680,7 +5686,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const me = await request('/auth/me');
     if (me?.user) {
       state.user = me.user;
-      state.guest = state.user.role === 'guest';
+      state.guest = false;
       showApp();
       await loadData({ refreshSnapshots: true });
 

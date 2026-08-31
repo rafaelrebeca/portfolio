@@ -58,10 +58,10 @@
       <div class="sidebar" aria-label="Main navigation">
         <div class="nav-section-label">Personal</div>
         <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
+        <div class="nav-item" id="navSimulation" data-page="simulation">🧮 Simulation</div>
         <div class="nav-item" id="navGoals" data-page="goals">🎯 Goals</div>
         <div class="nav-item" id="navPortfolio" data-page="portfolio">💼 My Portfolio</div>
         <div class="nav-item" id="navAccounts" data-page="accounts">🏦 My Accounts</div>
-        <div class="nav-item" id="navSimulation" data-page="simulation">📉 Simulation</div>
 
         <div class="nav-section-label">System</div>
         <div class="nav-item" id="navAssets" data-page="assets">📈 Assets</div>
@@ -105,7 +105,7 @@
             </div>
           </div>
           <div id="guestBanner" class="banner" style="display:none;">
-            You are viewing demo/mock data as a Guest. Sign in to view and manage your own portfolio.
+            You are viewing an isolated demo in Guest mode. Sign in to view and manage your own portfolio.
           </div>
           <div class="grid-cards">
             <div class="card">
@@ -138,10 +138,12 @@
               </div>
               <div class="chart-legend" id="allocationLegend"></div>
             </div>
-            <div class="chart-card" id="dashboardBreakdownCard" style="cursor: pointer;" title="Click to switch between By Provider and By Account">
+            <div class="chart-card" id="dashboardBreakdownCard" style="cursor: pointer;"
+              title="Click to switch between By Provider and By Account">
               <div style="flex-shrink:0;">
                 <h3 id="dashboardBreakdownTitle">By Provider</h3>
-                <p class="page-desc" id="dashboardBreakdownSubtitle" style="margin-bottom:12px;">Account value by provider</p>
+                <p class="page-desc" id="dashboardBreakdownSubtitle" style="margin-bottom:12px;">Account value by
+                  provider</p>
                 <div style="position:relative;height:200px;width:200px;"><canvas id="accountTypeChart"></canvas></div>
               </div>
               <div class="chart-legend" id="providerLegend"></div>
@@ -153,7 +155,9 @@
                 <div class="page-title" style="font-size:16px;margin-bottom:2px;">Account Overview</div>
                 <div class="dashboard-accounts-summary" id="dashboardAccountsSummary"></div>
               </div>
-              <button class="btn-sm icon-btn" id="toggleDashboardAccountsBtn" type="button" data-toggle-dashboard-accounts title="Collapse Account Overview" aria-label="Collapse Account Overview">−</button>
+              <button class="btn-sm icon-btn" id="toggleDashboardAccountsBtn" type="button"
+                data-toggle-dashboard-accounts title="Collapse Account Overview"
+                aria-label="Collapse Account Overview">−</button>
             </div>
             <div id="dashboardAccounts">Loading…</div>
           </div>
@@ -296,7 +300,8 @@
           <div class="page-title">Simulation</div>
           <div class="page-desc">A principal-only projection based on your historical Global Value growth.</div>
           <div class="banner simulation-assumption">
-            This is a simple trend projection: it uses the average monthly change between your oldest snapshot and today. It ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
+            This is a simple trend projection: it uses the average monthly change between your oldest snapshot and
+            today. It ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
           </div>
           <div class="grid-cards simulation-summary-cards">
             <div class="card">
@@ -321,10 +326,12 @@
               <p class="page-desc">History, current pace, and a current pace +5% annual growth scenario</p>
               <div class="simulation-chart-wrap"><canvas id="simulationTrendChart"></canvas></div>
             </div>
-            <div class="chart-card simulation-chart-card simulation-growth-card" id="simulationGrowthCard" title="Click to switch between All-Time, YTD, and Month">
+            <div class="chart-card simulation-chart-card simulation-growth-card" id="simulationGrowthCard"
+              title="Click to switch between All-Time, YTD, and Month">
               <h3 id="simulationGrowthTitle">Growth Contribution by Account</h3>
               <p class="page-desc" id="simulationGrowthSubtitle">Monthly change during each account's known lifetime</p>
-              <div class="simulation-chart-wrap simulation-doughnut-wrap"><canvas id="simulationGrowthChart"></canvas></div>
+              <div class="simulation-chart-wrap simulation-doughnut-wrap"><canvas id="simulationGrowthChart"></canvas>
+              </div>
               <div class="chart-legend simulation-growth-legend" id="simulationGrowthLegend"></div>
             </div>
           </div>
@@ -1004,7 +1011,6 @@
         </div>
         <div class="field"><label>Role</label>
           <select name="role" style="width:100%;">
-            <option value="guest">Guest</option>
             <option value="user">User</option>
             <option value="admin">Admin</option>
           </select>
@@ -1049,16 +1055,21 @@
   <div class="modal-overlay" id="welcomeModalOverlay">
     <div class="modal welcome-modal">
       <div class="modal-head">
-        <h3 id="welcomeModalTitle">👋 Welcome to Portfolio Manager</h3>
+        <h3 id="welcomeModalTitle">👋 Portfolio Manager guide</h3>
         <button class="modal-close" type="button" id="closeWelcomeBtn" title="Close" aria-label="Close">✕</button>
       </div>
 
-      <div class="welcome-tabs">
-        <button class="welcome-tab active" type="button" data-welcome-page="1">Getting Started</button>
-        <button class="welcome-tab" type="button" data-welcome-page="2">Privacy &amp; Time Travel</button>
+      <div class="welcome-tabs" role="tablist" aria-label="Portfolio Manager features">
+        <button class="welcome-tab active" id="welcomeTab1" role="tab" aria-selected="true" aria-controls="welcomePage1" type="button" data-welcome-page="1">Getting Started</button>
+        <button class="welcome-tab" id="welcomeTab2" role="tab" aria-selected="false" aria-controls="welcomePage2" type="button" data-welcome-page="2">Dashboard</button>
+        <button class="welcome-tab" id="welcomeTab3" role="tab" aria-selected="false" aria-controls="welcomePage3" type="button" data-welcome-page="3">Accounts</button>
+        <button class="welcome-tab" id="welcomeTab4" role="tab" aria-selected="false" aria-controls="welcomePage4" type="button" data-welcome-page="4">Portfolio</button>
+        <button class="welcome-tab" id="welcomeTab5" role="tab" aria-selected="false" aria-controls="welcomePage5" type="button" data-welcome-page="5">Goals</button>
+        <button class="welcome-tab" id="welcomeTab6" role="tab" aria-selected="false" aria-controls="welcomePage6" type="button" data-welcome-page="6">Simulation</button>
+        <button class="welcome-tab" id="welcomeTab7" role="tab" aria-selected="false" aria-controls="welcomePage7" type="button" data-welcome-page="7">Data &amp; Tools</button>
       </div>
 
-      <div class="welcome-page" data-welcome-page="1">
+      <div class="welcome-page" id="welcomePage1" role="tabpanel" aria-labelledby="welcomeTab1" data-welcome-page="1">
         <!-- Guest demo guide -->
         <div class="welcome-body" id="welcomeGuestBody" style="display:none;">
           <p class="welcome-intro">You're exploring the <span class="kw kw-guest">demo</span>. Here's what you're
@@ -1112,6 +1123,14 @@
               <p class="welcome-text">Everything is <strong>editable</strong> — add providers, accounts, holdings and
                 goals to explore the app freely. Changes are <strong>local only</strong> and are <strong>not
                   saved</strong>.</p>
+            </div>
+          </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">5</span>
+            <div>
+              <p class="welcome-title">Your data is <span class="kw kw-guest">private</span></p>
+              <p class="welcome-text">Everything you add — providers, accounts, holdings, assets and goals — is stored only under <strong>your account</strong>. No other user can see it, and guests only ever see the <strong>demo</strong> data. Press <strong>H</strong> to hide the values on screen from people nearby.</p>
             </div>
           </div>
         </div>
@@ -1179,45 +1198,72 @@
               </p>
             </div>
           </div>
+
+          <div class="welcome-step">
+            <span class="welcome-num">6</span>
+            <div>
+              <p class="welcome-title">Your data is <span class="kw kw-guest">private</span></p>
+              <p class="welcome-text">Everything you add — providers, accounts, holdings, assets and goals — is stored only under <strong>your account</strong>. No other user can see it. Press <strong>H</strong> to hide the values on screen from people nearby.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="welcome-page" data-welcome-page="2" style="display:none;">
-        <div class="welcome-body">
-          <p class="welcome-intro">Your data is private to you, and you can look back at how your dashboard looked on
-            any past day.</p>
+      <div class="welcome-page" id="welcomePage2" role="tabpanel" aria-labelledby="welcomeTab2" data-welcome-page="2" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">The Dashboard is your at-a-glance view of what changed, what you own and how your money is distributed.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">◈</span><div><p class="welcome-title">Value and growth cards</p><p class="welcome-text">See total portfolio value, day change, all-time growth and income. Click growth to switch between views.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">◌</span><div><p class="welcome-title">Allocation insights</p><p class="welcome-text">Use By Type and By Provider/Account to spot concentration. Click a chart slice or legend row to inspect the matching accounts.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">↑</span><div><p class="welcome-title">Status and movers</p><p class="welcome-text">Review winners, losers, open loans and upcoming goals. Summary sections can be collapsed when you want a cleaner view.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">🕰</span><div><p class="welcome-title">Snapshot controls</p><p class="welcome-text">Save today’s dashboard, move between saved days or open the history and calendar views from the Time Travel controls.</p></div></div>
+        </div>
+      </div>
 
-          <div class="welcome-step">
-            <span class="welcome-num">1</span>
-            <div>
-              <p class="welcome-title">Your data is <span class="kw kw-guest">private</span></p>
-              <p class="welcome-text">Everything you add — providers, accounts, holdings, assets and goals — is stored
-                only under <strong>your account</strong>. No other user can see it, and guests only ever see the
-                <strong>demo</strong> data. Press <strong>H</strong> to hide the values on screen from people nearby.
-              </p>
-            </div>
-          </div>
+      <div class="welcome-page" id="welcomePage3" role="tabpanel" aria-labelledby="welcomeTab3" data-welcome-page="3" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">Model the real-world places where your money lives, then connect them to the rest of your portfolio.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">🏦</span><div><p class="welcome-title">Providers</p><p class="welcome-text">Create banks, brokers or other institutions. Provider cards show their combined value and can be expanded or collapsed.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">▣</span><div><p class="welcome-title">Accounts</p><p class="welcome-text">Add bank, interest, loan or asset accounts with their own currency and balance. Accounts are the foundation for goals and holdings.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">⌁</span><div><p class="welcome-title">Details and history</p><p class="welcome-text">Open an account or provider to see its breakdown. When snapshots exist, account cards can show value through time.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">✓</span><div><p class="welcome-title">Keep totals meaningful</p><p class="welcome-text">Values are converted to your selected display currency while each account keeps its own original currency.</p></div></div>
+        </div>
+      </div>
 
-          <div class="welcome-step">
-            <span class="welcome-num">2</span>
-            <div>
-              <p class="welcome-title"><span class="kw kw-goal">Time Travel</span> snapshots</p>
-              <p class="welcome-text">On the <span class="menu" data-page="dashboard">Dashboard</span>, the
-                <strong>🕰 Time Travel</strong> button lets you save a snapshot of today's dashboard and view how it
-                looked on any past day. Snapshots are <strong>private to you</strong>.
-              </p>
-            </div>
-          </div>
+      <div class="welcome-page" id="welcomePage4" role="tabpanel" aria-labelledby="welcomeTab4" data-welcome-page="4" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">Track securities and personal items separately, while the app rolls them into the right totals.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">📈</span><div><p class="welcome-title">Holdings</p><p class="welcome-text">Add quantity, average cost and account for each holding. Use sortable columns and filters to find what matters quickly.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">◎</span><div><p class="welcome-title">Assets</p><p class="welcome-text">Browse platform assets by name, type and currency. System assets can receive refreshed prices; personal assets are custom and private to you.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">💰</span><div><p class="welcome-title">Dividends</p><p class="welcome-text">Explore expected dividend income by asset and filter the view by month, quarter or year.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">◒</span><div><p class="welcome-title">Portfolio insights</p><p class="welcome-text">My Portfolio compares allocation by asset and asset type, helping you understand what drives the overall result.</p></div></div>
+        </div>
+      </div>
 
-          <div class="welcome-step">
-            <span class="welcome-num">3</span>
-            <div>
-              <p class="welcome-title">One snapshot per <span class="kw kw-guest">day</span></p>
-              <p class="welcome-text">You keep at most <strong>one snapshot per day</strong>. Saving again on the same
-                day <strong>replaces</strong> that day's snapshot. You can <strong>delete</strong> any snapshot you no
-                longer need.</p>
-            </div>
-          </div>
+      <div class="welcome-page" id="welcomePage5" role="tabpanel" aria-labelledby="welcomeTab5" data-welcome-page="5" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">Turn accounts into concrete targets and see how close you are to each milestone.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">🎯</span><div><p class="welcome-title">Goals</p><p class="welcome-text">Create a target with a currency, optional milestones and linked accounts. Reorder goals to keep your priorities visible.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">▰</span><div><p class="welcome-title">Progress details</p><p class="welcome-text">Open a goal for its linked-account breakdown, progress chart and history when snapshots are available.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">⌁</span><div><p class="welcome-title">Goal simulator</p><p class="welcome-text">Test a monthly contribution and estimated return to understand when a target could be reached. It is a projection, not a promise.</p></div></div>
+        </div>
+      </div>
+
+      <div class="welcome-page" id="welcomePage6" role="tabpanel" aria-labelledby="welcomeTab6" data-welcome-page="6" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">Use Simulation to explore how your current history could develop over time.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">🧮</span><div><p class="welcome-title">Portfolio projection</p><p class="welcome-text">The simulator uses your snapshot history and average monthly change to show a simple historical and projected trend.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">↗</span><div><p class="welcome-title">Growth contribution</p><p class="welcome-text">Cycle the chart between account, provider and other breakdowns to see where growth has come from.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">🏠</span><div><p class="welcome-title">Loan simulator</p><p class="welcome-text">Compare keeping the term or payment after an amortization, including estimated interest savings and month-by-month evolution.</p></div></div>
+        </div>
+      </div>
+
+      <div class="welcome-page" id="welcomePage7" role="tabpanel" aria-labelledby="welcomeTab7" data-welcome-page="7" style="display:none;">
+        <div class="welcome-body welcome-feature-grid">
+          <p class="welcome-intro">A few controls help you keep the app private, current and portable.</p>
+          <div class="welcome-feature"><span class="welcome-feature-icon">H</span><div><p class="welcome-title">Privacy mode</p><p class="welcome-text">Press H when you need to hide monetary values from people nearby. Charts stay visible while sensitive labels are concealed.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">↻</span><div><p class="welcome-title">Refresh and currency</p><p class="welcome-text">Refresh current data when needed and use Currency to inspect available conversion rates. The display currency follows your profile setting.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">⇄</span><div><p class="welcome-title">Import and export</p><p class="welcome-text">Administrators can use Tools to import or export supported data and test currency conversion.</p></div></div>
+          <div class="welcome-feature"><span class="welcome-feature-icon">☁</span><div><p class="welcome-title">Guest mode</p><p class="welcome-text">Guest mode is a safe demo with sample data. Changes are local to the session and are not saved to an account.</p></div></div>
         </div>
       </div>
 

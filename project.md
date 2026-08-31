@@ -62,7 +62,7 @@ The repository uses `bcryptjs` at runtime and Wrangler as a development dependen
 
 The worker uses these D1 tables:
 
-- `users` — `id`, `username`, `password_hash`, `role`, `created_at`, `last_login`.
+- `users` — `id`, `username`, `password_hash`, `role`, `created_at`, `last_login`; stored roles are `user` or `admin`.
 - `sessions` — session `token`, `user_id`, and `expires_at`. Sessions expire after seven days.
 - `assets` — platform assets with `id`, `name`, `symbol`, `type`, `price`, and `coin`.
 - `personal_assets` — user-owned assets with the same core fields plus `user_id`, `created_at`, and `updated_at`.
@@ -83,15 +83,15 @@ Platform assets and personal assets can have the same numeric ID. The frontend t
 
 The worker exposes three authorization helpers:
 
-- `requireUser` — any authenticated account, including guest accounts for snapshot access.
-- `requireMember` — authenticated non-guest user; required for real portfolio data.
+- `requireUser` — any authenticated stored account.
+- `requireMember` — authenticated stored user or administrator; required for real portfolio data.
 - `requireAdmin` — authenticated administrator.
 
 Login creates a random session token and stores it in D1. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, and has a seven-day maximum age. Logout deletes the token and expires the cookie. The strict same-site policy means cross-site requests do not carry an authenticated session.
 
 Input is trimmed and validated at the API boundary. Usernames accept 3–50 characters from `[a-zA-Z0-9_.-]`; passwords accept 8–50 characters. Names, enum values, numeric fields, dates, roles, and ownership are validated before writes. Unexpected server errors are logged server-side and returned to the client as a generic internal error.
 
-Guest mode never calls the member data endpoints. It uses isolated in-memory mock data in `guestData`; guest changes are local-only and are not persisted.
+Guest mode is a login-menu mode, not a stored user role. It never calls the member data endpoints; it uses isolated in-memory mock data in `guestData`, including examples for accounts, loans, holdings, personal assets, dividends, goals, currency, and simulation. Guest changes are local-only and are not persisted.
 
 ## 6. Backend API
 
@@ -236,7 +236,7 @@ Goals can link to multiple accounts, contain up to three milestones, and be reor
 ### Tools, Users, Profile, and Currency
 
 - **Tools** is admin-only and has Import, Export, and Currency Test tabs. Import accepts asset CSV data; Export generates import-ready CSV; Currency Test converts up to five rows and shows individual and total results.
-- **Users** is admin-only and supports user creation, password reset, and role changes, except changing the current administrator's role.
+- **Users** is admin-only and supports user creation, password reset, and role changes between `user` and `admin`, except changing the current administrator's role. Guest mode is available only from the login menu and is not a stored user.
 - **Profile** shows the current username/role and provides self-service password reset.
 - **Currency** displays stored exchange rates with search and pagination.
 
@@ -281,7 +281,7 @@ Separate Account History and Goal History modals provide focused per-account and
 
 The topbar provides navigation, refresh, help, logout, and the privacy toggle. Pressing `H` toggles privacy while not typing. Privacy mode blurs currency amounts only, preserving symbols, percentages, and dates. While active, monetary chart axis labels are hidden and monetary tooltip values show `hidden`; chart visuals remain sharp. It is excluded from the Assets page and reapplied after re-renders through a MutationObserver.
 
-The welcome modal provides a two-page guide. Regular users see it on first use when they have no providers; guests see an isolated demo guide on every guest login. The guide explains providers, accounts, holdings, goals, personal assets, privacy, and Time Travel.
+The welcome/help modal provides a seven-tab feature guide. Regular users see the onboarding tab on first use when they have no providers; guests see an isolated demo guide on every guest login. The guide covers onboarding and privacy, Dashboard insights, providers and accounts, portfolio assets and dividends, goals, simulations, currency, and admin data tools. History and Time Travel remain documented in their dedicated views.
 
 All modals use shared open/close behavior, lock background scrolling while open, close through a header ✕, and respond to Escape. Destructive actions use the custom confirmation modal rather than browser `confirm()`.
 

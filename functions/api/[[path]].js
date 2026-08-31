@@ -4,7 +4,7 @@ const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(b
 const fail = (message, status = 400) => json({ error: message }, status);
 const readBody = async request => { try { return await request.json(); } catch { return {}; } };
 const clean = value => typeof value === 'string' ? value.trim() : '';
-const validRole = value => ['guest', 'user', 'admin'].includes(value);
+const validRole = value => ['user', 'admin'].includes(value);
 
 function sessionToken(request) {
   return request.headers.get('Cookie')?.split(';').map(item => item.trim()).find(item => item.startsWith('portfolio_session='))?.slice('portfolio_session='.length);
@@ -17,7 +17,7 @@ async function currentUser(request, env) {
   return row;
 }
 async function requireUser(request, env) { const user = await currentUser(request, env); if (!user) throw Object.assign(new Error('Authentication required.'), { status: 401 }); return user; }
-async function requireMember(request, env) { const user = await requireUser(request, env); if (user.role === 'guest') throw Object.assign(new Error('Guest accounts only have access to mock data.'), { status: 403 }); return user; }
+async function requireMember(request, env) { const user = await requireUser(request, env); if (!validRole(user.role)) throw Object.assign(new Error('Guest mode is available from the login menu only.'), { status: 403 }); return user; }
 async function requireAdmin(request, env) { const user = await requireUser(request, env); if (user.role !== 'admin') throw Object.assign(new Error('Administrator access required.'), { status: 403 }); return user; }
 const changed = result => result.meta?.changes > 0;
 
@@ -57,7 +57,7 @@ export async function onRequest(context) {
     if (method === 'POST' && path === 'auth/login') {
       const { username, password } = await readBody(request);
       const user = await env.myd1db.prepare('SELECT id, username, password_hash, role FROM users WHERE username = ?').bind(clean(username)).first();
-      if (!user || !(await bcrypt.compare(String(password || ''), user.password_hash))) return fail('Invalid username or password.', 401);
+      if (!user || !validRole(user.role) || !(await bcrypt.compare(String(password || ''), user.password_hash))) return fail('Invalid username or password.', 401);
       const token = crypto.randomUUID();
       await env.myd1db.batch([
         env.myd1db.prepare("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP"),
@@ -423,7 +423,7 @@ export async function onRequest(context) {
     }
 
     if (method === 'GET' && path === 'admin/users') {
-      await requireAdmin(request, env); const { results } = await env.myd1db.prepare('SELECT id, username, role, created_at, last_login FROM users ORDER BY username').all(); return json({ items: results });
+      await requireAdmin(request, env); const { results } = await env.myd1db.prepare("SELECT id, username, role, created_at, last_login FROM users WHERE role IN ('user', 'admin') ORDER BY username").all(); return json({ items: results });
     }
     if (method === 'POST' && path === 'admin/users') {
       await requireAdmin(request, env); const body = await readBody(request), username = clean(body.username), password = String(body.password || ''), role = clean(body.role || 'user');
