@@ -26,6 +26,7 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 - 💰 **Dividends Engine**: Track yield percentages and payout schedules by month across all held assets.
 - 💱 **Multi-Currency & Exchange Rates**: Multi-currency conversion support (USD, EUR, GBP, etc.) using stored ExchangeRate-API rates refreshed at most once per UTC day.
 - 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar and timeline controls.
+- 📈 **Simulation**: Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, dynamic paths to €0 or the next power-of-ten milestone, and an optional +5% annual-growth scenario.
 - 👁 **Privacy Blur Mode**: Quick keyboard shortcut (`H` key or toggle button) to blur sensitive monetary figures when viewing the app in public spaces.
 - 👤 **Role-Based Access Control**:
   - **Admin**: User management, database tools, asset price refreshes, global configuration.
