@@ -828,15 +828,21 @@ function renderDashboardAccountsSummary(accounts, prevData) {
   let up = 0;
   let down = 0;
   let unchanged = 0;
+  let totalChange = 0;
+  let comparableAccounts = 0;
   const movers = [];
   accounts.forEach(account => {
     const current = account.valueEur !== undefined
       ? Number(account.valueEur || 0)
       : accountValue(account, true);
     const previous = previousAccountValue(prevData, account.id);
-    if (previous !== null && current > previous) up += 1;
-    else if (previous !== null && current < previous) down += 1;
-    else unchanged += 1;
+    if (previous !== null) {
+      comparableAccounts += 1;
+      totalChange += current - previous;
+      if (current > previous) up += 1;
+      else if (current < previous) down += 1;
+      else unchanged += 1;
+    } else unchanged += 1;
     if (previous !== null && current !== previous) {
       movers.push({ name: account.name || '—', delta: current - previous });
     }
@@ -847,7 +853,10 @@ function renderDashboardAccountsSummary(accounts, prevData) {
     return `${mover.name} ${sign}${moneyEUR.format(Math.abs(mover.delta))}`;
   }).join(' / ');
   const base = `${accounts.length} account${accounts.length === 1 ? '' : 's'} · ${up} up · ${down} down · ${unchanged} unchanged`;
-  summary.textContent = moverText ? `${base} · Top movers: ${moverText}` : base;
+  const totalText = comparableAccounts
+    ? ` · Total: ${totalChange > 0 ? '+' : totalChange < 0 ? '−' : '±'}${moneyEUR.format(Math.abs(totalChange))}`
+    : '';
+  summary.textContent = moverText ? `${base}${totalText} · Top movers: ${moverText}` : `${base}${totalText}`;
 }
 
 function syncDashboardAccountsCollapsed() {
