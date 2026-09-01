@@ -179,11 +179,11 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 ### Dashboard
 
-The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Debit/Credit. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
+The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
 
 The two doughnut charts are:
 
-- **By Type** — asset holdings plus Loans, Cash, and Deposits.
+- **By Type / By Change** — the card is clickable. By Type shows asset holdings plus Loans, Cash, and Deposits; By Change shows Gain and Loss slices based on account value movement versus the previous snapshot. Clicking Gain or Loss filters Account Overview to accounts that increased or decreased.
 - **By Provider / By Account** — the card is clickable and cycles between provider totals and account totals. The selected mode is stored in `localStorage` as `portfolio_dashboard_breakdown_mode`, so it survives reloads.
 
 Both breakdown charts use the reusable `topNWithOthers(map, 9)` helper: the nine largest categories are shown individually and the remainder is grouped into **Others**. Clicking a slice or legend row filters Account Overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs rather than displaying only an aggregate.
@@ -258,7 +258,7 @@ The Dashboard header provides previous/next navigation, save, history, calendar,
 
 The History modal uses the in-memory snapshot list and offers:
 
-- **Global** — Global Value, Debit, and Credit lines.
+- **Global** — Global Value, Assets, and Liabilities lines. These display labels map to the stored snapshot fields `debit` and `credit`.
 - **By Type** — one line per asset type.
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.

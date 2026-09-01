@@ -125,15 +125,16 @@
               <div class="delta up">total net worth</div>
             </div>
             <div class="card">
-              <div class="label">Debit / Credit</div>
+              <div class="label">Assets / Liabilities</div>
               <div class="value" id="debitCreditValue" style="font-size:16px;">—</div>
             </div>
           </div>
           <div class="charts-row">
-            <div class="chart-card">
+            <div class="chart-card" id="dashboardAllocationCard" style="cursor: pointer;"
+              title="Click to switch between By Type and By Change">
               <div style="flex-shrink:0;">
-                <h3>By Type</h3>
-                <p class="page-desc" style="margin-bottom:12px;">Value allocation</p>
+                <h3 id="dashboardAllocationTitle">By Type</h3>
+                <p class="page-desc" id="dashboardAllocationSubtitle" style="margin-bottom:12px;">Value allocation</p>
                 <div style="position:relative;height:200px;width:200px;"><canvas id="allocationChart"></canvas></div>
               </div>
               <div class="chart-legend" id="allocationLegend"></div>

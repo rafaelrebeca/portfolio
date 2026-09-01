@@ -419,6 +419,7 @@ a {
 }
 
 #growthCard,
+#dashboardAllocationCard,
 #dashboardBreakdownCard,
 #portfolioAssetCard {
   cursor: pointer;
@@ -427,6 +428,7 @@ a {
 }
 
 #growthCard:hover,
+#dashboardAllocationCard:hover,
 #dashboardBreakdownCard:hover,
 #portfolioAssetCard:hover {
   border-color: var(--accent);

@@ -410,7 +410,7 @@ function cycleSimulationGrowthMode() {
   localStorage.setItem('portfolio_simulation_growth_mode', simulationGrowthMode);
   renderSimulation();
 }
-let dashboardFilter = null; // { source: 'assetType'|'provider', value: string } | null
+let dashboardFilter = null; // { source: 'assetType'|'provider'|'account'|'change', value: string } | null
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
 let activeAssetTab = 'system'; // 'system' or 'personal' — which Assets page tab is shown
@@ -418,6 +418,7 @@ let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
 let dashboardAccountOthers = [];
 let dashboardBreakdownMode = localStorage.getItem('portfolio_dashboard_breakdown_mode') || 'provider';
+let dashboardAllocationMode = localStorage.getItem('portfolio_dashboard_allocation_mode') || 'type';
 let dashboardAccountsCollapsed = false;
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
@@ -440,6 +441,18 @@ function cycleGrowthCardMode() {
 function cycleDashboardBreakdownMode() {
   dashboardBreakdownMode = dashboardBreakdownMode === 'provider' ? 'account' : 'provider';
   localStorage.setItem('portfolio_dashboard_breakdown_mode', dashboardBreakdownMode);
+  dashboardFilter = null;
+  if (timeTravelActive()) {
+    renderDashboardFromSnapshot(timeTravelSnapshot.data);
+  } else {
+    renderCharts();
+    renderDashboardAccounts();
+  }
+}
+
+function cycleDashboardAllocationMode() {
+  dashboardAllocationMode = dashboardAllocationMode === 'type' ? 'change' : 'type';
+  localStorage.setItem('portfolio_dashboard_allocation_mode', dashboardAllocationMode);
   dashboardFilter = null;
   if (timeTravelActive()) {
     renderDashboardFromSnapshot(timeTravelSnapshot.data);
@@ -764,6 +777,16 @@ function renderDashboardAccounts() {
         accounts = state.accounts.filter(a => a.name === val);
       }
       filterLabel = `Account: ${val}`;
+    } else if (dashboardFilter.source === 'change') {
+      const direction = dashboardFilter.value === 'Gain' ? 1 : -1;
+      const previousData = getPreviousSnapshotData();
+      accounts = state.accounts.filter(account => {
+        const previous = previousAccountValue(previousData, account.id);
+        if (previous === null) return false;
+        const delta = accountValue(account, true) - previous;
+        return direction > 0 ? delta > 0 : delta < 0;
+      });
+      filterLabel = `${dashboardFilter.value === 'Gain' ? 'Increased' : 'Decreased'} in value`;
     }
   }
 
@@ -866,6 +889,29 @@ function renderDashboardBreakdownHeading() {
   if (subtitle) subtitle.textContent = byAccount ? 'Account value by account' : 'Account value by provider';
 }
 
+function renderDashboardAllocationHeading() {
+  const title = $('#dashboardAllocationTitle');
+  const subtitle = $('#dashboardAllocationSubtitle');
+  const byChange = dashboardAllocationMode === 'change';
+  if (title) title.textContent = byChange ? 'By Change' : 'By Type';
+  if (subtitle) subtitle.textContent = byChange ? 'Account value movement' : 'Value allocation';
+}
+
+function dashboardChangeBreakdown(accounts, previousData) {
+  const totals = { Gain: 0, Loss: 0 };
+  accounts.forEach(account => {
+    const current = account.valueEur !== undefined
+      ? Number(account.valueEur || 0)
+      : accountValue(account, true);
+    const previous = previousAccountValue(previousData, account.id);
+    if (previous === null) return;
+    const delta = current - previous;
+    if (delta > 0) totals.Gain += delta;
+    else if (delta < 0) totals.Loss += Math.abs(delta);
+  });
+  return { labels: ['Gain', 'Loss'], data: [totals.Gain, totals.Loss] };
+}
+
 function renderCharts() {
   if (typeof Chart === 'undefined') return;
 
@@ -874,6 +920,7 @@ function renderCharts() {
   if (!allocCtx || !typeCtx) return;
 
   renderDashboardBreakdownHeading();
+  renderDashboardAllocationHeading();
 
   if (allocationChartInstance) allocationChartInstance.destroy();
   if (accountTypeChartInstance) accountTypeChartInstance.destroy();
@@ -907,12 +954,15 @@ function renderCharts() {
   if (cashTotal !== 0) allocMap['Cash'] = cashTotal;
   if (depositsTotal !== 0) allocMap['Deposits'] = depositsTotal;
 
-  const allocTop = topNWithOthers(allocMap, 9);
+  const previousData = getPreviousSnapshotData();
+  const allocTop = dashboardAllocationMode === 'change'
+    ? dashboardChangeBreakdown(state.accounts, previousData)
+    : topNWithOthers(allocMap, 9);
   const allocLabels = allocTop.labels;
   const allocData = allocTop.data;
   const allocDataAbs = allocData.map(v => Math.abs(v));
-  const allocColors = CHART_COLORS;
-  dashboardAllocOthers = allocTop.others;
+  const allocColors = dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS;
+  dashboardAllocOthers = allocTop.others || [];
 
   allocationChartInstance = new Chart(allocCtx, {
     type: 'doughnut',
@@ -932,10 +982,11 @@ function renderCharts() {
       onClick(event, elements) {
         if (!elements.length || !allocLabels.length) return;
         const clickedLabel = allocLabels[elements[0].index];
-        if (dashboardFilter && dashboardFilter.source === 'assetType' && dashboardFilter.value === clickedLabel) {
+        const source = dashboardAllocationMode === 'change' ? 'change' : 'assetType';
+        if (dashboardFilter && dashboardFilter.source === source && dashboardFilter.value === clickedLabel) {
           dashboardFilter = null;
         } else {
-          dashboardFilter = { source: 'assetType', value: clickedLabel };
+          dashboardFilter = { source, value: clickedLabel };
         }
         renderDashboardAccounts();
       },
@@ -1726,6 +1777,7 @@ function renderDashboardFromSnapshot(data) {
     allocationChartInstance = null;
     accountTypeChartInstance = null;
     renderDashboardBreakdownHeading();
+    renderDashboardAllocationHeading();
 
     const byType = d.byType || {};
     const byProvider = d.byProvider || {};
@@ -1734,7 +1786,9 @@ function renderDashboardFromSnapshot(data) {
       const name = account.name || '—';
       byAccount[name] = (byAccount[name] || 0) + Number(account.valueEur || 0);
     });
-    const allocTop = topNWithOthers(byType, 9);
+    const allocTop = dashboardAllocationMode === 'change'
+      ? dashboardChangeBreakdown(d.accounts || [], getPreviousSnapshotData())
+      : topNWithOthers(byType, 9);
     const breakdownTop = topNWithOthers(dashboardBreakdownMode === 'account' ? byAccount : byProvider, 9);
     const allocDataAbs = allocTop.data.map(v => Math.abs(v));
     const breakdownDataAbs = breakdownTop.data.map(v => Math.abs(v));
@@ -1744,9 +1798,20 @@ function renderDashboardFromSnapshot(data) {
         type: 'doughnut',
         data: {
           labels: allocTop.labels.length ? allocTop.labels : ['No Data'],
-          datasets: [{ data: allocDataAbs.length ? allocDataAbs : [1], backgroundColor: allocDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
+          datasets: [{ data: allocDataAbs.length ? allocDataAbs : [1], backgroundColor: allocDataAbs.length ? (dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS) : ['#2a3550'], borderWidth: 0 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
+          onClick(event, elements) {
+            if (!elements.length || !allocTop.labels.length) return;
+            const clickedLabel = allocTop.labels[elements[0].index];
+            const source = dashboardAllocationMode === 'change' ? 'change' : 'assetType';
+            dashboardFilter = dashboardFilter?.source === source && dashboardFilter.value === clickedLabel
+              ? null : { source, value: clickedLabel };
+            renderDashboardFromSnapshot(d);
+          },
+          onHover(event, elements) { event.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        }
       });
     }
     if (typeCtx) {
@@ -1756,17 +1821,37 @@ function renderDashboardFromSnapshot(data) {
           labels: breakdownTop.labels.length ? breakdownTop.labels : ['No Data'],
           datasets: [{ data: breakdownDataAbs.length ? breakdownDataAbs : [1], backgroundColor: breakdownDataAbs.length ? CHART_COLORS : ['#2a3550'], borderWidth: 0 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
+          onClick(event, elements) {
+            if (!elements.length || !breakdownTop.labels.length) return;
+            const clickedLabel = breakdownTop.labels[elements[0].index];
+            const source = dashboardBreakdownMode === 'account' ? 'account' : 'provider';
+            dashboardFilter = dashboardFilter?.source === source && dashboardFilter.value === clickedLabel
+              ? null : { source, value: clickedLabel };
+            renderDashboardFromSnapshot(d);
+          },
+          onHover(event, elements) { event.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        }
       });
     }
-    renderLegend('allocationLegend', allocTop.labels, allocTop.data, CHART_COLORS, false);
-    renderLegend('providerLegend', breakdownTop.labels, breakdownTop.data, CHART_COLORS, false);
+    renderLegend('allocationLegend', allocTop.labels, allocTop.data, dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS, true);
+    renderLegend('providerLegend', breakdownTop.labels, breakdownTop.data, CHART_COLORS, true);
   }
 
   // Account overview
   const container = $('#dashboardAccounts');
   if (container) {
-    const accounts = d.accounts || [];
+    let accounts = d.accounts || [];
+    if (dashboardFilter?.source === 'change') {
+      const direction = dashboardFilter.value === 'Gain' ? 1 : -1;
+      accounts = accounts.filter(account => {
+        const previous = previousAccountValue(prev, account.id);
+        if (previous === null) return false;
+        const delta = Number(account.valueEur || 0) - previous;
+        return direction > 0 ? delta > 0 : delta < 0;
+      });
+    }
     renderDashboardAccountsSummary(accounts, prev);
     container.innerHTML = accounts.length ? `
       <div class="dashboard-accounts-grid">
@@ -2310,8 +2395,8 @@ function buildHistoryDatasets(points, chartType, growthValues = null) {
   if (chartType === 'global') {
     return [
       { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false },
-      { label: 'Debit', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false },
-      { label: 'Credit', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false }
+      { label: 'Assets', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false },
+      { label: 'Liabilities', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false }
     ];
   }
   const categoryMaps = points.map(p => {
@@ -4730,6 +4815,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('click', (e) => {
     if (e.target.closest('#growthCard')) {
       cycleGrowthCardMode();
+    } else if (e.target.closest('#dashboardAllocationCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
+      cycleDashboardAllocationMode();
     } else if (e.target.closest('#portfolioAssetCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cyclePortfolioAssetMode();
     } else if (e.target.closest('#simulationGrowthCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
@@ -5376,12 +5463,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const label = legendRow.dataset.legendLabel;
       const legendId = legendRow.closest('.chart-legend')?.id;
       if (legendId === 'allocationLegend') {
-        if (dashboardFilter && dashboardFilter.source === 'assetType' && dashboardFilter.value === label) {
+        const source = dashboardAllocationMode === 'change' ? 'change' : 'assetType';
+        if (dashboardFilter && dashboardFilter.source === source && dashboardFilter.value === label) {
           dashboardFilter = null;
         } else {
-          dashboardFilter = { source: 'assetType', value: label };
+          dashboardFilter = { source, value: label };
         }
-        renderDashboardAccounts();
+        if (timeTravelActive()) renderDashboardFromSnapshot(timeTravelSnapshot.data);
+        else renderDashboardAccounts();
       } else if (legendId === 'providerLegend') {
         const source = dashboardBreakdownMode === 'account' ? 'account' : 'provider';
         if (dashboardFilter && dashboardFilter.source === source && dashboardFilter.value === label) {
