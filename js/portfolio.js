@@ -419,6 +419,7 @@ let dashboardProviderOthers = [];
 let dashboardAccountOthers = [];
 let dashboardBreakdownMode = localStorage.getItem('portfolio_dashboard_breakdown_mode') || 'provider';
 let dashboardAllocationMode = localStorage.getItem('portfolio_dashboard_allocation_mode') || 'type';
+let simulationTargetMode = localStorage.getItem('portfolio_simulation_target_mode') || 'milestone';
 let dashboardAccountsCollapsed = false;
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
@@ -519,6 +520,50 @@ function simulationNextTarget(value) {
   return target;
 }
 
+// Estimate average monthly expenses from portfolio-level losses across the
+// full snapshot history. Transaction-level expense data is not stored.
+function simulationAverageMonthlyExpenses() {
+  if (!timeTravelList || !timeTravelList.length) return null;
+  const now = new Date();
+  const snapshots = timeTravelList
+    .filter(snapshot => Number.isFinite(Number(snapshot?.data?.globalValue)) && simulationSnapshotDate(snapshot))
+    .slice()
+    .sort((a, b) => simulationSnapshotDate(a) - simulationSnapshotDate(b));
+  if (!snapshots.length) return null;
+
+  const points = snapshots.map(snapshot => ({
+    date: simulationSnapshotDate(snapshot),
+    value: Number(snapshot.data.globalValue || 0)
+  }));
+  const livePoint = {
+    date: now,
+    value: totalPortfolioValue()
+  };
+  const lastPoint = points[points.length - 1];
+  const sameUtcDay = lastPoint.date.getUTCFullYear() === now.getUTCFullYear()
+    && lastPoint.date.getUTCMonth() === now.getUTCMonth()
+    && lastPoint.date.getUTCDate() === now.getUTCDate();
+  if (sameUtcDay) points[points.length - 1] = livePoint;
+  else points.push(livePoint);
+
+  const firstDate = points[0].date;
+  const monthsDiff = (now.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24 * 30.4375);
+  if (monthsDiff <= 0) return null;
+
+  let totalLoss = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const delta = points[index].value - points[index - 1].value;
+    if (delta < 0) totalLoss += Math.abs(delta);
+  }
+  return totalLoss / Math.max(1, monthsDiff);
+}
+
+function cycleSimulationTargetMode() {
+  simulationTargetMode = simulationTargetMode === 'milestone' ? 'fire' : 'milestone';
+  localStorage.setItem('portfolio_simulation_target_mode', simulationTargetMode);
+  renderSimulation();
+}
+
 function formatSimulationTarget(value) {
   return value.toLocaleString(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 }
@@ -550,20 +595,34 @@ function renderSimulation() {
   if (monthlySub) monthlySub.textContent = projection.oldestDate
     ? `oldest snapshot: ${formatSimulationDate(projection.oldestDate)}`
     : 'need two dated snapshots';
+  const fireExpenses = simulationAverageMonthlyExpenses();
+  const fireTarget = fireExpenses === null ? null : fireExpenses * 12 * 25;
+  const fireMode = simulationTargetMode === 'fire';
   const target = simulationNextTarget(projection.current);
-  if (targetLabelEl) targetLabelEl.textContent = `Path to ${formatSimulationTarget(target)}`;
+  if (targetLabelEl) targetLabelEl.textContent = fireMode ? 'Path to FIRE' : `Path to ${formatSimulationTarget(target)}`;
   if (zeroEl && zeroSubEl) {
-    const targetMonths = projection.monthlyChange > 0 && projection.current < target
-      ? Math.ceil((target - projection.current) / projection.monthlyChange)
-      : null;
-    if (targetMonths !== null) {
+    if (fireMode && fireTarget === null) {
+      zeroEl.textContent = 'Not available';
+      zeroSubEl.textContent = 'need a monthly expense baseline';
+    } else if (fireMode && fireTarget !== null && projection.current >= fireTarget) {
+      zeroEl.textContent = 'Achieved';
+      zeroSubEl.textContent = `${moneyEUR.format(fireExpenses)} monthly expenses · 25× annual expenses`;
+    } else {
+      const destination = fireMode ? fireTarget : target;
+      const targetMonths = projection.monthlyChange > 0 && projection.current < destination
+        ? Math.ceil((destination - projection.current) / projection.monthlyChange)
+        : null;
+      if (targetMonths !== null) {
       const date = new Date();
       date.setUTCMonth(date.getUTCMonth() + targetMonths);
       zeroEl.textContent = formatSimulationDate(date);
-      zeroSubEl.textContent = `about ${targetMonths} month${targetMonths === 1 ? '' : 's'} at this pace`;
-    } else {
-      zeroEl.textContent = 'Not reached';
-      zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
+        zeroSubEl.textContent = fireMode
+          ? `${moneyEUR.format(fireExpenses)} monthly expenses · target ${moneyEUR.format(fireTarget)}`
+          : `about ${targetMonths} month${targetMonths === 1 ? '' : 's'} at this pace`;
+      } else {
+        zeroEl.textContent = 'Not reached';
+        zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
+      }
     }
   }
 
@@ -592,6 +651,9 @@ function renderSimulation() {
   const labels = [...historical.map(point => point.label), 'Today', '1 year', '5 years', '10 years', '20 years'];
   const historicalData = [...historical.map(point => point.value), ...Array(5).fill(null)];
   const projectedData = [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => point.value)];
+  const fireProgressData = fireTarget !== null && projection.monthlyChange > 0 && projection.current < fireTarget
+    ? [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => Math.min(fireTarget, point.value))]
+    : null;
   const annualFivePercentValues = projection.monthlyChange === null ? Array(5).fill(null) : projection.milestones.map(point => {
     if (point.month === 0) return projection.current;
     let value = projection.current;
@@ -606,7 +668,8 @@ function renderSimulation() {
     data: { labels, datasets: [
       { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
       { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 },
-      { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 }
+      { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 },
+      ...(fireProgressData ? [{ label: 'Estimated Path to FIRE', data: fireProgressData, borderColor: '#ffb454', backgroundColor: '#ffb454', borderDash: [8, 4], tension: 0.15, pointRadius: 3 }] : [])
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
@@ -4830,6 +4893,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       cyclePortfolioAssetMode();
     } else if (e.target.closest('#simulationGrowthCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleSimulationGrowthMode();
+    } else if (e.target.closest('#simulationTargetCard')) {
+      cycleSimulationTargetMode();
     } else if (e.target.closest('#dashboardBreakdownCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleDashboardBreakdownMode();
     }

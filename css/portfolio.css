@@ -965,6 +965,18 @@ select {
   border-color: var(--accent);
 }
 
+.simulation-target-card,
+#simulationTargetCard {
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.simulation-target-card:hover,
+#simulationTargetCard:hover {
+  border-color: var(--accent);
+}
+
 .simulation-growth-card > h3,
 .simulation-growth-card > .page-desc {
   flex: 0 0 100%;
