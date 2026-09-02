@@ -12,7 +12,7 @@ function sessionToken(request) {
 async function currentUser(request, env) {
   const token = sessionToken(request);
   if (!token) return null;
-  const row = await env.myd1db.prepare(`SELECT u.id, u.username, u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP`).bind(token).first();
+  const row = await env.myd1db.prepare(`SELECT u.id, u.username, u.role, u.fire_expenses FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP`).bind(token).first();
   if (!row) return null;
   return row;
 }
@@ -56,7 +56,7 @@ export async function onRequest(context) {
   try {
     if (method === 'POST' && path === 'auth/login') {
       const { username, password } = await readBody(request);
-      const user = await env.myd1db.prepare('SELECT id, username, password_hash, role FROM users WHERE username = ?').bind(clean(username)).first();
+      const user = await env.myd1db.prepare('SELECT id, username, password_hash, role, fire_expenses FROM users WHERE username = ?').bind(clean(username)).first();
       if (!user || !validRole(user.role) || !(await bcrypt.compare(String(password || ''), user.password_hash))) return fail('Invalid username or password.', 401);
       const token = crypto.randomUUID();
       await env.myd1db.batch([
@@ -64,7 +64,7 @@ export async function onRequest(context) {
         env.myd1db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))").bind(token, user.id),
         env.myd1db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').bind(user.id)
       ]);
-      return json({ user: { id: user.id, username: user.username, role: user.role } }, 200, { 'set-cookie': `portfolio_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800` });
+      return json({ user: { id: user.id, username: user.username, role: user.role, fire_expenses: user.fire_expenses } }, 200, { 'set-cookie': `portfolio_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800` });
     }
     if (method === 'POST' && path === 'auth/logout') {
       const token = sessionToken(request); if (token) await env.myd1db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
@@ -445,6 +445,19 @@ export async function onRequest(context) {
       const hash = await bcrypt.hash(String(password), 12);
       await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, user.id).run();
       return json({ ok: true });
+    }
+    // Update profile settings (fire_expenses).
+    if (method === 'PATCH' && path === 'me/profile') {
+      const user = await requireMember(request, env);
+      const body = await readBody(request);
+      let fireExpenses = null;
+      if (body.fire_expenses !== null && body.fire_expenses !== undefined && body.fire_expenses !== '') {
+        const val = Number(body.fire_expenses);
+        if (!Number.isFinite(val) || val < 0) return fail('Monthly expenses for FIRE must be a non-negative number.');
+        fireExpenses = val;
+      }
+      await env.myd1db.prepare('UPDATE users SET fire_expenses = ? WHERE id = ?').bind(fireExpenses, user.id).run();
+      return json({ ok: true, fire_expenses: fireExpenses });
     }
     if (method === 'PATCH' && /^admin\/users\/\d+\/role$/.test(path)) {
       const admin = await requireAdmin(request, env), id = Number(path.split('/')[2]), { role } = await readBody(request);

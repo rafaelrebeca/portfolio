@@ -419,7 +419,11 @@ let dashboardProviderOthers = [];
 let dashboardAccountOthers = [];
 let dashboardBreakdownMode = localStorage.getItem('portfolio_dashboard_breakdown_mode') || 'provider';
 let dashboardAllocationMode = localStorage.getItem('portfolio_dashboard_allocation_mode') || 'type';
-let simulationTargetMode = localStorage.getItem('portfolio_simulation_target_mode') || 'milestone';
+let simulationTargetMode = (() => {
+  const mode = localStorage.getItem('portfolio_simulation_target_mode');
+  if (mode === 'fire') return 'fire_auto';
+  return (mode === 'fire_auto' || mode === 'fire_user' || mode === 'milestone') ? mode : 'milestone';
+})();
 let dashboardAccountsCollapsed = false;
 let portfolioAssetOthers = [];
 let portfolioTypeOthers = [];
@@ -559,7 +563,9 @@ function simulationAverageMonthlyExpenses() {
 }
 
 function cycleSimulationTargetMode() {
-  simulationTargetMode = simulationTargetMode === 'milestone' ? 'fire' : 'milestone';
+  const modes = ['milestone', 'fire_auto', 'fire_user'];
+  const curIdx = modes.indexOf(simulationTargetMode);
+  simulationTargetMode = modes[(curIdx + 1) % modes.length];
   localStorage.setItem('portfolio_simulation_target_mode', simulationTargetMode);
   renderSimulation();
 }
@@ -595,30 +601,80 @@ function renderSimulation() {
   if (monthlySub) monthlySub.textContent = projection.oldestDate
     ? `oldest snapshot: ${formatSimulationDate(projection.oldestDate)}`
     : 'need two dated snapshots';
-  const fireExpenses = simulationAverageMonthlyExpenses();
-  const fireTarget = fireExpenses === null ? null : fireExpenses * 12 * 25;
-  const fireMode = simulationTargetMode === 'fire';
+
+  const fireAutoExpenses = simulationAverageMonthlyExpenses();
+  const fireAutoTarget = fireAutoExpenses === null ? null : fireAutoExpenses * 12 * 25;
+
+  const rawUserExpenses = state.user?.fire_expenses;
+  const fireUserExpenses = (rawUserExpenses !== null && rawUserExpenses !== undefined && rawUserExpenses !== '' && Number(rawUserExpenses) > 0)
+    ? Number(rawUserExpenses)
+    : null;
+  const fireUserTarget = fireUserExpenses === null ? null : fireUserExpenses * 12 * 25;
+
+  const isAutoFire = simulationTargetMode === 'fire_auto';
+  const isUserFire = simulationTargetMode === 'fire_user';
   const target = simulationNextTarget(projection.current);
-  if (targetLabelEl) targetLabelEl.textContent = fireMode ? 'Path to FIRE' : `Path to ${formatSimulationTarget(target)}`;
+
+  if (targetLabelEl) {
+    targetLabelEl.textContent = isAutoFire
+      ? 'Path to FIRE (auto)'
+      : isUserFire
+        ? 'Path to FIRE (user)'
+        : `Path to ${formatSimulationTarget(target)}`;
+  }
+
   if (zeroEl && zeroSubEl) {
-    if (fireMode && fireTarget === null) {
-      zeroEl.textContent = 'Not available';
-      zeroSubEl.textContent = 'need a monthly expense baseline';
-    } else if (fireMode && fireTarget !== null && projection.current >= fireTarget) {
-      zeroEl.textContent = 'Achieved';
-      zeroSubEl.textContent = `${moneyEUR.format(fireExpenses)} monthly expenses · 25× annual expenses`;
+    if (isAutoFire) {
+      if (fireAutoTarget === null) {
+        zeroEl.textContent = 'Not available';
+        zeroSubEl.textContent = 'need a monthly expense baseline';
+      } else if (projection.current >= fireAutoTarget) {
+        zeroEl.textContent = 'Achieved';
+        zeroSubEl.textContent = `${moneyEUR.format(fireAutoExpenses)} monthly expenses · 25× annual expenses`;
+      } else {
+        const targetMonths = projection.monthlyChange > 0 && projection.current < fireAutoTarget
+          ? Math.ceil((fireAutoTarget - projection.current) / projection.monthlyChange)
+          : null;
+        if (targetMonths !== null) {
+          const date = new Date();
+          date.setUTCMonth(date.getUTCMonth() + targetMonths);
+          zeroEl.textContent = formatSimulationDate(date);
+          zeroSubEl.textContent = `${moneyEUR.format(fireAutoExpenses)} monthly expenses · target ${moneyEUR.format(fireAutoTarget)}`;
+        } else {
+          zeroEl.textContent = 'Not reached';
+          zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
+        }
+      }
+    } else if (isUserFire) {
+      if (fireUserTarget === null) {
+        zeroEl.textContent = 'Not configured';
+        zeroSubEl.textContent = 'set monthly expenses in Profile';
+      } else if (projection.current >= fireUserTarget) {
+        zeroEl.textContent = 'Achieved';
+        zeroSubEl.textContent = `${moneyEUR.format(fireUserExpenses)} monthly expenses · 25× annual expenses`;
+      } else {
+        const targetMonths = projection.monthlyChange > 0 && projection.current < fireUserTarget
+          ? Math.ceil((fireUserTarget - projection.current) / projection.monthlyChange)
+          : null;
+        if (targetMonths !== null) {
+          const date = new Date();
+          date.setUTCMonth(date.getUTCMonth() + targetMonths);
+          zeroEl.textContent = formatSimulationDate(date);
+          zeroSubEl.textContent = `${moneyEUR.format(fireUserExpenses)} monthly expenses · target ${moneyEUR.format(fireUserTarget)}`;
+        } else {
+          zeroEl.textContent = 'Not reached';
+          zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
+        }
+      }
     } else {
-      const destination = fireMode ? fireTarget : target;
-      const targetMonths = projection.monthlyChange > 0 && projection.current < destination
-        ? Math.ceil((destination - projection.current) / projection.monthlyChange)
+      const targetMonths = projection.monthlyChange > 0 && projection.current < target
+        ? Math.ceil((target - projection.current) / projection.monthlyChange)
         : null;
       if (targetMonths !== null) {
-      const date = new Date();
-      date.setUTCMonth(date.getUTCMonth() + targetMonths);
-      zeroEl.textContent = formatSimulationDate(date);
-        zeroSubEl.textContent = fireMode
-          ? `${moneyEUR.format(fireExpenses)} monthly expenses · target ${moneyEUR.format(fireTarget)}`
-          : `about ${targetMonths} month${targetMonths === 1 ? '' : 's'} at this pace`;
+        const date = new Date();
+        date.setUTCMonth(date.getUTCMonth() + targetMonths);
+        zeroEl.textContent = formatSimulationDate(date);
+        zeroSubEl.textContent = `about ${targetMonths} month${targetMonths === 1 ? '' : 's'} at this pace`;
       } else {
         zeroEl.textContent = 'Not reached';
         zeroSubEl.textContent = projection.monthlyChange === null ? 'not enough history' : 'current pace is not improving';
@@ -651,8 +707,11 @@ function renderSimulation() {
   const labels = [...historical.map(point => point.label), 'Today', '1 year', '5 years', '10 years', '20 years'];
   const historicalData = [...historical.map(point => point.value), ...Array(5).fill(null)];
   const projectedData = [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => point.value)];
-  const fireProgressData = fireTarget !== null && projection.monthlyChange > 0 && projection.current < fireTarget
-    ? [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => Math.min(fireTarget, point.value))]
+  const fireAutoProgressData = fireAutoTarget !== null && projection.monthlyChange > 0 && projection.current < fireAutoTarget
+    ? [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => Math.min(fireAutoTarget, point.value))]
+    : null;
+  const fireUserProgressData = fireUserTarget !== null && projection.monthlyChange > 0 && projection.current < fireUserTarget
+    ? [...Array(historical.length).fill(null), projection.current, ...projection.milestones.slice(1).map(point => Math.min(fireUserTarget, point.value))]
     : null;
   const annualFivePercentValues = projection.monthlyChange === null ? Array(5).fill(null) : projection.milestones.map(point => {
     if (point.month === 0) return projection.current;
@@ -669,7 +728,8 @@ function renderSimulation() {
       { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
       { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 },
       { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 },
-      ...(fireProgressData ? [{ label: 'Estimated Path to FIRE', data: fireProgressData, borderColor: '#ffb454', backgroundColor: '#ffb454', borderDash: [8, 4], tension: 0.15, pointRadius: 3 }] : [])
+      ...(fireAutoProgressData ? [{ label: 'Estimated Path to FIRE (auto)', data: fireAutoProgressData, borderColor: '#ffb454', backgroundColor: '#ffb454', borderDash: [8, 4], tension: 0.15, pointRadius: 3 }] : []),
+      ...(fireUserProgressData ? [{ label: 'Estimated Path to FIRE (user)', data: fireUserProgressData, borderColor: '#e08a3c', backgroundColor: '#e08a3c', borderDash: [4, 4], tension: 0.15, pointRadius: 3 }] : [])
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
@@ -3726,8 +3786,52 @@ function showApp() {
 function renderProfile() {
   const username = $('#profileUsername');
   const role = $('#profileRole');
+  const fireExpenses = $('#profileFireExpenses');
   if (username) username.textContent = state.guest ? 'Guest' : (state.user?.username || '—');
   if (role) role.textContent = state.guest ? 'guest' : (state.user?.role || 'user');
+  if (fireExpenses) {
+    fireExpenses.value = (state.user?.fire_expenses !== undefined && state.user?.fire_expenses !== null)
+      ? state.user.fire_expenses
+      : '';
+  }
+}
+
+// Save the logged-in user's monthly FIRE expenses from the Profile page.
+async function saveProfileFireExpenses() {
+  const fireInput = $('#profileFireExpenses');
+  const rawVal = fireInput?.value?.trim() ?? '';
+  let expenses = null;
+  if (rawVal !== '') {
+    const parsed = Number(rawVal);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast('Monthly expenses for FIRE must be a non-negative number.');
+      return;
+    }
+    expenses = parsed;
+  }
+  const btn = $('#profileSaveFireExpensesBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (state.guest) {
+      if (!state.user) state.user = { id: 0, username: 'Guest', role: 'guest' };
+      state.user.fire_expenses = expenses;
+      toast('FIRE expenses saved.');
+    } else {
+      const res = await request('/me/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ fire_expenses: expenses })
+      });
+      if (!state.user) state.user = {};
+      state.user.fire_expenses = res.fire_expenses ?? expenses;
+      toast('FIRE expenses saved successfully.');
+    }
+    renderProfile();
+    if (currentPage === 'simulation') renderSimulation();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // Reset the logged-in user's password from the Profile page.
@@ -4932,6 +5036,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
+  $('#profileSaveFireExpensesBtn')?.addEventListener('click', saveProfileFireExpenses);
   $('#profileResetPasswordBtn')?.addEventListener('click', resetProfilePassword);
   $('#currencySearch')?.addEventListener('input', () => { currencyPage = 0; renderCurrency(); });
 

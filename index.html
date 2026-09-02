@@ -316,7 +316,7 @@
               <div class="delta" id="simulationMonthlySubtext">same pace shown on Dashboard</div>
             </div>
             <div class="card" id="simulationTargetCard" style="cursor: pointer;"
-              title="Click to switch between the milestone path and Path to FIRE">
+              title="Click to switch between the milestone path, Path to FIRE (auto), and Path to FIRE (user)">
               <div class="label" id="simulationTargetLabel">Path to €0</div>
               <div class="value" id="simulationZeroValue">—</div>
               <div class="delta" id="simulationZeroSubtext">only relevant when global value is negative</div>
@@ -564,7 +564,7 @@
 
         <div class="page" id="page-profile">
           <div class="page-title">Profile</div>
-          <div class="page-desc">View your account details and reset your password</div>
+          <div class="page-desc">View your account details and update your settings</div>
           <div class="card" style="max-width:420px;margin-top:16px;">
             <div class="field"><label>Username</label>
               <div id="profileUsername" style="padding:8px 0;font-weight:600;"></div>
@@ -572,6 +572,10 @@
             <div class="field"><label>User type</label>
               <div id="profileRole" style="padding:8px 0;"></div>
             </div>
+            <div class="field"><label>Monthly expenses for FIRE (€)</label><input type="number" id="profileFireExpenses" min="0" step="any"
+                placeholder="e.g. 2500"></div>
+            <button class="btn-sm primary" type="button" id="profileSaveFireExpensesBtn" style="margin-top:8px;">Save
+              expenses</button>
             <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
             <div class="field"><label>New password</label><input type="password" id="profileNewPassword" maxlength="50"
                 autocomplete="new-password" placeholder="Enter a new password"></div>
