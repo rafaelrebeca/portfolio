@@ -4192,10 +4192,10 @@ function setUpdateLog(value) {
 }
 
 // --- Bulk "Update All Prices" (admin) ---
-// Finnhub rate limit: 1 request every 5 seconds (12 calls/minute).
-const BULK_UPDATE_RATE_LIMIT_MS = 5000; // 5s between calls
+// Finnhub rate limit: 1 request every 15 seconds (4 calls/minute).
+const BULK_UPDATE_RATE_LIMIT_MS = 15000; // 15s between calls
 const BULK_UPDATE_MAX_RETRIES = 3;
-const BULK_UPDATE_RETRY_DELAY_MS = 30000; // 30s wait before retry on failure
+const BULK_UPDATE_RETRY_DELAYS_MS = [30000, 60000, 120000]; // 30s -> 60s -> 120s exponential backoff
 
 function bulkUpdateEligibleAssets() {
   return state.assets.filter(a => a.type === 'stock' && (a.coin || 'USD') === 'USD');
@@ -4259,7 +4259,7 @@ async function runBulkUpdate(eligible) {
     }
 
     appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
-    appendBulkUpdateLog(`Rate limit: 1 request every 5 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with ${BULK_UPDATE_RETRY_DELAY_MS / 1000}s delay).`);
+    appendBulkUpdateLog(`Rate limit: 1 request every 15 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with exponential backoff: 30s, 60s, 120s).`);
 
     for (let i = 0; i < total; i++) {
       const a = eligible[i];
@@ -4280,8 +4280,9 @@ async function runBulkUpdate(eligible) {
         }
 
         if (attempt < BULK_UPDATE_MAX_RETRIES) {
-          appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting 30s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
-          await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RETRY_DELAY_MS));
+          const retryDelayMs = BULK_UPDATE_RETRY_DELAYS_MS[attempt] || 120000;
+          appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting ${retryDelayMs / 1000}s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
         }
       }
 
