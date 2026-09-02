@@ -197,17 +197,16 @@ export async function onRequest(context) {
       const apiKey = env.STOCK_API_KEY;
       if (!apiKey) return fail('STOCK_API_KEY not configured in environment variables.', 500);
 
-      const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(asset.symbol)}/prev?apiKey=${encodeURIComponent(apiKey)}`;
+      const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(asset.symbol)}&token=${encodeURIComponent(apiKey)}`;
       let response;
       try {
         response = await fetch(url, { signal: AbortSignal.timeout(15000) });
       } catch (error) {
-        return fail('Massive API request timed out.', 504);
+        return fail('Finnhub API request timed out.', 504);
       }
-      if (!response.ok) return fail(`Massive API returned ${response.status}.`, 502);
+      if (!response.ok) return fail(`Finnhub API returned ${response.status}.`, 502);
       const data = await response.json();
-      const results = Array.isArray(data?.results) ? data.results[0] : data?.results;
-      const price = results?.c ?? null;
+      const price = (typeof data?.c === 'number' && data.c > 0) ? data.c : null;
       if (price == null) return fail('No price returned for this asset.', 404);
       return json({ price, coin: asset.coin || 'USD', raw: data });
     }

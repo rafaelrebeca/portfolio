@@ -48,7 +48,7 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 | **Frontend** | Vanilla HTML5, CSS3 (Custom Variables & Responsive Design), JS (ES Modules) |
 | **Data Visualization** | Chart.js |
 | **Authentication** | Secure `HttpOnly` Session Cookies + `bcrypt` password hashing |
-| **External APIs** | Massive.com (Stock Prices API), ExchangeRate-API (Currency Rates) |
+| **External APIs** | Finnhub (Stock Prices API), ExchangeRate-API (Currency Rates) |
 
 ---
 

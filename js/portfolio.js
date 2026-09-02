@@ -4078,8 +4078,8 @@ function setUpdateLog(value) {
 }
 
 // --- Bulk "Update All Prices" (admin) ---
-// Massive free tier allows 5 calls/minute; we cap at 4 to be safe.
-const BULK_UPDATE_RATE_LIMIT_MS = 15000; // 60s / 4 calls
+// Finnhub allows up to 30-60 calls/minute; we cap at 30 calls/minute (2s delay).
+const BULK_UPDATE_RATE_LIMIT_MS = 2000; // 60s / 30 calls
 
 function bulkUpdateEligibleAssets() {
   return state.assets.filter(a => a.type === 'stock' && (a.coin || 'USD') === 'USD');
@@ -4131,12 +4131,12 @@ async function runBulkUpdate(eligible) {
   }
 
   appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
-  appendBulkUpdateLog(`Rate limit: 4 Massive calls/minute (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls).`);
+  appendBulkUpdateLog(`Rate limit: 30 calls/minute (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls).`);
 
   for (let i = 0; i < total; i++) {
     const a = eligible[i];
     try {
-      // Fetch latest price from Massive (respects the 4/min cap).
+      // Fetch latest price from Finnhub (respects the 30/min cap).
       const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
       const price = data.price;
       if (price == null) {

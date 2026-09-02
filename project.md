@@ -16,7 +16,7 @@ This document describes the current source in `index.html`, `css/portfolio.css`,
 | Frontend | Vanilla HTML, CSS, and an ES-module JavaScript client |
 | Charts | Chart.js loaded by the page shell |
 | Authentication | Session cookie named `portfolio_session`; passwords hashed with bcrypt |
-| External data | Massive.com for previous-day US stock closes; ExchangeRate-API for currency rates |
+| External data | Finnhub for real-time / current stock quote prices; ExchangeRate-API for currency rates |
 | PWA | `manifest.webmanifest` and `sw.js` |
 
 The application is a single-page interface. `index.html` contains all page shells and modal markup. `js/portfolio.js` owns client state, API calls, rendering, event delegation, calculations, and modal behavior. `css/portfolio.css` contains the visual system and responsive layout. `_routes.json` sends only `/api/*` requests to the Pages Function.
@@ -113,7 +113,7 @@ All routes are under `/api`. The route is implemented by `functions/api/[[path]]
 | POST | `/api/assets` | Admin | Creates a platform asset. |
 | PUT/PATCH | `/api/assets/{id}` | Admin | Updates a platform asset, dividend yield, and payment months. |
 | DELETE | `/api/assets/{id}` | Admin | Deletes a platform asset and its related holdings/dividend rows. |
-| POST | `/api/assets/{id}/price` | Admin | Fetches the previous trading day's close from Massive.com. |
+| POST | `/api/assets/{id}/price` | Admin | Fetches the quote price from Finnhub. |
 | POST | `/api/personal-assets` | Member | Creates a user-owned personal asset. |
 | PUT/PATCH | `/api/personal-assets/{id}` | Owner/Admin | Updates a personal asset. |
 | DELETE | `/api/personal-assets/{id}` | Owner/Admin | Deletes a personal asset. |
