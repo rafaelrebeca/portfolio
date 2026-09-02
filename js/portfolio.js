@@ -4043,24 +4043,34 @@ async function fetchUpdateAssetPrice(a) {
   const err = $('#updateAssetError');
   if (err) err.textContent = '';
   setUpdateLog(null);
-  try {
-    setUpdateProgress(40);
-    const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
-    setUpdateProgress(100);
-    setUpdateLog(data.raw);
-    const price = data.price;
-    if (price == null) {
-      if (err) err.textContent = data.error || 'No price returned for this asset.';
+  const maxRetries = 3;
+  const retryDelayMs = 30000;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      setUpdateProgress(40 + attempt * 15);
+      const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+      const price = data.price;
+      if (price == null) {
+        throw new Error(data.error || 'No price returned for this asset.');
+      }
+      setUpdateProgress(100);
+      setUpdateLog(data.raw);
+      $('#updateAssetPrice').value = price;
+      const form = $('#updateAssetForm');
+      const progressWrap = $('#updateAssetProgressWrap');
+      if (form) form.style.display = '';
+      if (progressWrap) progressWrap.style.display = 'none';
       return;
+    } catch (error) {
+      if (attempt < maxRetries) {
+        if (err) err.textContent = `Attempt ${attempt + 1} failed: ${error.message}. Retrying in 30s (${attempt + 1}/${maxRetries})...`;
+        setUpdateLog({ attempt: attempt + 1, error: error.message, next_retry_in_seconds: 30 });
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+      } else {
+        if (err) err.textContent = error.message;
+        setUpdateLog({ error: error.message, total_attempts: attempt + 1 });
+      }
     }
-    $('#updateAssetPrice').value = price;
-    const form = $('#updateAssetForm');
-    const progressWrap = $('#updateAssetProgressWrap');
-    if (form) form.style.display = '';
-    if (progressWrap) progressWrap.style.display = 'none';
-  } catch (error) {
-    if (err) err.textContent = error.message;
-    setUpdateLog({ error: error.message });
   }
 }
 
@@ -4080,6 +4090,8 @@ function setUpdateLog(value) {
 // --- Bulk "Update All Prices" (admin) ---
 // Finnhub rate limit: 1 request every 5 seconds (12 calls/minute).
 const BULK_UPDATE_RATE_LIMIT_MS = 5000; // 5s between calls
+const BULK_UPDATE_MAX_RETRIES = 3;
+const BULK_UPDATE_RETRY_DELAY_MS = 30000; // 30s wait before retry on failure
 
 function bulkUpdateEligibleAssets() {
   return state.assets.filter(a => a.type === 'stock' && (a.coin || 'USD') === 'USD');
@@ -4131,18 +4143,37 @@ async function runBulkUpdate(eligible) {
   }
 
   appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
-  appendBulkUpdateLog(`Rate limit: 1 request every 5 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls).`);
+  appendBulkUpdateLog(`Rate limit: 1 request every 5 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with ${BULK_UPDATE_RETRY_DELAY_MS / 1000}s delay).`);
 
   for (let i = 0; i < total; i++) {
     const a = eligible[i];
-    try {
-      // Fetch latest price from Finnhub (respects the 5s interval).
-      const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
-      const price = data.price;
-      if (price == null) {
-        failed++;
-        appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: no price returned.`);
-      } else {
+    let price = null;
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= BULK_UPDATE_MAX_RETRIES; attempt++) {
+      try {
+        const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+        if (data.price != null) {
+          price = data.price;
+          break;
+        } else {
+          lastError = new Error(data.error || 'no price returned');
+        }
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < BULK_UPDATE_MAX_RETRIES) {
+        appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting 30s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
+        await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RETRY_DELAY_MS));
+      }
+    }
+
+    if (price == null) {
+      failed++;
+      appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed after ${BULK_UPDATE_MAX_RETRIES + 1} attempts (${lastError?.message || 'no price returned'}).`);
+    } else {
+      try {
         // Commit the fetched price.
         await request(`/assets/${a.id}`, {
           method: 'PUT',
@@ -4164,13 +4195,14 @@ async function runBulkUpdate(eligible) {
         const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
         portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
         portfolioAfter += qty * Number(price);
+      } catch (commitErr) {
+        failed++;
+        appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed to save price (${commitErr.message})`);
       }
-    } catch (error) {
-      failed++;
-      appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: ${error.message}`);
     }
+
     setBulkUpdateProgress(updated + failed, total);
-    // Wait between calls to respect the rate limit (skip after the last one).
+    // Wait between successful assets to respect the base rate limit (skip after the last one).
     if (i < total - 1) {
       await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RATE_LIMIT_MS));
     }
