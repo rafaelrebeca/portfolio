@@ -4217,7 +4217,13 @@ function appendBulkUpdateLog(line) {
   pre.scrollTop = pre.scrollHeight;
 }
 
+let bulkUpdateRunning = false;
+
 function openBulkUpdateModal() {
+  if (bulkUpdateRunning) {
+    openModal('updateAllPricesModalOverlay');
+    return;
+  }
   const eligible = bulkUpdateEligibleAssets();
   const err = $('#updateAllPricesError');
   const logWrap = $('#updateAllPricesLogWrap');
@@ -4231,6 +4237,11 @@ function openBulkUpdateModal() {
 }
 
 async function runBulkUpdate(eligible) {
+  if (bulkUpdateRunning) return;
+  bulkUpdateRunning = true;
+  const btn = $('#updateAllPricesBtn');
+  if (btn) btn.disabled = true;
+
   const err = $('#updateAllPricesError');
   const total = eligible.length;
   let updated = 0;
@@ -4239,87 +4250,92 @@ async function runBulkUpdate(eligible) {
   let portfolioBefore = 0;
   let portfolioAfter = 0;
 
-  if (total === 0) {
-    if (err) err.textContent = 'No USD stocks to update.';
-    appendBulkUpdateLog('No USD stocks found to update.');
-    setBulkUpdateProgress(0, 0);
-    return;
-  }
+  try {
+    if (total === 0) {
+      if (err) err.textContent = 'No USD stocks to update.';
+      appendBulkUpdateLog('No USD stocks found to update.');
+      setBulkUpdateProgress(0, 0);
+      return;
+    }
 
-  appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
-  appendBulkUpdateLog(`Rate limit: 1 request every 5 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with ${BULK_UPDATE_RETRY_DELAY_MS / 1000}s delay).`);
+    appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
+    appendBulkUpdateLog(`Rate limit: 1 request every 5 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with ${BULK_UPDATE_RETRY_DELAY_MS / 1000}s delay).`);
 
-  for (let i = 0; i < total; i++) {
-    const a = eligible[i];
-    let price = null;
-    let lastError = null;
+    for (let i = 0; i < total; i++) {
+      const a = eligible[i];
+      let price = null;
+      let lastError = null;
 
-    for (let attempt = 0; attempt <= BULK_UPDATE_MAX_RETRIES; attempt++) {
-      try {
-        const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
-        if (data.price != null) {
-          price = data.price;
-          break;
-        } else {
-          lastError = new Error(data.error || 'no price returned');
+      for (let attempt = 0; attempt <= BULK_UPDATE_MAX_RETRIES; attempt++) {
+        try {
+          const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+          if (data.price != null) {
+            price = data.price;
+            break;
+          } else {
+            lastError = new Error(data.error || 'no price returned');
+          }
+        } catch (error) {
+          lastError = error;
         }
-      } catch (error) {
-        lastError = error;
+
+        if (attempt < BULK_UPDATE_MAX_RETRIES) {
+          appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting 30s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
+          await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RETRY_DELAY_MS));
+        }
       }
 
-      if (attempt < BULK_UPDATE_MAX_RETRIES) {
-        appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting 30s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
-        await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RETRY_DELAY_MS));
-      }
-    }
-
-    if (price == null) {
-      failed++;
-      appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed after ${BULK_UPDATE_MAX_RETRIES + 1} attempts (${lastError?.message || 'no price returned'}).`);
-    } else {
-      try {
-        // Commit the fetched price.
-        await request(`/assets/${a.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            name: a.name,
-            symbol: a.symbol || '',
-            type: a.type,
-            coin: a.coin || 'USD',
-            price: Number(price),
-            payment_months: a.payment_months || []
-          })
-        });
-        updated++;
-        const oldPrice = a.price;
-        const changePct = (oldPrice != null && oldPrice > 0) ? ((price - oldPrice) / oldPrice) * 100 : null;
-        const changeStr = changePct == null ? 'n/a' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
-        appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price} (${changeStr})`);
-        // Accumulate portfolio impact from this asset's holdings (USD).
-        const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
-        portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
-        portfolioAfter += qty * Number(price);
-      } catch (commitErr) {
+      if (price == null) {
         failed++;
-        appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed to save price (${commitErr.message})`);
+        appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed after ${BULK_UPDATE_MAX_RETRIES + 1} attempts (${lastError?.message || 'no price returned'}).`);
+      } else {
+        try {
+          // Commit the fetched price.
+          await request(`/assets/${a.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name: a.name,
+              symbol: a.symbol || '',
+              type: a.type,
+              coin: a.coin || 'USD',
+              price: Number(price),
+              payment_months: a.payment_months || []
+            })
+          });
+          updated++;
+          const oldPrice = a.price;
+          const changePct = (oldPrice != null && oldPrice > 0) ? ((price - oldPrice) / oldPrice) * 100 : null;
+          const changeStr = changePct == null ? 'n/a' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
+          appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price} (${changeStr})`);
+          // Accumulate portfolio impact from this asset's holdings (USD).
+          const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
+          portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
+          portfolioAfter += qty * Number(price);
+        } catch (commitErr) {
+          failed++;
+          appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed to save price (${commitErr.message})`);
+        }
+      }
+
+      setBulkUpdateProgress(updated + failed, total);
+      // Wait between successful assets to respect the base rate limit (skip after the last one).
+      if (i < total - 1) {
+        await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RATE_LIMIT_MS));
       }
     }
 
-    setBulkUpdateProgress(updated + failed, total);
-    // Wait between successful assets to respect the base rate limit (skip after the last one).
-    if (i < total - 1) {
-      await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RATE_LIMIT_MS));
-    }
+    const impactUsd = portfolioAfter - portfolioBefore;
+    const impactPct = portfolioBefore > 0 ? (impactUsd / portfolioBefore) * 100 : null;
+    const impactStr = impactPct == null ? 'n/a' : `${impactPct >= 0 ? '+' : ''}${impactPct.toFixed(2)}%`;
+    appendBulkUpdateLog(`Done. Updated ${updated}, failed ${failed}.`);
+    appendBulkUpdateLog(`Portfolio impact: ${impactUsd >= 0 ? '+' : ''}${formatCurrency(impactUsd, 'USD')} (${impactStr})`);
+    if (err) err.textContent = failed ? `${failed} asset(s) failed. See console log.` : '';
+    await loadData();
+    toast(`Bulk update finished: ${updated} updated, ${failed} failed.`);
+  } finally {
+    bulkUpdateRunning = false;
+    if (btn) btn.disabled = false;
   }
-
-  const impactUsd = portfolioAfter - portfolioBefore;
-  const impactPct = portfolioBefore > 0 ? (impactUsd / portfolioBefore) * 100 : null;
-  const impactStr = impactPct == null ? 'n/a' : `${impactPct >= 0 ? '+' : ''}${impactPct.toFixed(2)}%`;
-  appendBulkUpdateLog(`Done. Updated ${updated}, failed ${failed}.`);
-  appendBulkUpdateLog(`Portfolio impact: ${impactUsd >= 0 ? '+' : ''}${formatCurrency(impactUsd, 'USD')} (${impactStr})`);
-  if (err) err.textContent = failed ? `${failed} asset(s) failed. See console log.` : '';
-  await loadData();
-  toast(`Bulk update finished: ${updated} updated, ${failed} failed.`);
 }
 
 function openProviderModal(providerId = null) {
