@@ -10,7 +10,7 @@
     "bcryptjs": "^3.0.2"
   },
   "devDependencies": {
-    "wrangler": "^4.33.1"
+    "wrangler": "^4.129.0"
   },
   "allowScripts": {
     "esbuild": true,

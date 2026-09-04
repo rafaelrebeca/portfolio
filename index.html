@@ -700,17 +700,32 @@
         <h3>Update All Prices</h3>
         <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close" aria-label="Close">✕</button>
       </div>
-      <p class="modal-copy">Updating prices for all <strong>USD stocks</strong> from finnhub.io. Bonds, ETFs, CFDs,
-        commodities and non-USD assets are skipped. Limited to 1 request every 15 seconds (4 calls/minute), with up to 3 retries (30s, 60s, 120s exponential backoff on failure), so this may take a while.
-      </p>
-      <div class="field">
+      <p class="modal-copy">Update prices for all <strong>USD stocks</strong>. Bonds, ETFs, CFDs, commodities, and non-USD assets are skipped.</p>
+      <div class="field" id="bulkUpdateProviderField">
+        <label for="bulkUpdateProviderSelect">Choose Stock Data Provider</label>
+        <select id="bulkUpdateProviderSelect" style="width:100%; margin-top:4px;">
+          <option value="twelvedata">Twelve Data (7 calls/min — ~8.6s delay)</option>
+          <option value="massive">Massive (4 calls/min — 15s delay)</option>
+          <option value="finnhub">Finnhub.io (1 call every 2s — 30 calls/min)</option>
+        </select>
+      </div>
+      <div class="bulk-update-info" id="bulkUpdateInfo" style="margin-bottom:16px; padding:10px 12px; border-radius:8px; background:var(--panel2); border:1px solid var(--border); font-size:12px; color:var(--muted); line-height:1.5;">
+        <div><strong id="bulkUpdateAssetCount">0</strong> USD stock(s) found.</div>
+        <div id="bulkUpdateEstimatedTime" style="margin-top:4px;">Estimated duration: ~0s</div>
+        <div style="margin-top:4px; font-size:11px;">Retry logic: 30s after 1st failure, 60s after 2nd, 120s after 3rd.</div>
+      </div>
+      <div class="field" id="bulkUpdateProgressField" style="display:none;">
         <label id="updateAllPricesLabel">Preparing...</label>
         <div class="progress">
           <div class="progress-bar" id="updateAllPricesProgressBar"></div>
         </div>
       </div>
       <p class="form-error" id="updateAllPricesError"></p>
-      <details class="update-log" id="updateAllPricesLogWrap" style="display:none;">
+      <div class="modal-actions" id="bulkUpdateActions" style="margin-top:16px;">
+        <button class="btn-sm" type="button" id="cancelBulkUpdateBtn">Cancel</button>
+        <button class="btn-sm primary" type="button" id="startBulkUpdateBtn">Start Update</button>
+      </div>
+      <details class="update-log" id="updateAllPricesLogWrap" style="display:none; margin-top:16px;">
         <summary>Console log</summary>
         <pre id="updateAllPricesLog"></pre>
       </details>

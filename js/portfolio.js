@@ -724,16 +724,20 @@ function renderSimulation() {
   const annualFivePercentData = [...Array(historical.length).fill(null), ...annualFivePercentValues];
   simulationTrendChartInstance = new Chart(trendCtx, {
     type: 'line',
-    data: { labels, datasets: [
-      { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
-      { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 },
-      { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 },
-      ...(fireAutoProgressData ? [{ label: 'Estimated Path to FIRE (auto)', data: fireAutoProgressData, borderColor: '#ffb454', backgroundColor: '#ffb454', borderDash: [8, 4], tension: 0.15, pointRadius: 3 }] : []),
-      ...(fireUserProgressData ? [{ label: 'Estimated Path to FIRE (user)', data: fireUserProgressData, borderColor: '#e08a3c', backgroundColor: '#e08a3c', borderDash: [4, 4], tension: 0.15, pointRadius: 3 }] : [])
-    ] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+    data: {
+      labels, datasets: [
+        { label: 'Historical Global Value', data: historicalData, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0], tension: 0.25, pointRadius: 3 },
+        { label: 'Projected Global Value', data: projectedData, borderColor: CHART_COLORS[1], backgroundColor: CHART_COLORS[1], borderDash: [6, 5], tension: 0.15, pointRadius: 3 },
+        { label: 'Projected +5% Annual Growth', data: annualFivePercentData, borderColor: CHART_COLORS[4], backgroundColor: CHART_COLORS[4], borderDash: [3, 4], tension: 0.15, pointRadius: 3 },
+        ...(fireAutoProgressData ? [{ label: 'Estimated Path to FIRE (auto)', data: fireAutoProgressData, borderColor: '#ffb454', backgroundColor: '#ffb454', borderDash: [8, 4], tension: 0.15, pointRadius: 3 }] : []),
+        ...(fireUserProgressData ? [{ label: 'Estimated Path to FIRE (user)', data: fireUserProgressData, borderColor: '#e08a3c', backgroundColor: '#e08a3c', borderDash: [4, 4], tension: 0.15, pointRadius: 3 }] : [])
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
-      scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } } } }
+      scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } } }
+    }
   });
   // Build each account's own lifetime from all snapshots. An account that was
   // created later starts at its first known snapshot; a deleted account ends
@@ -793,25 +797,33 @@ function renderSimulation() {
   const growthColors = growthLabels.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]);
   simulationGrowthChartInstance = new Chart(growthCtx, {
     type: 'doughnut',
-    data: { labels: growthLabels.length ? growthLabels : ['No growth data'], datasets: [
-      { label: 'Positive growth', data: positiveGrowth.length ? positiveGrowth : [1], backgroundColor: positiveGrowth.length ? growthColors : '#2a3550', borderWidth: 0 },
-      { label: 'Negative growth', data: negativeGrowth.length ? negativeGrowth : [0], backgroundColor: negativeGrowth.length ? growthColors : 'transparent', borderWidth: 0 }
-    ] },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '42%', plugins: {
-      legend: { display: false },
-      tooltip: { callbacks: { label: context => {
-        if (blurActive()) return `${context.dataset.label}: hidden`;
-        const label = growthLabels[context.dataIndex];
-        const total = Number(displayedGrowthMap[label] || 0);
-        const base = `${context.dataset.label}: ${moneyEUR.format(Math.abs(Number(context.raw || 0)))}`;
-        if (label !== 'Others' || !growthTop.others.length) return base;
-        const detail = growthTop.others.map(name => {
-          const value = Number(growthMap[name] || 0);
-          return `  ${name}: ${value >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(value))}`;
-        });
-        return [`Others total: ${total >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(total))}`, 'Included accounts:', ...detail];
-      } } }
-    } }
+    data: {
+      labels: growthLabels.length ? growthLabels : ['No growth data'], datasets: [
+        { label: 'Positive growth', data: positiveGrowth.length ? positiveGrowth : [1], backgroundColor: positiveGrowth.length ? growthColors : '#2a3550', borderWidth: 0 },
+        { label: 'Negative growth', data: negativeGrowth.length ? negativeGrowth : [0], backgroundColor: negativeGrowth.length ? growthColors : 'transparent', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, cutout: '42%', plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: context => {
+              if (blurActive()) return `${context.dataset.label}: hidden`;
+              const label = growthLabels[context.dataIndex];
+              const total = Number(displayedGrowthMap[label] || 0);
+              const base = `${context.dataset.label}: ${moneyEUR.format(Math.abs(Number(context.raw || 0)))}`;
+              if (label !== 'Others' || !growthTop.others.length) return base;
+              const detail = growthTop.others.map(name => {
+                const value = Number(growthMap[name] || 0);
+                return `  ${name}: ${value >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(value))}`;
+              });
+              return [`Others total: ${total >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(total))}`, 'Included accounts:', ...detail];
+            }
+          }
+        }
+      }
+    }
   });
   // Use the same account legend format as the other doughnut charts. Negative
   // rows are marked as negative by the shared renderer and remain signed in
@@ -4148,18 +4160,23 @@ async function fetchUpdateAssetPrice(a) {
   if (err) err.textContent = '';
   setUpdateLog(null);
   const maxRetries = 3;
-  const retryDelayMs = 30000;
+  const retryDelaysMs = [30000, 60000, 120000];
+  const providerKey = bulkUpdateSelectedProvider || 'finnhub';
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       setUpdateProgress(40 + attempt * 15);
-      const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+      const data = await request(`/assets/${a.id}/price?provider=${encodeURIComponent(providerKey)}`, {
+        method: 'POST',
+        body: JSON.stringify({ provider: providerKey })
+      });
       const price = data.price;
       if (price == null) {
         throw new Error(data.error || 'No price returned for this asset.');
       }
+      const roundedPrice = Math.round(Number(price) * 100) / 100;
       setUpdateProgress(100);
       setUpdateLog(data.raw);
-      $('#updateAssetPrice').value = price;
+      $('#updateAssetPrice').value = roundedPrice.toFixed(2);
       const form = $('#updateAssetForm');
       const progressWrap = $('#updateAssetProgressWrap');
       if (form) form.style.display = '';
@@ -4167,9 +4184,10 @@ async function fetchUpdateAssetPrice(a) {
       return;
     } catch (error) {
       if (attempt < maxRetries) {
-        if (err) err.textContent = `Attempt ${attempt + 1} failed: ${error.message}. Retrying in 30s (${attempt + 1}/${maxRetries})...`;
-        setUpdateLog({ attempt: attempt + 1, error: error.message, next_retry_in_seconds: 30 });
-        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        const delayMs = retryDelaysMs[attempt] || 120000;
+        if (err) err.textContent = `Attempt ${attempt + 1} failed: ${error.message}. Retrying in ${delayMs / 1000}s (${attempt + 1}/${maxRetries})...`;
+        setUpdateLog({ attempt: attempt + 1, error: error.message, next_retry_in_seconds: delayMs / 1000 });
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       } else {
         if (err) err.textContent = error.message;
         setUpdateLog({ error: error.message, total_attempts: attempt + 1 });
@@ -4192,13 +4210,62 @@ function setUpdateLog(value) {
 }
 
 // --- Bulk "Update All Prices" (admin) ---
-// Finnhub rate limit: 1 request every 15 seconds (4 calls/minute).
-const BULK_UPDATE_RATE_LIMIT_MS = 15000; // 15s between calls
+const BULK_PROVIDERS = {
+  twelvedata: {
+    key: 'twelvedata',
+    name: 'Twelve Data',
+    rateLimitMs: 8600, // 7 calls per minute: ~8571ms -> 8600ms safe margin
+    rateLabel: '7 calls/min (~8.6s delay)'
+  },
+  massive: {
+    key: 'massive',
+    name: 'Massive',
+    rateLimitMs: 15000, // 4 calls per minute: 15000ms
+    rateLabel: '4 calls/min (15s delay)'
+  },
+  finnhub: {
+    key: 'finnhub',
+    name: 'Finnhub.io',
+    rateLimitMs: 2000, // 1 call every 2 seconds: 2000ms
+    rateLabel: '1 call every 2s (30 calls/min)'
+  }
+};
+
 const BULK_UPDATE_MAX_RETRIES = 3;
 const BULK_UPDATE_RETRY_DELAYS_MS = [30000, 60000, 120000]; // 30s -> 60s -> 120s exponential backoff
 
+let bulkUpdateRunning = false;
+let bulkUpdateAbortRequested = false;
+let bulkUpdateSelectedProvider = 'twelvedata';
+
 function bulkUpdateEligibleAssets() {
   return state.assets.filter(a => a.type === 'stock' && (a.coin || 'USD') === 'USD');
+}
+
+function updateBulkUpdateEstimate() {
+  const eligible = bulkUpdateEligibleAssets();
+  const providerKey = $('#bulkUpdateProviderSelect')?.value || bulkUpdateSelectedProvider;
+  const provider = BULK_PROVIDERS[providerKey] || BULK_PROVIDERS.twelvedata;
+  const count = eligible.length;
+
+  const countEl = $('#bulkUpdateAssetCount');
+  const estEl = $('#bulkUpdateEstimatedTime');
+  if (countEl) countEl.textContent = String(count);
+
+  if (estEl) {
+    if (count === 0) {
+      estEl.textContent = 'No USD stocks found to update.';
+    } else {
+      const approxSeconds = Math.round(((count - 1) * (provider.rateLimitMs / 1000)) + (count * 0.5));
+      if (approxSeconds < 60) {
+        estEl.textContent = `Estimated duration: ~${approxSeconds}s (at ${provider.rateLabel})`;
+      } else {
+        const mins = Math.floor(approxSeconds / 60);
+        const secs = approxSeconds % 60;
+        estEl.textContent = `Estimated duration: ~${mins}m ${secs > 0 ? `${secs}s ` : ''}(at ${provider.rateLabel})`;
+      }
+    }
+  }
 }
 
 function setBulkUpdateProgress(updated, total) {
@@ -4217,8 +4284,6 @@ function appendBulkUpdateLog(line) {
   pre.scrollTop = pre.scrollHeight;
 }
 
-let bulkUpdateRunning = false;
-
 function openBulkUpdateModal() {
   if (bulkUpdateRunning) {
     openModal('updateAllPricesModalOverlay');
@@ -4228,25 +4293,75 @@ function openBulkUpdateModal() {
   const err = $('#updateAllPricesError');
   const logWrap = $('#updateAllPricesLogWrap');
   const pre = $('#updateAllPricesLog');
+  const progressField = $('#bulkUpdateProgressField');
+  const providerSelect = $('#bulkUpdateProviderSelect');
+  const startBtn = $('#startBulkUpdateBtn');
+  const cancelBtn = $('#cancelBulkUpdateBtn');
+
   if (err) err.textContent = '';
   if (logWrap) logWrap.style.display = 'none';
   if (pre) pre.textContent = '';
+  if (progressField) progressField.style.display = 'none';
+  if (providerSelect) {
+    providerSelect.disabled = false;
+    providerSelect.value = bulkUpdateSelectedProvider;
+  }
+  if (startBtn) {
+    startBtn.disabled = eligible.length === 0;
+    startBtn.textContent = 'Start Update';
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = 'Cancel';
+  }
+
   setBulkUpdateProgress(0, eligible.length);
+  updateBulkUpdateEstimate();
   openModal('updateAllPricesModalOverlay');
-  runBulkUpdate(eligible);
 }
 
-async function runBulkUpdate(eligible) {
+function startBulkUpdate() {
+  if (bulkUpdateRunning) return;
+  const eligible = bulkUpdateEligibleAssets();
+  if (eligible.length === 0) return;
+
+  const providerKey = $('#bulkUpdateProviderSelect')?.value || bulkUpdateSelectedProvider;
+  bulkUpdateSelectedProvider = providerKey;
+  runBulkUpdate(eligible, providerKey);
+}
+
+function handleCancelOrStopBulkUpdate() {
+  if (bulkUpdateRunning) {
+    bulkUpdateAbortRequested = true;
+    appendBulkUpdateLog('[STOP] Abort requested. Stopping after current operation...');
+  } else {
+    closeModal('updateAllPricesModalOverlay');
+  }
+}
+
+async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
   if (bulkUpdateRunning) return;
   bulkUpdateRunning = true;
-  const btn = $('#updateAllPricesBtn');
-  if (btn) btn.disabled = true;
+  bulkUpdateAbortRequested = false;
+
+  const provider = BULK_PROVIDERS[providerKey] || BULK_PROVIDERS.twelvedata;
+  const rateLimitMs = provider.rateLimitMs;
+
+  const startBtn = $('#startBulkUpdateBtn');
+  const cancelBtn = $('#cancelBulkUpdateBtn');
+  const providerSelect = $('#bulkUpdateProviderSelect');
+  const progressField = $('#bulkUpdateProgressField');
+  const updateAllPricesBtn = $('#updateAllPricesBtn');
+
+  if (startBtn) startBtn.disabled = true;
+  if (cancelBtn) cancelBtn.textContent = 'Stop';
+  if (providerSelect) providerSelect.disabled = true;
+  if (progressField) progressField.style.display = '';
+  if (updateAllPricesBtn) updateAllPricesBtn.disabled = true;
 
   const err = $('#updateAllPricesError');
   const total = eligible.length;
   let updated = 0;
   let failed = 0;
-  // Track portfolio impact (USD) of the updated assets' holdings.
   let portfolioBefore = 0;
   let portfolioAfter = 0;
 
@@ -4258,17 +4373,28 @@ async function runBulkUpdate(eligible) {
       return;
     }
 
-    appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s).`);
-    appendBulkUpdateLog(`Rate limit: 1 request every 15 seconds (${BULK_UPDATE_RATE_LIMIT_MS / 1000}s between calls; retries up to ${BULK_UPDATE_MAX_RETRIES} times with exponential backoff: 30s, 60s, 120s).`);
+    appendBulkUpdateLog(`Starting bulk update of ${total} USD stock(s) via ${provider.name}.`);
+    appendBulkUpdateLog(`Rate limit: ${provider.rateLabel} (${(rateLimitMs / 1000).toFixed(1)}s between calls).`);
+    appendBulkUpdateLog(`Retry logic: up to ${BULK_UPDATE_MAX_RETRIES} retries with exponential backoff (30s, 60s, 120s).`);
 
     for (let i = 0; i < total; i++) {
+      if (bulkUpdateAbortRequested) {
+        appendBulkUpdateLog('[STOPPED] Bulk update stopped by user.');
+        break;
+      }
+
       const a = eligible[i];
       let price = null;
       let lastError = null;
 
       for (let attempt = 0; attempt <= BULK_UPDATE_MAX_RETRIES; attempt++) {
+        if (bulkUpdateAbortRequested) break;
+
         try {
-          const data = await request(`/assets/${a.id}/price`, { method: 'POST' });
+          const data = await request(`/assets/${a.id}/price?provider=${encodeURIComponent(provider.key)}`, {
+            method: 'POST',
+            body: JSON.stringify({ provider: provider.key })
+          });
           if (data.price != null) {
             price = data.price;
             break;
@@ -4279,11 +4405,21 @@ async function runBulkUpdate(eligible) {
           lastError = error;
         }
 
-        if (attempt < BULK_UPDATE_MAX_RETRIES) {
+        if (attempt < BULK_UPDATE_MAX_RETRIES && !bulkUpdateAbortRequested) {
           const retryDelayMs = BULK_UPDATE_RETRY_DELAYS_MS[attempt] || 120000;
           appendBulkUpdateLog(`[RETRY] ${a.symbol || a.name}: attempt ${attempt + 1} failed (${lastError?.message || 'unknown error'}). Waiting ${retryDelayMs / 1000}s before retry ${attempt + 1}/${BULK_UPDATE_MAX_RETRIES}...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+
+          const waitSteps = Math.ceil(retryDelayMs / 500);
+          for (let step = 0; step < waitSteps; step++) {
+            if (bulkUpdateAbortRequested) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
+      }
+
+      if (bulkUpdateAbortRequested) {
+        appendBulkUpdateLog(`[STOPPED] Bulk update stopped during ${a.symbol || a.name}.`);
+        break;
       }
 
       if (price == null) {
@@ -4291,6 +4427,7 @@ async function runBulkUpdate(eligible) {
         appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed after ${BULK_UPDATE_MAX_RETRIES + 1} attempts (${lastError?.message || 'no price returned'}).`);
       } else {
         try {
+          const roundedPrice = Math.round(Number(price) * 100) / 100;
           // Commit the fetched price.
           await request(`/assets/${a.id}`, {
             method: 'PUT',
@@ -4299,19 +4436,19 @@ async function runBulkUpdate(eligible) {
               symbol: a.symbol || '',
               type: a.type,
               coin: a.coin || 'USD',
-              price: Number(price),
+              price: roundedPrice,
               payment_months: a.payment_months || []
             })
           });
           updated++;
           const oldPrice = a.price;
-          const changePct = (oldPrice != null && oldPrice > 0) ? ((price - oldPrice) / oldPrice) * 100 : null;
+          const changePct = (oldPrice != null && oldPrice > 0) ? ((roundedPrice - oldPrice) / oldPrice) * 100 : null;
           const changeStr = changePct == null ? 'n/a' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
-          appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${price} (${changeStr})`);
+          appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${roundedPrice.toFixed(2)} (${changeStr})`);
           // Accumulate portfolio impact from this asset's holdings (USD).
           const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
           portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
-          portfolioAfter += qty * Number(price);
+          portfolioAfter += qty * roundedPrice;
         } catch (commitErr) {
           failed++;
           appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed to save price (${commitErr.message})`);
@@ -4319,9 +4456,14 @@ async function runBulkUpdate(eligible) {
       }
 
       setBulkUpdateProgress(updated + failed, total);
-      // Wait between successful assets to respect the base rate limit (skip after the last one).
-      if (i < total - 1) {
-        await new Promise(resolve => setTimeout(resolve, BULK_UPDATE_RATE_LIMIT_MS));
+
+      // Wait between assets to respect the provider's rate limit (skip after the last one).
+      if (i < total - 1 && !bulkUpdateAbortRequested) {
+        const waitSteps = Math.ceil(rateLimitMs / 500);
+        for (let step = 0; step < waitSteps; step++) {
+          if (bulkUpdateAbortRequested) break;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
     }
 
@@ -4335,7 +4477,14 @@ async function runBulkUpdate(eligible) {
     toast(`Bulk update finished: ${updated} updated, ${failed} failed.`);
   } finally {
     bulkUpdateRunning = false;
-    if (btn) btn.disabled = false;
+    bulkUpdateAbortRequested = false;
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start Update';
+    }
+    if (cancelBtn) cancelBtn.textContent = 'Close';
+    if (providerSelect) providerSelect.disabled = false;
+    if (updateAllPricesBtn) updateAllPricesBtn.disabled = false;
   }
 }
 
@@ -5221,7 +5370,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Modal header X close buttons
   $('#closeAssetModalX')?.addEventListener('click', () => closeModal('assetModalOverlay'));
   $('#closeUpdateAssetModalX')?.addEventListener('click', () => closeModal('updateAssetModalOverlay'));
-  $('#closeUpdateAllPricesX')?.addEventListener('click', () => closeModal('updateAllPricesModalOverlay'));
+  $('#closeUpdateAllPricesX')?.addEventListener('click', () => {
+    if (bulkUpdateRunning) {
+      handleCancelOrStopBulkUpdate();
+    } else {
+      closeModal('updateAllPricesModalOverlay');
+    }
+  });
+  $('#bulkUpdateProviderSelect')?.addEventListener('change', e => {
+    bulkUpdateSelectedProvider = e.target.value;
+    updateBulkUpdateEstimate();
+  });
+  $('#startBulkUpdateBtn')?.addEventListener('click', () => startBulkUpdate());
+  $('#cancelBulkUpdateBtn')?.addEventListener('click', () => handleCancelOrStopBulkUpdate());
   $('#closeProviderModalX')?.addEventListener('click', () => closeModal('providerModalOverlay'));
   $('#closeAccountModalX')?.addEventListener('click', () => closeModal('accountModalOverlay'));
   $('#closeHoldingModalX')?.addEventListener('click', () => closeModal('holdingModalOverlay'));

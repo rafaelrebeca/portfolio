@@ -112,7 +112,9 @@ The live Cloudflare Pages deployment uses the following server-side secrets:
 
 | Secret | Description |
 |---|---|
-| `STOCK_API_KEY` | API key for Massive.com previous-trading-day US stock closes |
+| `STOCK_API_KEY_TWELVEDATA` | API key for Twelve Data US stock prices (7 calls/min) |
+| `STOCK_API_KEY_MASSIVE` | API key for Massive.com previous-trading-day US stock closes (4 calls/min) |
+| `STOCK_API_KEY_FINHUB` | API key for Finnhub.io real-time / current stock quote prices (1 call every 2s) |
 | `API_KEY` | API key for ExchangeRate-API exchange-rate data |
 
 For local development, provide these values through local Wrangler configuration or another local secret mechanism. Never commit real API keys or other credentials to the repository.

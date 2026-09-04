@@ -16,7 +16,7 @@ This document describes the current source in `index.html`, `css/portfolio.css`,
 | Frontend | Vanilla HTML, CSS, and an ES-module JavaScript client |
 | Charts | Chart.js loaded by the page shell |
 | Authentication | Session cookie named `portfolio_session`; passwords hashed with bcrypt |
-| External data | Finnhub for real-time / current stock quote prices; ExchangeRate-API for currency rates |
+| External data | Twelve Data, Massive, and Finnhub for US stock prices; ExchangeRate-API for currency rates |
 | PWA | `manifest.webmanifest` and `sw.js` |
 
 The application is a single-page interface. `index.html` contains all page shells and modal markup. `js/portfolio.js` owns client state, API calls, rendering, event delegation, calculations, and modal behavior. `css/portfolio.css` contains the visual system and responsive layout. `_routes.json` sends only `/api/*` requests to the Pages Function.
@@ -206,7 +206,7 @@ Account cards become clickable for account history when snapshots exist. The acc
 
 Assets has separate **System Assets** and **Personal Assets** tabs. Each tab has its own search and type filter. Platform assets are administrator-managed; personal assets are private to their owner and can also be managed by an administrator. Personal assets have no dividend schedule and are visually distinguished in holding displays.
 
-The administrator-only single-asset update uses Massive.com's previous-day bar endpoint. The bulk update feature is limited to USD stocks and spaces calls to stay below the free-tier rate limit. The UI shows progress, per-asset results, and portfolio impact for the updated holdings.
+The administrator-only price updates support choosing between Twelve Data (7 calls/min), Massive.com (4 calls/min), and Finnhub.io (1 call every 2s). The bulk update feature is limited to USD stocks, allows selecting the API provider before running, estimates duration, and spaces calls according to the provider's rate limit. If a call fails, exponential backoff retries after 30s, 60s, and 120s. The UI displays progress, per-asset results, and portfolio impact for updated holdings.
 
 ### Dividends
 

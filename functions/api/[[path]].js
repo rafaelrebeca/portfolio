@@ -194,20 +194,72 @@ export async function onRequest(context) {
       const asset = await env.myd1db.prepare('SELECT id, symbol, coin FROM assets WHERE id = ?').bind(id).first();
       if (!asset) return fail('Asset not found.', 404);
       if (!asset.symbol) return fail('This asset has no symbol to look up.', 400);
-      const apiKey = env.STOCK_API_KEY;
-      if (!apiKey) return fail('STOCK_API_KEY not configured in environment variables.', 500);
+
+      const urlObj = new URL(request.url);
+      const body = await readBody(request);
+      const provider = clean(urlObj.searchParams.get('provider') || body.provider).toLowerCase() || 'finnhub';
+
+      const roundPrice = val => {
+        if (val == null) return null;
+        const num = typeof val === 'number' ? val : Number(String(val).replace(',', '.').trim());
+        return Number.isFinite(num) && num > 0 ? Math.round(num * 100) / 100 : null;
+      };
+
+      if (provider === 'twelvedata' || provider === 'twelve_data') {
+        const apiKey = env.STOCK_API_KEY_TWELVEDATA;
+        if (!apiKey) return fail('STOCK_API_KEY_TWELVEDATA not configured in environment variables.', 500);
+
+        const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(asset.symbol)}&apikey=${encodeURIComponent(apiKey)}`;
+        let response;
+        try {
+          response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        } catch {
+          return fail('Twelve Data API request timed out.', 504);
+        }
+        if (!response.ok) return fail(`Twelve Data API returned ${response.status}.`, 502);
+        const data = await response.json();
+        if (data?.status === 'error' || (data?.code && data.code >= 400)) {
+          return fail(data.message || 'Twelve Data API returned an error.', data?.code === 404 ? 404 : 502);
+        }
+        const price = roundPrice(data?.price);
+        if (price == null) return fail('No price returned for this asset from Twelve Data.', 404);
+        return json({ price, coin: asset.coin || 'USD', raw: data });
+      }
+
+      if (provider === 'massive') {
+        const apiKey = env.STOCK_API_KEY_MASSIVE || env.STOCK_API_KEY;
+        if (!apiKey) return fail('STOCK_API_KEY_MASSIVE not configured in environment variables.', 500);
+
+        const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(asset.symbol)}/prev?apiKey=${encodeURIComponent(apiKey)}`;
+        let response;
+        try {
+          response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        } catch {
+          return fail('Massive API request timed out.', 504);
+        }
+        if (!response.ok) return fail(`Massive API returned ${response.status}.`, 502);
+        const data = await response.json();
+        const results = Array.isArray(data?.results) ? data.results[0] : data?.results;
+        const price = roundPrice(results?.c);
+        if (price == null) return fail('No price returned for this asset from Massive.', 404);
+        return json({ price, coin: asset.coin || 'USD', raw: data });
+      }
+
+      // Default: finnhub
+      const apiKey = env.STOCK_API_KEY_FINHUB || env.STOCK_API_KEY_TWELVEDATA || env.STOCK_API_KEY;
+      if (!apiKey) return fail('STOCK_API_KEY_FINHUB not configured in environment variables.', 500);
 
       const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(asset.symbol)}&token=${encodeURIComponent(apiKey)}`;
       let response;
       try {
         response = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      } catch (error) {
+      } catch {
         return fail('Finnhub API request timed out.', 504);
       }
       if (!response.ok) return fail(`Finnhub API returned ${response.status}.`, 502);
       const data = await response.json();
-      const price = (typeof data?.c === 'number' && data.c > 0) ? data.c : null;
-      if (price == null) return fail('No price returned for this asset.', 404);
+      const price = roundPrice(data?.c);
+      if (price == null) return fail('No price returned for this asset from Finnhub.', 404);
       return json({ price, coin: asset.coin || 'USD', raw: data });
     }
     if (method === 'GET' && path === 'dividends') { await requireMember(request, env); return json({ items: normalizeAssets((await assetsStatement(env.myd1db).all()).results).filter(item => item.dividend_yield !== null || item.payment_months.length) }); }
@@ -471,24 +523,24 @@ export async function onRequest(context) {
       let count = 0;
       for (const row of rows) {
         if (!row.symbol || !row.name || !row.type) continue;
-        
+
         const symbol = clean(row.symbol).toUpperCase();
         const name = clean(row.name);
         const type = clean(row.type);
         const coin = clean(row.coin) || 'USD';
         const price = row.price === null || row.price === undefined || row.price === '' ? null : Number(row.price);
         const dividendYield = row.yield === null || row.yield === undefined || row.yield === '' ? null : Number(row.yield);
-        
+
         let months = [];
         if (typeof row.payment_months === 'string' && row.payment_months.trim()) {
           months = row.payment_months.split('|').map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
         }
-        
+
         if (!['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) continue;
-        
+
         // Check if asset exists
         const existing = await env.myd1db.prepare('SELECT id FROM assets WHERE UPPER(symbol) = UPPER(?)').bind(symbol).first();
-        
+
         let assetId;
         if (existing) {
           // Update existing asset
@@ -499,12 +551,12 @@ export async function onRequest(context) {
           const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin).run();
           assetId = result.meta.last_row_id;
         }
-        
+
         // Update dividend yield
         if (dividendYield !== null && Number.isFinite(dividendYield)) {
           await env.myd1db.prepare('INSERT INTO dividends (asset_id, dividend_yield) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET dividend_yield = excluded.dividend_yield').bind(assetId, dividendYield).run();
         }
-        
+
         // Update payment months
         if (months.length > 0) {
           await env.myd1db.prepare('DELETE FROM dividend_payment_months WHERE asset_id = ?').bind(assetId).run();
@@ -512,7 +564,7 @@ export async function onRequest(context) {
             await env.myd1db.prepare('INSERT OR IGNORE INTO dividend_payment_months (asset_id, month_paid) VALUES (?, ?)').bind(assetId, m).run();
           }
         }
-        
+
         count++;
       }
       return json({ count, ok: true });
