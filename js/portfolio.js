@@ -43,7 +43,7 @@ const guestData = {
   users: []
 };
 
-const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [] };
+const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], accountGrowths: new Map(), accountGrowthsDirty: true };
 let blurMode = false;
 let currentPage = 'dashboard';
 const $ = selector => document.querySelector(selector);
@@ -209,6 +209,7 @@ function setSnapshotList(snapshots) {
   if (historyData) historyData = list;
   if (accountHistoryData) accountHistoryData = list;
   if (goalHistoryData) goalHistoryData = list;
+  invalidateAccountGrowthCache();
 }
 
 function hydrateSnapshotCache() {
@@ -291,6 +292,7 @@ async function loadData({ refreshSnapshots = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
     timeTravelList = [];
+    invalidateAccountGrowthCache();
     render();
     return true;
   }
@@ -310,6 +312,7 @@ async function loadData({ refreshSnapshots = false } = {}) {
     });
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
+    invalidateAccountGrowthCache();
     render();
     return false;
   }
@@ -319,10 +322,12 @@ async function loadData({ refreshSnapshots = false } = {}) {
       state.users = (await request('/admin/users')).items || [];
     } catch (err) {
       console.error('Failed to load admin users:', err);
+      invalidateAccountGrowthCache();
       render();
       return false;
     }
   }
+  invalidateAccountGrowthCache();
   render();
   if (!refreshSnapshots) return true;
   snapshotsFresh = await loadTimeTravelList();
@@ -522,6 +527,89 @@ function simulationNextTarget(value) {
   let target = 10;
   while (target <= value && target < Number.MAX_SAFE_INTEGER / 10) target *= 10;
   return target;
+}
+
+// Observation history for all accounts across snapshots and live state.
+// An account that was created later starts at its first known snapshot;
+// a deleted account ends at its last known snapshot instead of being forced to zero.
+function getAccountHistories() {
+  const snapshots = (timeTravelList || [])
+    .filter(snapshot => Number.isFinite(Number(snapshot?.data?.globalValue)) && simulationSnapshotDate(snapshot))
+    .slice()
+    .sort((a, b) => simulationSnapshotDate(a) - simulationSnapshotDate(b));
+
+  const accountHistory = new Map();
+  snapshots.forEach(snapshot => {
+    const snapshotDate = simulationSnapshotDate(snapshot);
+    (snapshot.data?.accounts || []).forEach(account => {
+      const id = String(account.id);
+      if (!accountHistory.has(id)) accountHistory.set(id, { id: account.id, name: account.name || `Account ${id}`, observations: [] });
+      const history = accountHistory.get(id);
+      history.name = account.name || history.name;
+      history.observations.push({ date: snapshotDate, value: Number(account.valueEur || 0) });
+    });
+  });
+
+  const liveDate = new Date();
+  state.accounts.forEach(account => {
+    const id = String(account.id);
+    if (!accountHistory.has(id)) accountHistory.set(id, { id: account.id, name: account.name || `Account ${id}`, observations: [] });
+    const history = accountHistory.get(id);
+    history.name = account.name || history.name;
+    history.observations.push({ date: liveDate, value: accountValue(account, true) });
+  });
+
+  return accountHistory;
+}
+
+// Calculate monthly growth (EUR delta / month) per account based on the requested mode:
+// 'all' (lifetime), 'ytd' (current year), or 'month' (current month).
+function calculateAccountGrowths(mode = 'all') {
+  const accountHistory = getAccountHistories();
+  const liveDate = new Date();
+  const periodStart = new Date(Date.UTC(liveDate.getUTCFullYear(), mode === 'month' ? liveDate.getUTCMonth() : 0, 1));
+
+  const growths = new Map();
+  for (const [id, history] of accountHistory.entries()) {
+    const observations = history.observations;
+    let first = observations[0];
+    if (mode !== 'all') {
+      const beforePeriod = observations.filter(observation => observation.date < periodStart);
+      const duringPeriod = observations.filter(observation => observation.date >= periodStart && observation.date <= liveDate);
+      first = beforePeriod[beforePeriod.length - 1] || duringPeriod[0];
+      if (!first || observations[observations.length - 1].date < periodStart) continue;
+    }
+    const latest = observations[observations.length - 1];
+    if (!first || !latest) continue;
+    const calculationStart = mode === 'all'
+      ? first.date
+      : (first.date < periodStart ? periodStart : first.date);
+    const daysExisted = Math.max(1, (latest.date.getTime() - calculationStart.getTime()) / (1000 * 60 * 60 * 24));
+    const monthsExisted = Math.max(1, daysExisted / 30.4375);
+    const delta = (latest.value - first.value) / monthsExisted;
+
+    growths.set(id, {
+      id: history.id,
+      name: history.name,
+      delta,
+      observationsCount: observations.length,
+      daysExisted,
+      monthsExisted
+    });
+  }
+  return growths;
+}
+
+function getGlobalAccountGrowths() {
+  if (!state.accountGrowths || state.accountGrowthsDirty) {
+    state.accountGrowths = calculateAccountGrowths('all');
+    state.accountGrowthsDirty = false;
+  }
+  return state.accountGrowths;
+}
+
+function invalidateAccountGrowthCache() {
+  state.accountGrowthsDirty = true;
 }
 
 // Estimate average monthly expenses from portfolio-level losses across the
@@ -739,49 +827,10 @@ function renderSimulation() {
       scales: { x: { ticks: { color: '#e6ebf5', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } } }
     }
   });
-  // Build each account's own lifetime from all snapshots. An account that was
-  // created later starts at its first known snapshot; a deleted account ends
-  // at its last known snapshot instead of being incorrectly forced to zero.
-  const accountHistory = new Map();
-  projection.snapshots.forEach(snapshot => {
-    const snapshotDate = simulationSnapshotDate(snapshot);
-    (snapshot.data?.accounts || []).forEach(account => {
-      const id = String(account.id);
-      if (!accountHistory.has(id)) accountHistory.set(id, { name: account.name || `Account ${id}`, observations: [] });
-      const history = accountHistory.get(id);
-      history.name = account.name || history.name;
-      history.observations.push({ date: snapshotDate, value: Number(account.valueEur || 0) });
-    });
-  });
-  const liveDate = new Date();
-  state.accounts.forEach(account => {
-    const id = String(account.id);
-    if (!accountHistory.has(id)) accountHistory.set(id, { name: account.name || `Account ${id}`, observations: [] });
-    const history = accountHistory.get(id);
-    history.name = account.name || history.name;
-    history.observations.push({ date: liveDate, value: accountValue(account, true) });
-  });
-  const periodStart = new Date(Date.UTC(liveDate.getUTCFullYear(), simulationGrowthMode === 'month' ? liveDate.getUTCMonth() : 0, 1));
-  const accountGrowth = [...accountHistory.values()].map(history => {
-    const observations = history.observations;
-    let first = observations[0];
-    if (simulationGrowthMode !== 'all') {
-      // Compare the period with the most recent record before it. A record on
-      // the first day belongs to the period and must not become its baseline.
-      const beforePeriod = observations.filter(observation => observation.date < periodStart);
-      const duringPeriod = observations.filter(observation => observation.date >= periodStart && observation.date <= liveDate);
-      first = beforePeriod[beforePeriod.length - 1] || duringPeriod[0];
-      if (!first || observations[observations.length - 1].date < periodStart) return null;
-    }
-    const latest = observations[observations.length - 1];
-    if (!first || !latest) return null;
-    const calculationStart = simulationGrowthMode === 'all'
-      ? first.date
-      : (first.date < periodStart ? periodStart : first.date);
-    const daysExisted = Math.max(1, (latest.date.getTime() - calculationStart.getTime()) / (1000 * 60 * 60 * 24));
-    const monthsExisted = Math.max(1, daysExisted / 30.4375);
-    return { name: history.name, delta: (latest.value - first.value) / monthsExisted };
-  }).filter(Boolean);
+  const accountGrowthMap = simulationGrowthMode === 'all'
+    ? getGlobalAccountGrowths()
+    : calculateAccountGrowths(simulationGrowthMode);
+  const accountGrowth = [...accountGrowthMap.values()];
   const growthMap = {};
   accountGrowth.forEach(account => { growthMap[account.name] = (growthMap[account.name] || 0) + account.delta; });
   const growthTop = topNWithOthers(Object.fromEntries(Object.entries(growthMap).map(([name, value]) => [name, Math.abs(value)])), 9);
@@ -1735,6 +1784,7 @@ function formatDelta(delta) {
 function renderTopGoalDashboardCard(snapshotAccounts) {
   const topGoalValEl = $('#topGoalValue');
   const topGoalSubEl = $('#topGoalSubtext');
+  const topGoalEstimateEl = $('#topGoalEstimate');
   if (!topGoalValEl || !topGoalSubEl) return;
 
   const goals = state.goals || [];
@@ -1742,6 +1792,7 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
     topGoalValEl.textContent = '—';
     topGoalSubEl.textContent = 'no active goals';
     topGoalValEl.className = 'value';
+    if (topGoalEstimateEl) topGoalEstimateEl.style.display = 'none';
     return;
   }
 
@@ -1752,6 +1803,7 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
   if (snapshotAccounts && Array.isArray(snapshotAccounts)) {
     const prog = goalProgressFromSnapshot(topGoal, snapshotAccounts);
     pct = prog !== null ? prog : 0;
+    if (topGoalEstimateEl) topGoalEstimateEl.style.display = 'none';
   } else {
     const current = goalCurrentValue(topGoal);
     const target = Number(topGoal.value || 0);
@@ -1770,6 +1822,28 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
       pct = absNeg > 0 ? Math.min(100, Math.max(0, (posSum / absNeg) * 100)) : 100;
     } else {
       pct = Math.min(100, Math.max(0, (current / target) * 100));
+    }
+
+    if (topGoalEstimateEl) {
+      const est = calculateGoalPaceAndEstimate(topGoal);
+      if (est && est.reachText) {
+        topGoalEstimateEl.style.display = '';
+        if (est.status === 'achieved') {
+          topGoalEstimateEl.textContent = `🎉 ${est.reachText}`;
+          topGoalEstimateEl.className = 'delta up';
+        } else if (est.status === 'on_track') {
+          topGoalEstimateEl.textContent = `Est: ${est.reachText} (${est.paceText})`;
+          topGoalEstimateEl.className = 'delta up';
+        } else if (est.status === 'stalled') {
+          topGoalEstimateEl.textContent = `Est: ${est.reachText} (${est.paceText})`;
+          topGoalEstimateEl.className = 'delta down';
+        } else {
+          topGoalEstimateEl.textContent = est.reachText;
+          topGoalEstimateEl.className = 'delta';
+        }
+      } else {
+        topGoalEstimateEl.style.display = 'none';
+      }
     }
   }
 
@@ -3412,6 +3486,195 @@ function goalCurrentValue(goal) {
   return total;
 }
 
+// Estimate goal completion date and monthly growth pace based on the sum
+// of global monthly growth across all linked accounts.
+function calculateGoalPaceAndEstimate(goal) {
+  if (!goal) return null;
+  const currency = goal.coin || 'USD';
+  const target = Number(goal.value || 0);
+  const current = goalCurrentValue(goal);
+  const linked = state.accounts.filter(a => (goal.account_ids || []).includes(a.id));
+
+  const hasHistory = Boolean(timeTravelList && timeTravelList.length > 0);
+  const accountGrowths = getGlobalAccountGrowths();
+
+  // Sum monthly growth of linked accounts in the goal currency
+  let monthlyGrowth = 0;
+  let linkedAccountsWithHistory = 0;
+  const eurToGoalRate = getExchangeRate('EUR', currency) || 1;
+
+  linked.forEach(acc => {
+    const accGrowth = accountGrowths.get(String(acc.id));
+    if (accGrowth) {
+      monthlyGrowth += accGrowth.delta * eurToGoalRate;
+      if (accGrowth.observationsCount > 1) {
+        linkedAccountsWithHistory++;
+      }
+    }
+  });
+
+  const isDebt = target === 0;
+
+  if (!linked.length) {
+    return {
+      monthlyGrowth: 0,
+      months: null,
+      reachDate: null,
+      reachText: 'No linked accounts',
+      paceText: '—',
+      status: 'none',
+      isDebt,
+      current,
+      target,
+      currency
+    };
+  }
+
+  if (!hasHistory || linkedAccountsWithHistory === 0) {
+    return {
+      monthlyGrowth: 0,
+      months: null,
+      reachDate: null,
+      reachText: 'Need snapshot history',
+      paceText: '—',
+      status: 'no_history',
+      isDebt,
+      current,
+      target,
+      currency
+    };
+  }
+
+  const paceSign = monthlyGrowth > 0 ? '+' : (monthlyGrowth < 0 ? '−' : '');
+  const paceText = `${paceSign}${formatCurrency(Math.abs(monthlyGrowth), currency)}/mo`;
+
+  if (isDebt) {
+    if (current >= 0) {
+      return {
+        monthlyGrowth,
+        months: 0,
+        reachDate: null,
+        reachText: 'Debt cleared',
+        paceText,
+        status: 'achieved',
+        isDebt,
+        current,
+        target,
+        currency
+      };
+    }
+    const debtRemaining = Math.abs(current);
+    if (monthlyGrowth > 0) {
+      const months = Math.ceil(debtRemaining / monthlyGrowth);
+      if (months > 1200) {
+        return {
+          monthlyGrowth,
+          months,
+          reachDate: null,
+          reachText: '> 100 years',
+          paceText,
+          status: 'on_track',
+          isDebt,
+          current,
+          target,
+          currency
+        };
+      }
+      const reachDate = new Date();
+      reachDate.setUTCMonth(reachDate.getUTCMonth() + months);
+      const dateLabel = formatSimulationDate(reachDate);
+      return {
+        monthlyGrowth,
+        months,
+        reachDate,
+        reachText: `${dateLabel} (~${months} mo${months === 1 ? '' : 's'})`,
+        paceText,
+        status: 'on_track',
+        isDebt,
+        current,
+        target,
+        currency
+      };
+    } else {
+      return {
+        monthlyGrowth,
+        months: null,
+        reachDate: null,
+        reachText: monthlyGrowth < 0 ? 'Declining' : 'No growth',
+        paceText,
+        status: 'stalled',
+        isDebt,
+        current,
+        target,
+        currency
+      };
+    }
+  }
+
+  // Normal / savings goal (target > 0)
+  const remaining = target - current;
+  if (remaining <= 0) {
+    return {
+      monthlyGrowth,
+      months: 0,
+      reachDate: null,
+      reachText: 'Target reached',
+      paceText,
+      status: 'achieved',
+      isDebt,
+      current,
+      target,
+      currency
+    };
+  }
+
+  if (monthlyGrowth > 0) {
+    const months = Math.ceil(remaining / monthlyGrowth);
+    if (months > 1200) {
+      return {
+        monthlyGrowth,
+        months,
+        reachDate: null,
+        reachText: '> 100 years',
+        paceText,
+        status: 'on_track',
+        isDebt,
+        current,
+        target,
+        currency
+      };
+    }
+    const reachDate = new Date();
+    reachDate.setUTCMonth(reachDate.getUTCMonth() + months);
+    const dateLabel = formatSimulationDate(reachDate);
+    return {
+      monthlyGrowth,
+      months,
+      reachDate,
+      reachText: `${dateLabel} (~${months} mo${months === 1 ? '' : 's'})`,
+      paceText,
+      status: 'on_track',
+      isDebt,
+      current,
+      target,
+      currency
+    };
+  } else {
+    return {
+      monthlyGrowth,
+      months: null,
+      reachDate: null,
+      reachText: monthlyGrowth < 0 ? 'Declining' : 'No growth',
+      paceText,
+      status: 'stalled',
+      isDebt,
+      current,
+      target,
+      currency
+    };
+  }
+}
+
 // Build the progress bar HTML for a goal. Handles three cases:
 // 1. No sub-goals -> single bar (unchanged behavior).
 // 2. Normal goal (value > 0) with sub-goals -> segmented bar + global % label.
@@ -3526,6 +3789,11 @@ function renderGoals() {
     const progressHTML = goalProgressHTML(g, current, target, g.coin || 'USD');
     const isFirst = idx === 0;
     const isLast = idx === sorted.length - 1;
+
+    const est = calculateGoalPaceAndEstimate(g);
+    const paceClass = est && est.monthlyGrowth > 0 ? 'pos' : (est && est.monthlyGrowth < 0 ? 'neg' : '');
+    const estClass = est && est.status === 'achieved' ? 'pos' : (est && est.status === 'stalled' ? 'neg' : '');
+
     return `
       <div class="goal-card">
         <div class="goal-card-head">
@@ -3547,6 +3815,8 @@ function renderGoals() {
           <div><div class="dlabel">Target</div><div class="dvalue">${formatCurrency(target, g.coin || 'USD')}</div></div>
           <div><div class="dlabel">Current</div><div class="dvalue ${current < 0 ? 'neg' : 'pos'}">${formatCurrency(current, g.coin || 'USD')}</div></div>
           <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), g.coin || 'USD')}</div></div>
+          <div><div class="dlabel">Growth Pace</div><div class="dvalue ${paceClass}">${esc(est?.paceText || '—')}</div></div>
+          <div><div class="dlabel">Est. Reach</div><div class="dvalue ${estClass}">${esc(est?.reachText || '—')}</div></div>
         </div>
         ${progressHTML}
         <div class="goal-linked">Linked: ${linkedNames}</div>
@@ -4699,11 +4969,17 @@ function openGoalDetailsModal(goalId) {
   // Summary
   const summary = $('#goalDetailsSummary');
   if (summary) {
+    const est = calculateGoalPaceAndEstimate(g);
+    const paceClass = est && est.monthlyGrowth > 0 ? 'pos' : (est && est.monthlyGrowth < 0 ? 'neg' : '');
+    const estClass = est && est.status === 'achieved' ? 'pos' : (est && est.status === 'stalled' ? 'neg' : '');
+
     summary.innerHTML = `
       <div><div class="dlabel">Target</div><div class="dvalue">${formatCurrency(target, currency)}</div></div>
       <div><div class="dlabel">Current</div><div class="dvalue ${current < 0 ? 'neg' : 'pos'}">${formatCurrency(current, currency)}</div></div>
       <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), currency)}</div></div>
       <div><div class="dlabel">Accounts</div><div class="dvalue">${linked.length}</div></div>
+      <div><div class="dlabel">Growth Pace</div><div class="dvalue ${paceClass}">${esc(est?.paceText || '—')}</div></div>
+      <div><div class="dlabel">Est. Reach</div><div class="dvalue ${estClass}">${esc(est?.reachText || '—')}</div></div>
     `;
   }
 
