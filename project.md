@@ -181,6 +181,8 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
 
+The **Top Goal Status** card shows the first goal's completion percentage, its name, and — when snapshot history exists — an estimated reach date and monthly growth pace (e.g. `Est: Oct 2026 (~8 mos) (+$450/mo)`). The estimate is hidden when viewing a past Time Travel snapshot.
+
 The two doughnut charts are:
 
 - **By Type / By Change** — the card is clickable. By Type shows asset holdings plus Loans, Cash, and Deposits; By Change shows Gain and Loss slices based on account value movement versus the previous snapshot. Clicking Gain or Loss filters Account Overview to accounts that increased or decreased.
@@ -233,6 +235,13 @@ My Portfolio lists holdings assigned to asset accounts. It shows asset, account,
 
 Goals can link to multiple accounts, contain up to three milestones, and be reordered with arrow controls. Positive goals use segmented progress bars; debt goals use a debt-cleared bar with milestone diamond markers. Goal Details and Goal Simulation reuse the same progress and account-value calculations. Goal History plots historical progress from snapshots.
 
+Each goal card and the Goal Details modal display two additional fields computed by `calculateGoalPaceAndEstimate(goal)`:
+
+- **Growth Pace** — the sum of each linked account's all-time monthly growth rate, converted to the goal's currency. Shown in green when positive, red when negative.
+- **Est. Reach** — the projected date at which the current pace reaches the goal target (e.g. `Oct 2026 (~8 mos)`). Shows `Target reached` / `Debt cleared` when already achieved, `Declining` or `No growth` when the pace is ≤ 0, and `Need snapshot history` when no snapshot data is available.
+
+The Dashboard Top Goal Status card also shows this estimate beneath the goal name.
+
 ### Tools, Users, Profile, and Currency
 
 - **Tools** is admin-only and has Import, Export, and Currency Test tabs. Import accepts asset CSV data; Export generates import-ready CSV; Currency Test converts up to five rows and shows individual and total results.
@@ -276,6 +285,14 @@ Separate Account History and Goal History modals provide focused per-account and
 - Display values use localized currency formatting, normally EUR on portfolio/dashboard surfaces.
 - Loans use the French amortization formula, with a zero-rate fallback, and infer remaining months from the finish date.
 - Goal values are converted into the goal currency for progress calculations.
+
+### Account growth cache
+
+Three helpers compute per-account monthly growth from snapshot history:
+
+- `getAccountHistories()` — builds a `Map<accountId, { observations[] }>` from all snapshots (sorted oldest to newest) plus a live observation for each current account.
+- `calculateAccountGrowths(mode)` — iterates the history map and returns a `Map<accountId, { delta, observationsCount, … }>` where `delta` is the EUR monthly change over the account's lifetime (`'all'`) or within the current year/month (`'ytd'` / `'month'`). Used directly by the Simulation Growth Contribution chart for non-`'all'` modes.
+- `getGlobalAccountGrowths()` — memoized wrapper for `calculateAccountGrowths('all')`. The result is stored in `state.accountGrowths` and reused by `calculateGoalPaceAndEstimate()` and the Simulation chart (all-time mode) without recomputation. The cache is invalidated via `invalidateAccountGrowthCache()` whenever snapshots change (`setSnapshotList`) or account/portfolio data is reloaded (`loadData`).
 
 ## 10. Privacy and first-run UX
 
