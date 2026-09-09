@@ -400,7 +400,7 @@ export async function onRequest(context) {
 
     if (method === 'GET' && path === 'goals') {
       const user = await requireMember(request, env);
-      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3, order_by FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
+      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3, order_by, end_date FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
       const items = [];
       for (const g of results) {
         const links = await env.myd1db.prepare('SELECT account_id FROM goal_link WHERE goal_id = ?').bind(g.id).all();
@@ -417,6 +417,9 @@ export async function onRequest(context) {
       const sub2 = body.sub2 === null || body.sub2 === undefined || body.sub2 === '' ? null : Number(body.sub2);
       const sub3 = body.sub3 === null || body.sub3 === undefined || body.sub3 === '' ? null : Number(body.sub3);
       const subs = [sub1, sub2, sub3];
+      // Optional target date (YYYY-MM-DD). Empty/blank clears it.
+      let endDate = body.end_date === null || body.end_date === undefined || body.end_date === '' ? null : clean(body.end_date);
+      if (endDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return fail('Target date must be a valid date (YYYY-MM-DD).');
       for (const s of subs) {
         if (s !== null && !Number.isFinite(s)) return fail('Sub-goals must be valid numbers.');
       }
@@ -443,7 +446,7 @@ export async function onRequest(context) {
       if (goalId && Number.isInteger(goalId)) {
         const existing = await env.myd1db.prepare('SELECT id FROM goals WHERE id = ? AND user_id = ?').bind(goalId, user.id).first();
         if (!existing) return fail('Goal not found.', 404);
-        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, goalId).run();
+        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ?, end_date = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, endDate, goalId).run();
         await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(goalId).run();
         for (const aid of accountIds) {
           await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(goalId, aid).run();
@@ -452,7 +455,7 @@ export async function onRequest(context) {
       }
       const maxOrder = await env.myd1db.prepare('SELECT COALESCE(MAX(order_by), 0) AS m FROM goals WHERE user_id = ?').bind(user.id).first();
       const orderBy = body.order_by ?? (Number(maxOrder?.m || 0) + 1);
-      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3, order_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3, orderBy).run();
+      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3, order_by, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3, orderBy, endDate).run();
       const newId = result.meta.last_row_id;
       for (const aid of accountIds) {
         await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(newId, aid).run();

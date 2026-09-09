@@ -254,6 +254,15 @@ Each goal card and the Goal Details modal display two additional fields computed
 
 The Dashboard Top Goal Status card also shows this estimate beneath the goal name.
 
+Goals have an optional **Target Date** (`end_date`, `YYYY-MM-DD`) set with a calendar picker in the create/edit form. When a target date is present, the goal name is followed by a compact on-track badge computed by `goalOnTrackInfo(goal)`:
+
+- **On track** (green pill, 🟢) — the current monthly pace is enough to close the gap by the target date, or the target is already reached.
+- **Not on track** (red pill, 🔴) — the current pace is insufficient to reach the target on/before the date.
+
+In the Goal Details grid, the target date is replaced by a status field that states the **extra monthly amount** needed when off track (e.g. `Extra Needed +€242.39/mo`), the surplus pace when on track (`Ahead of Pace +Y/mo`), or `Status: Reached` when the goal is already achieved.
+
+Above the goal list, a **Goal Statistics** card (`renderGoalStats`) summarizes the goals: total count, how many are on track / not on track / achieved / without a target date, and the best- and worst-performing goals. Best/Worst are judged by projected reach date among not-yet-achieved goals with growth (earliest reach = best; won't-reach or latest reach = worst), not by progress percentage. No combined target/current totals are shown.
+
 ### Tools, Users, Profile, and Currency
 
 - **Tools** is admin-only and has Import, Export, and Currency Test tabs. Import accepts asset CSV data; Export generates import-ready CSV; Currency Test converts up to five rows and shows individual and total results.

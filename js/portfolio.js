@@ -3946,6 +3946,53 @@ function calculateGoalPaceAndEstimate(goal) {
   }
 }
 
+// On-track assessment against an optional target date (end_date).
+// Returns null when the goal has no end_date. Otherwise returns:
+//   { onTrack, status, requiredMonthly, extraMonthly, monthsLeft, endDate }
+// where extraMonthly is the additional amount needed per month to reach the
+// target on/before end_date when not on track (0 when on track).
+function goalOnTrackInfo(goal) {
+  if (!goal || !goal.end_date) return null;
+  const currency = goal.coin || 'USD';
+  const target = Number(goal.value || 0);
+  const current = goalCurrentValue(goal);
+  const isDebt = target === 0;
+
+  const end = new Date(`${goal.end_date}T00:00:00Z`);
+  if (Number.isNaN(end.getTime())) return null;
+  const now = new Date();
+  // Months remaining until the target date (fractional, at least a small epsilon).
+  const monthsLeft = Math.max((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30.44), 0);
+
+  // Already achieved.
+  const achieved = isDebt ? current >= 0 : current >= target;
+  if (achieved) {
+    return { onTrack: true, status: 'achieved', requiredMonthly: 0, extraMonthly: 0, monthsLeft, endDate: goal.end_date };
+  }
+
+  const remaining = isDebt ? Math.abs(current) : (target - current);
+  const requiredMonthly = monthsLeft > 0 ? remaining / monthsLeft : Infinity;
+
+  const est = calculateGoalPaceAndEstimate(goal);
+  const monthlyGrowth = est?.monthlyGrowth || 0;
+
+  // On track if the current monthly growth is enough to close the gap by end_date.
+  const onTrack = monthlyGrowth >= requiredMonthly;
+  const extraMonthly = onTrack ? 0 : Math.max(requiredMonthly - monthlyGrowth, 0);
+
+  return {
+    onTrack,
+    status: onTrack ? 'on_track' : 'off_track',
+    requiredMonthly,
+    extraMonthly,
+    monthlyGrowth,
+    monthsLeft,
+    endDate: goal.end_date,
+    currency,
+    isDebt
+  };
+}
+
 // Build the progress bar HTML for a goal. Handles three cases:
 // 1. No sub-goals -> single bar (unchanged behavior).
 // 2. Normal goal (value > 0) with sub-goals -> segmented bar + global % label.
@@ -4064,11 +4111,14 @@ function renderGoals() {
     const est = calculateGoalPaceAndEstimate(g);
     const paceClass = est && est.monthlyGrowth > 0 ? 'pos' : (est && est.monthlyGrowth < 0 ? 'neg' : '');
     const estClass = est && est.status === 'achieved' ? 'pos' : (est && est.status === 'stalled' ? 'neg' : '');
+    const onTrack = goalOnTrackInfo(g);
+    const onTrackBadge = onTrack ? goalOnTrackBadge(onTrack) : '';
+    const extraField = onTrack ? goalExtraFieldHTML(onTrack) : '';
 
     return `
       <div class="goal-card">
         <div class="goal-card-head">
-          <span class="goal-name">🎯 ${esc(g.goal_name)} <span class="tag goal">${esc(g.coin || 'USD')}</span></span>
+          <span class="goal-name">🎯 ${esc(g.goal_name)} <span class="tag goal">${esc(g.coin || 'USD')}</span>${onTrackBadge}</span>
           <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
             <span class="goal-order-btns">
               <button class="btn-sm goal-order-btn" data-goal-up="${g.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
@@ -4088,13 +4138,134 @@ function renderGoals() {
           <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), g.coin || 'USD')}</div></div>
           <div><div class="dlabel">Growth Pace</div><div class="dvalue ${paceClass}">${esc(est?.paceText || '—')}</div></div>
           <div><div class="dlabel">Est. Reach</div><div class="dvalue ${estClass}">${esc(est?.reachText || '—')}</div></div>
+          ${extraField}
         </div>
         ${progressHTML}
         <div class="goal-linked">Linked: ${linkedNames}</div>
       </div>`;
   }).join('') : '<div class="page-desc">No goals yet. Create one to start tracking your targets.</div>';
+
+  renderGoalStats();
 }
 
+// Compact on-track badge shown next to the goal name (icon + status only).
+function goalOnTrackBadge(info) {
+  if (!info) return '';
+  if (info.status === 'achieved') {
+    return `<span class="goal-ontrack-badge on-track" title="Target reached">✅ On track</span>`;
+  }
+  if (info.onTrack) {
+    return `<span class="goal-ontrack-badge on-track" title="On pace to reach the target by ${esc(formatDate(info.endDate))}">🟢 On track</span>`;
+  }
+  return `<span class="goal-ontrack-badge off-track" title="Need an extra ${esc(formatCurrency(info.extraMonthly, info.currency || 'USD'))}/mo to reach the target by ${esc(formatDate(info.endDate))}">🔴 Not on track</span>`;
+}
+
+// Detail-grid field replacing "Target Date": shows the extra monthly amount
+// needed (off track) or the surplus by which the pace exceeds what's required
+// (on track / achieved).
+function goalExtraFieldHTML(info) {
+  if (!info) return '';
+  const currency = info.currency || 'USD';
+  if (info.status === 'achieved') {
+    return `<div><div class="dlabel">Status</div><div class="dvalue pos">Reached</div></div>`;
+  }
+  if (info.onTrack) {
+    const surplus = Math.max(info.monthlyGrowth - info.requiredMonthly, 0);
+    return `<div><div class="dlabel">Ahead of Pace</div><div class="dvalue pos">+${formatCurrency(surplus, currency)}/mo</div></div>`;
+  }
+  return `<div><div class="dlabel">Extra Needed</div><div class="dvalue neg">+${formatCurrency(info.extraMonthly, currency)}/mo</div></div>`;
+}
+
+// Render the goal statistics summary card shown above the goal list.
+function renderGoalStats() {
+  const card = $('#goalStatsCard');
+  if (!card) return;
+  const goals = state.goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
+  if (!goals.length) {
+    card.innerHTML = '';
+    return;
+  }
+
+  // Classify each goal: achieved, on track (has end_date & on pace), off track
+  // (has end_date & not on pace), or no target date.
+  let achieved = 0, onTrack = 0, offTrack = 0, noDate = 0;
+  goals.forEach(g => {
+    const info = goalOnTrackInfo(g);
+    if (info) {
+      if (info.status === 'achieved') achieved++;
+      else if (info.onTrack) onTrack++;
+      else offTrack++;
+    } else {
+      noDate++;
+    }
+  });
+
+  // Best / worst performing based on projected reach:
+  // - Best = the goal that hasn't reached its target yet but will reach it first
+  //   (earliest projected reach date). If none will reach, the one closest to its
+  //   target (highest progress %).
+  // - Worst = the opposite: a goal that won't reach its target, or the one that
+  //   will reach it last.
+  const progressPct = g => {
+    const target = Number(g.value || 0);
+    const current = goalCurrentValue(g);
+    const isDebt = target === 0;
+    const pct = isDebt
+      ? (current >= 0 ? 100 : Math.min(Math.abs(current) / Math.max(Math.abs(g.sub1 || 0), 1) * 100, 100))
+      : (target > 0 ? Math.min((current / target) * 100, 100) : 0);
+    return Math.max(pct, 0);
+  };
+
+  const ranked = goals.map(g => {
+    const est = calculateGoalPaceAndEstimate(g);
+    const achieved = est?.status === 'achieved';
+    const willReach = !achieved && est?.reachDate instanceof Date && Number.isFinite(est.reachDate.getTime());
+    return { g, est, achieved, willReach, reachDate: willReach ? est.reachDate : null, pct: progressPct(g) };
+  });
+
+  const willReach = ranked.filter(r => r.willReach);
+  const wontReach = ranked.filter(r => !r.achieved && !r.willReach);
+
+  let best = null, worst = null;
+  if (willReach.length) {
+    // Best = earliest reach date; worst = latest reach date among those that will reach.
+    const byReach = willReach.slice().sort((a, b) => a.reachDate - b.reachDate);
+    best = byReach[0];
+    worst = byReach[byReach.length - 1];
+  }
+  // If some goals won't reach, the worst is the one furthest behind among them.
+  if (wontReach.length) {
+    const byPct = wontReach.slice().sort((a, b) => a.pct - b.pct);
+    worst = byPct[0];
+  }
+  // If no goal will reach, best is the one closest to its target.
+  if (!best && wontReach.length) {
+    const byPctDesc = wontReach.slice().sort((a, b) => b.pct - a.pct);
+    best = byPctDesc[0];
+  }
+
+  const stat = (label, value, cls = '') => `
+    <div class="goal-stat">
+      <div class="goal-stat-value ${cls}">${value}</div>
+      <div class="goal-stat-label">${label}</div>
+    </div>`;
+
+  card.innerHTML = `
+    <div class="goal-stats-head">
+      <span class="goal-stats-title">📊 Goal Statistics</span>
+    </div>
+    <div class="goal-stats-grid">
+      ${stat('Total Goals', goals.length)}
+      ${stat('On Track', onTrack, 'pos')}
+      ${stat('Not On Track', offTrack, 'neg')}
+      ${stat('Achieved', achieved, 'pos')}
+      ${stat('No Target Date', noDate)}
+      ${stat('Best Performing', best ? esc(best.g.goal_name) : '—', 'pos')}
+      ${stat('Worst Performing', worst ? esc(worst.g.goal_name) : '—', 'neg')}
+    </div>`;
+}
+
+// Build the on-track status banner HTML for a goal that has a target date.
 function renderUsers() {
   if (!$('#usersTable')) return;
   const currentUserId = state.user?.id;
@@ -5188,11 +5359,13 @@ function openGoalModal(goalId = null) {
     $('#goalSub2').value = g.sub2 ?? '';
     $('#goalSub3').value = g.sub3 ?? '';
     $('#goalCoin').value = g.coin || 'USD';
+    $('#goalEndDate').value = g.end_date || '';
     goalSelectedAccounts = (g.account_ids || []).slice();
   } else {
     $('#goalModalTitle').textContent = 'New Goal';
     $('#goalEditId').value = '';
     $('#goalCoin').value = 'USD';
+    $('#goalEndDate').value = '';
   }
   updateGoalSubGating();
   renderGoalAccountsList();
@@ -6204,6 +6377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     values.sub1 = numeric(values.sub1);
     values.sub2 = numeric(values.sub2);
     values.sub3 = numeric(values.sub3);
+    values.end_date = values.end_date || null;
     values.account_ids = goalSelectedAccounts.slice();
     const goalId = values.goal_id ? Number(values.goal_id) : null;
 
@@ -6223,12 +6397,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           g.sub1 = values.sub1;
           g.sub2 = values.sub2;
           g.sub3 = values.sub3;
+          g.end_date = values.end_date;
           g.account_ids = values.account_ids;
         }
       } else {
         const newId = Math.max(...guestData.goals.map(g => g.id), 0) + 1;
         const maxOrder = Math.max(...guestData.goals.map(g => g.order_by ?? 0), 0);
-        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, account_ids: values.account_ids, order_by: maxOrder + 1 });
+        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, end_date: values.end_date, account_ids: values.account_ids, order_by: maxOrder + 1 });
       }
       closeModal('goalModalOverlay');
       await loadData();
