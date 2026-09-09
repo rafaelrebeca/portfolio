@@ -1026,6 +1026,13 @@ select {
   min-width: 160px;
 }
 
+.chart-legend.legend-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+}
+
 .legend-row {
   display: flex;
   align-items: center;

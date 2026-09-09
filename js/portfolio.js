@@ -1499,12 +1499,19 @@ function renderPortfolioCharts(assetOnly = false) {
       ? 'Share of each asset type per account'
       : 'Current gain or loss per asset type';
   // Doughnut mode uses a square canvas with the legend beside it; bar modes
-  // use the full card width (legend hidden) so the bars fill the horizontal space.
+  // use the full card width so the bars fill the horizontal space. The Type by
+  // Account mode shows a horizontal legend below the chart; Gain/Loss has no legend.
+  const showLegend = portfolioTypeMode !== 'gain';
   if (typeCol) {
     typeCol.style.flex = isDoughnut ? '0 0 auto' : '1 1 100%';
     typeCol.style.width = isDoughnut ? 'auto' : '100%';
   }
-  if (typeLegend) typeLegend.style.display = isDoughnut ? '' : 'none';
+  if (typeLegend) {
+    typeLegend.style.display = showLegend ? '' : 'none';
+    typeLegend.style.flex = isDoughnut ? '1' : '1 1 100%';
+    typeLegend.style.minWidth = isDoughnut ? '160px' : '0';
+    typeLegend.classList.toggle('legend-horizontal', !isDoughnut);
+  }
   if (typeWrap) {
     typeWrap.style.width = isDoughnut ? '200px' : '100%';
     typeWrap.style.height = isDoughnut ? '200px' : '260px';
@@ -1578,9 +1585,6 @@ function renderPortfolioTypeDoughnut(ctx, colors) {
 // 100%, with segments showing the percentage share of each asset type within
 // that account, so composition is comparable across accounts regardless of size.
 function renderPortfolioTypeByAccount(ctx, colors) {
-  const legendEl = $('#portfolioTypeLegend');
-  if (legendEl) legendEl.innerHTML = '';
-
   // Group holdings by account, then by asset type (EUR values).
   const accountTypeMap = {}; // accountName -> { type -> eurValue }
   state.holdings.forEach(h => {
@@ -1598,7 +1602,11 @@ function renderPortfolioTypeByAccount(ctx, colors) {
 
   const accountNames = Object.keys(accountTypeMap);
   if (portfolioTypeChartInstance) { portfolioTypeChartInstance.destroy(); portfolioTypeChartInstance = null; }
-  if (!accountNames.length) return;
+  if (!accountNames.length) {
+    const legendEl = $('#portfolioTypeLegend');
+    if (legendEl) legendEl.innerHTML = '';
+    return;
+  }
 
   // Aggregate types across all accounts to pick a stable, consistent color set.
   const typeTotals = {};
@@ -1667,6 +1675,16 @@ function renderPortfolioTypeByAccount(ctx, colors) {
       }
     }
   });
+
+  // Legend: one row per asset type showing its color swatch and name.
+  const legendEl = $('#portfolioTypeLegend');
+  if (legendEl) {
+    legendEl.innerHTML = typeLabels.map((type, i) => `
+      <div class="legend-row">
+        <span class="legend-swatch" style="background:${colors[i % colors.length]}"></span>
+        <span class="lname">${esc(type)}</span>
+      </div>`).join('');
+  }
 }
 
 // Gain/Loss by Type: vertical bar of each asset type's current gain/loss.
