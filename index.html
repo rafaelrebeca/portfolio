@@ -375,11 +375,12 @@
               </div>
               <div class="chart-legend" id="portfolioAssetLegend"></div>
             </div>
-            <div class="chart-card">
-              <div style="flex-shrink:0;">
-                <h3>By Asset Type</h3>
-                <p class="page-desc" style="margin-bottom:12px;">Market holdings allocation</p>
-                <div style="position:relative;height:200px;width:200px;"><canvas id="portfolioTypeChart"></canvas></div>
+            <div class="chart-card" id="portfolioTypeCard"
+              title="Click to switch between By Asset Type, Type by Account, and Gain/Loss by Type">
+              <div id="portfolioTypeChartCol" style="flex-shrink:0;">
+                <h3 id="portfolioTypeChartTitle">By Asset Type</h3>
+                <p class="page-desc" id="portfolioTypeChartSubtitle" style="margin-bottom:12px;">Market holdings allocation</p>
+                <div id="portfolioTypeChartWrap" style="position:relative;height:200px;width:200px;"><canvas id="portfolioTypeChart"></canvas></div>
               </div>
               <div class="chart-legend" id="portfolioTypeLegend"></div>
             </div>

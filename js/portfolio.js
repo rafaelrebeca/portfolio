@@ -233,16 +233,26 @@ function removeSnapshot(day) {
 
 function pruneSnapshotsLocally(mode) {
   const now = new Date();
+  const len = mode === 'months' ? 6 : 4;
   const currentPrefix = mode === 'months'
     ? `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}`
     : String(now.getUTCFullYear());
+  // timeTravelList is newest-first. Keep the most recent snapshot per past
+  // period, plus the current period in full. The oldest snapshot is never
+  // dropped, so the first-ever period keeps both its oldest and its most
+  // recent snapshot (they may be the same).
+  const days = timeTravelList.map(s => String(s.day));
+  const keep = new Set();
   const seen = new Set();
-  setSnapshotList(timeTravelList.filter(snapshot => {
-    const day = String(snapshot.day);
-    const prefix = mode === 'months' ? day.slice(0, 6) : day.slice(0, 4);
-    if (prefix === currentPrefix || seen.has(prefix)) return prefix === currentPrefix;
-    seen.add(prefix);
-    return true;
+  for (const day of days) {
+    const prefix = day.slice(0, len);
+    if (prefix === currentPrefix) continue;
+    if (!seen.has(prefix)) { seen.add(prefix); keep.add(day); }
+  }
+  if (days.length) keep.add(days[days.length - 1]);
+  setSnapshotList(timeTravelList.filter(s => {
+    const day = String(s.day);
+    return day.slice(0, len) === currentPrefix || keep.has(day);
   }));
 }
 
@@ -419,11 +429,20 @@ let simulationTrendChartInstance = null;
 let simulationGrowthChartInstance = null;
 let simulationGrowthMode = localStorage.getItem('portfolio_simulation_growth_mode') || 'all';
 let portfolioAssetMode = localStorage.getItem('portfolio_asset_chart_mode') || 'asset';
+let portfolioTypeMode = localStorage.getItem('portfolio_type_chart_mode') || 'type';
 
 function cyclePortfolioAssetMode() {
   portfolioAssetMode = portfolioAssetMode === 'asset' ? 'gain' : 'asset';
   localStorage.setItem('portfolio_asset_chart_mode', portfolioAssetMode);
   renderPortfolioCharts(true);
+}
+
+function cyclePortfolioTypeMode() {
+  const modes = ['type', 'account', 'gain'];
+  const currentIndex = modes.indexOf(portfolioTypeMode);
+  portfolioTypeMode = modes[(currentIndex + 1) % modes.length];
+  localStorage.setItem('portfolio_type_chart_mode', portfolioTypeMode);
+  renderPortfolioCharts();
 }
 
 function cycleSimulationGrowthMode() {
@@ -1464,7 +1483,45 @@ function renderPortfolioCharts(assetOnly = false) {
   // chart, so keep its existing Chart.js instance and avoid a visual refresh.
   if (assetOnly) return;
 
-  // By Asset Type: allocation by asset type
+  // The type card cycles through three modes: By Asset Type (doughnut),
+  // Type by Account (vertical stacked bar of each account's type share), and
+  // Gain/Loss by Type (vertical bar of each type's current gain/loss).
+  const typeTitle = $('#portfolioTypeChartTitle');
+  const typeSubtitle = $('#portfolioTypeChartSubtitle');
+  const typeWrap = $('#portfolioTypeChartWrap');
+  const typeCol = $('#portfolioTypeChartCol');
+  const typeLegend = $('#portfolioTypeLegend');
+  const isDoughnut = portfolioTypeMode === 'type';
+  if (typeTitle) typeTitle.textContent = portfolioTypeMode === 'type' ? 'By Asset Type' : portfolioTypeMode === 'account' ? 'Type by Account' : 'Gain/Loss by Type';
+  if (typeSubtitle) typeSubtitle.textContent = portfolioTypeMode === 'type'
+    ? 'Market holdings allocation'
+    : portfolioTypeMode === 'account'
+      ? 'Share of each asset type per account'
+      : 'Current gain or loss per asset type';
+  // Doughnut mode uses a square canvas with the legend beside it; bar modes
+  // use the full card width (legend hidden) so the bars fill the horizontal space.
+  if (typeCol) {
+    typeCol.style.flex = isDoughnut ? '0 0 auto' : '1 1 100%';
+    typeCol.style.width = isDoughnut ? 'auto' : '100%';
+  }
+  if (typeLegend) typeLegend.style.display = isDoughnut ? '' : 'none';
+  if (typeWrap) {
+    typeWrap.style.width = isDoughnut ? '200px' : '100%';
+    typeWrap.style.height = isDoughnut ? '200px' : '260px';
+  }
+
+  if (portfolioTypeMode === 'type') {
+    renderPortfolioTypeDoughnut(typeCtx, colors);
+  } else if (portfolioTypeMode === 'account') {
+    renderPortfolioTypeByAccount(typeCtx, colors);
+  } else {
+    renderPortfolioGainByType(typeCtx, colors);
+  }
+}
+
+// By Asset Type: allocation by asset type (doughnut). Clicking a slice or
+// legend row filters the holdings table to that type.
+function renderPortfolioTypeDoughnut(ctx, colors) {
   const typeMap = {};
   state.holdings.forEach(h => {
     const asset = findAsset(h.asset_id, h.is_personal);
@@ -1482,7 +1539,8 @@ function renderPortfolioCharts(assetOnly = false) {
   const typeDataAbs = typeData.map(v => Math.abs(v));
   portfolioTypeOthers = typeTop.others;
 
-  portfolioTypeChartInstance = new Chart(typeCtx, {
+  if (portfolioTypeChartInstance) portfolioTypeChartInstance.destroy();
+  portfolioTypeChartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: typeLabels.length ? typeLabels : ['No Data'],
@@ -1495,6 +1553,7 @@ function renderPortfolioCharts(assetOnly = false) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !typeLabels.length) return;
@@ -1513,6 +1572,177 @@ function renderPortfolioCharts(assetOnly = false) {
   });
 
   renderLegend('portfolioTypeLegend', typeLabels, typeData, colors, true);
+}
+
+// Type by Account: vertical stacked bar. Each account's bar always fills to
+// 100%, with segments showing the percentage share of each asset type within
+// that account, so composition is comparable across accounts regardless of size.
+function renderPortfolioTypeByAccount(ctx, colors) {
+  const legendEl = $('#portfolioTypeLegend');
+  if (legendEl) legendEl.innerHTML = '';
+
+  // Group holdings by account, then by asset type (EUR values).
+  const accountTypeMap = {}; // accountName -> { type -> eurValue }
+  state.holdings.forEach(h => {
+    const asset = findAsset(h.asset_id, h.is_personal);
+    if (!asset) return;
+    const account = state.accounts.find(a => a.id === h.account_id);
+    if (!account) return;
+    const val = Number(asset.price || 0) * Number(h.quantity || 0);
+    const valInEur = convertToEUR(val, asset.coin || 'USD');
+    const type = asset.type || 'Other';
+    const accName = account.name || '—';
+    accountTypeMap[accName] = accountTypeMap[accName] || {};
+    accountTypeMap[accName][type] = (accountTypeMap[accName][type] || 0) + valInEur;
+  });
+
+  const accountNames = Object.keys(accountTypeMap);
+  if (portfolioTypeChartInstance) { portfolioTypeChartInstance.destroy(); portfolioTypeChartInstance = null; }
+  if (!accountNames.length) return;
+
+  // Aggregate types across all accounts to pick a stable, consistent color set.
+  const typeTotals = {};
+  accountNames.forEach(name => Object.entries(accountTypeMap[name]).forEach(([type, value]) => {
+    typeTotals[type] = (typeTotals[type] || 0) + value;
+  }));
+  const typeTop = topNWithOthers(typeTotals, 9);
+  const typeLabels = typeTop.labels;
+
+  // Convert each type's EUR value into a percentage of that account's total.
+  const accountTotals = {};
+  accountNames.forEach(name => {
+    accountTotals[name] = Object.values(accountTypeMap[name]).reduce((sum, v) => sum + Number(v || 0), 0);
+  });
+  const pctOf = (name, value) => {
+    const total = accountTotals[name];
+    return total > 0 ? (Number(value || 0) / total) * 100 : 0;
+  };
+
+  const datasets = typeLabels.map((type, i) => ({
+    label: type,
+    data: accountNames.map(name => {
+      const map = accountTypeMap[name];
+      if (type === 'Others') {
+        return pctOf(name, typeTop.others.reduce((sum, other) => sum + Number(map[other] || 0), 0));
+      }
+      return pctOf(name, map[type]);
+    }),
+    backgroundColor: colors[i % colors.length],
+    borderWidth: 0
+  }));
+
+  portfolioTypeChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: accountNames, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const value = Number(context.raw || 0);
+              const label = context.dataset.label || '';
+              return blurActive()
+                ? `${label}: hidden`
+                : `${label}: ${value.toFixed(1)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: '#e6ebf5' },
+          grid: { display: false }
+        },
+        y: {
+          stacked: true,
+          max: 100,
+          ticks: { color: '#e6ebf5', callback: value => `${value}%` },
+          grid: { color: 'rgba(255,255,255,.05)' }
+        }
+      }
+    }
+  });
+}
+
+// Gain/Loss by Type: vertical bar of each asset type's current gain/loss.
+// Positive gains are green, losses are red. No time axis — current data only.
+function renderPortfolioGainByType(ctx, colors) {
+  const legendEl = $('#portfolioTypeLegend');
+  if (legendEl) legendEl.innerHTML = '';
+
+  // Aggregate current gain/loss per asset type (EUR).
+  const typeGainMap = {};
+  state.holdings.forEach(h => {
+    const asset = findAsset(h.asset_id, h.is_personal);
+    if (!asset) return;
+    if (h.purchase_price == null || Number(h.purchase_price) <= 0) return;
+    const quantity = Number(h.quantity || 0);
+    const gain = (Number(asset.price || 0) - Number(h.purchase_price)) * quantity;
+    const gainInEur = convertToEUR(gain, asset.coin || 'USD');
+    const type = asset.type || 'Other';
+    typeGainMap[type] = (typeGainMap[type] || 0) + gainInEur;
+  });
+
+  const typeTop = topNWithOthers(Object.fromEntries(Object.entries(typeGainMap).map(([type, value]) => [type, Math.abs(value)])), 9);
+  const typeLabels = typeTop.labels;
+  const typeData = typeLabels.map(label => label === 'Others'
+    ? typeTop.others.reduce((sum, type) => sum + Number(typeGainMap[type] || 0), 0)
+    : Number(typeGainMap[label] || 0));
+
+  if (portfolioTypeChartInstance) { portfolioTypeChartInstance.destroy(); portfolioTypeChartInstance = null; }
+  if (!typeLabels.length) return;
+
+  const green = '#3fd0a3';
+  const red = '#ff5c72';
+  const barColors = typeData.map(value => value > 0 ? green : value < 0 ? red : '#8b95a8');
+
+  portfolioTypeChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: typeLabels,
+      datasets: [{
+        label: 'Gain/Loss',
+        data: typeData,
+        backgroundColor: barColors,
+        borderColor: barColors,
+        borderWidth: 1,
+        borderRadius: 8,
+        borderSkipped: false,
+        maxBarThickness: 48
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const value = Number(context.raw || 0);
+              const label = context.dataset.label || '';
+              if (blurActive()) return `${label}: hidden`;
+              const sign = value >= 0 ? '+' : '−';
+              return `${label}: ${sign}${moneyEUR.format(Math.abs(value))}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#e6ebf5' }, grid: { display: false } },
+        y: {
+          ticks: { color: '#e6ebf5', callback: privacyMoneyTick },
+          grid: { color: 'rgba(255,255,255,.05)' }
+        }
+      }
+    }
+  });
 }
 
 function accountValue(acc, convertToEur = false) {
@@ -2448,12 +2678,12 @@ function exitTimeTravel() {
 }
 
 // Clean snapshots: keep only the most recent snapshot per month (mode 'months') or per year (mode 'years').
-// The current month / current year is never touched.
+// The current month / current year is never touched, and the oldest snapshot is always preserved.
 async function cleanSnapshots(mode) {
   const isMonths = mode === 'months';
   const label = isMonths ? 'month' : 'year';
   const ok = await confirmDialog(
-    `Keep only the most recent snapshot per ${label}? Snapshots from the current ${label} will be left untouched.`,
+    `Keep only the most recent snapshot per ${label}? Snapshots from the current ${label} will be left untouched, and the oldest snapshot is always kept.`,
     'Clean'
   );
   if (!ok) return;
@@ -3250,6 +3480,9 @@ function renderHoldingsSortIndicators() {
 
 function renderHoldings() {
   if (!$('#holdingsTable')) return;
+
+  const typeCard = $('#portfolioTypeCard');
+  if (typeCard) typeCard.classList.toggle('filtered', !!(portfolioFilter && portfolioFilter.source === 'type'));
 
   let holdings = state.holdings;
   let filterLabel = null;
@@ -5513,6 +5746,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       cycleDashboardAllocationMode();
     } else if (e.target.closest('#portfolioAssetCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cyclePortfolioAssetMode();
+    } else if (e.target.closest('#portfolioTypeCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
+      cyclePortfolioTypeMode();
     } else if (e.target.closest('#simulationGrowthCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleSimulationGrowthMode();
     } else if (e.target.closest('#simulationTargetCard')) {

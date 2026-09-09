@@ -421,7 +421,8 @@ a {
 #growthCard,
 #dashboardAllocationCard,
 #dashboardBreakdownCard,
-#portfolioAssetCard {
+#portfolioAssetCard,
+#portfolioTypeCard {
   cursor: pointer;
   user-select: none;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -430,8 +431,14 @@ a {
 #growthCard:hover,
 #dashboardAllocationCard:hover,
 #dashboardBreakdownCard:hover,
-#portfolioAssetCard:hover {
+#portfolioAssetCard:hover,
+#portfolioTypeCard:hover {
   border-color: var(--accent);
+}
+
+#portfolioTypeCard.filtered {
+  border-color: var(--accent);
+  background: rgba(79, 140, 255, 0.05);
 }
 
 .card .label {

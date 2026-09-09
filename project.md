@@ -166,8 +166,8 @@ Goal validation enforces the dependency chain (`sub2` requires `sub1`, `sub3` re
 | GET | `/api/snapshots` | User | Lists the current user's snapshots newest first. |
 | GET | `/api/snapshots/{YYYYMMDD}` | User | Retrieves one owned snapshot. |
 | DELETE | `/api/snapshots/{YYYYMMDD}` | User | Deletes one owned snapshot. |
-| POST | `/api/snapshots/clean-months` | User | Keeps the most recent snapshot per historical month; current month is untouched. |
-| POST | `/api/snapshots/clean-years` | User | Keeps the most recent snapshot per historical year; current year is untouched. |
+| POST | `/api/snapshots/clean-months` | User | Keeps the most recent snapshot per historical month; current month is untouched and the oldest snapshot is always preserved. |
+| POST | `/api/snapshots/clean-years` | User | Keeps the most recent snapshot per historical year; current year is untouched and the oldest snapshot is always preserved. |
 
 ## 7. Frontend pages
 
@@ -232,6 +232,16 @@ Simulation is a read-only, principal-only projection of Global Value. It uses th
 ### My Portfolio
 
 My Portfolio lists holdings assigned to asset accounts. It shows asset, account, quantity, purchase price, market value, gain percentage, and gain value. Every displayed column except Action is sortable. Sorting respects the active asset/type filter and persists through re-renders. Asset and account names resolve platform/personal IDs with the personal flag.
+
+The page shows two chart cards above the holdings table:
+
+- **By Asset** — a doughnut of market value per asset. The card is clickable and cycles between market value and gain/loss. Clicking a slice or legend row filters the holdings table to that asset; clicking the same slice again clears the filter.
+- **By Asset Type** — a single card that cycles through three modes when clicked (stored in `localStorage` as `portfolio_type_chart_mode`):
+  - **By Asset Type** — a doughnut of market value per asset type. Clicking a slice or legend row filters the holdings table to that type; clicking the same slice again clears the filter. The card highlights with an accent border while a type filter is active.
+  - **Type by Account** — a vertical stacked bar chart. Each account is one bar that always fills to 100%, with segments showing the percentage share of each asset type within that account, so composition is comparable across accounts regardless of absolute size. Accounts with no asset holdings are omitted. Hovering a segment shows the type and its percentage.
+  - **Gain/Loss by Type** — a vertical bar chart of each asset type's current gain/loss (no time axis). Positive gains are green, losses are red, matching the By Growth history chart style. Holdings without a purchase price are excluded.
+
+The By Asset Type and Type by Account modes use the reusable `topNWithOthers(map, 9)` helper so the nine largest types are shown individually and the remainder is grouped into **Others**. Both chart cards respect the privacy blur mode.
 
 ### Goals
 

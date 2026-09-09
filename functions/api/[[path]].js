@@ -672,11 +672,15 @@ export async function onRequest(context) {
         'SELECT day FROM dashboard_snapshots WHERE user_id = ? AND substr(day, 1, 6) != ? ORDER BY day DESC'
       ).bind(user.id, curMonthPrefix).all();
       // Keep the first (most recent) day per YYYYMM prefix; delete the rest.
+      // The oldest snapshot is never deleted, so the first-ever month keeps
+      // both its oldest and its most recent snapshot (they may be the same).
       const keep = new Set();
+      const seen = new Set();
       for (const r of results) {
         const prefix = r.day.slice(0, 6);
-        if (!keep.has(prefix)) { keep.add(prefix); keep.add(r.day); }
+        if (!seen.has(prefix)) { seen.add(prefix); keep.add(r.day); }
       }
+      if (results.length) keep.add(results[results.length - 1].day);
       const toDelete = results.filter(r => !keep.has(r.day)).map(r => r.day);
       let deleted = 0;
       for (const day of toDelete) {
@@ -695,11 +699,15 @@ export async function onRequest(context) {
         'SELECT day FROM dashboard_snapshots WHERE user_id = ? AND substr(day, 1, 4) != ? ORDER BY day DESC'
       ).bind(user.id, String(curYear)).all();
       // Keep the first (most recent) day per YYYY prefix; delete the rest.
+      // The oldest snapshot is never deleted, so the first-ever year keeps
+      // both its oldest and its most recent snapshot (they may be the same).
       const keep = new Set();
+      const seen = new Set();
       for (const r of results) {
         const prefix = r.day.slice(0, 4);
-        if (!keep.has(prefix)) { keep.add(prefix); keep.add(r.day); }
+        if (!seen.has(prefix)) { seen.add(prefix); keep.add(r.day); }
       }
+      if (results.length) keep.add(results[results.length - 1].day);
       const toDelete = results.filter(r => !keep.has(r.day)).map(r => r.day);
       let deleted = 0;
       for (const day of toDelete) {
