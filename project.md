@@ -43,7 +43,7 @@ Important runtime files:
 - `index.html` — Dashboard, Assets, Dividends, My Accounts, My Portfolio, Goals, Tools, Users, Profile, Currency, and all modal markup.
 - `js/portfolio.js` — state, API wrapper, calculations, renderers, chart construction, filters, event handlers, snapshots, and simulations.
 - `functions/api/[[path]].js` — authentication, authorization, validation, D1 queries, external API calls, and snapshot endpoints.
-- `schema.sql` — local schema reference. The deployed D1 database is managed separately.
+- `schema.sql` — local schema reference. The deployed D1 database is managed separately; one-off migrations (e.g. `mig-remove-dividends.sql`) are applied manually with `wrangler d1 execute`.
 - `wrangler.toml` — Pages project, D1 binding, compatibility date, and local variable configuration. Do not commit real credentials or API keys.
 
 ## 3. Local commands
@@ -62,12 +62,12 @@ The repository uses `bcryptjs` at runtime and Wrangler as a development dependen
 
 The worker uses these D1 tables:
 
-- `users` — `id`, `username`, `password_hash`, `role`, `created_at`, `last_login`; stored roles are `user` or `admin`.
+- `users` — `id`, `username`, `password_hash`, `role`, `created_at`, `last_login`, and optional `fire_expenses` (monthly expenses used for the user-configured FIRE target); stored roles are `user` or `admin`.
 - `sessions` — session `token`, `user_id`, and `expires_at`. Sessions expire after seven days.
-- `assets` — platform assets with `id`, `name`, `symbol`, `type`, `price`, and `coin`.
-- `personal_assets` — user-owned assets with the same core fields plus `user_id`, `created_at`, and `updated_at`.
-- `dividends` — one dividend yield per platform asset.
-- `dividend_payment_months` — payment months from 1 to 12 for platform assets.
+- `assets` — platform assets with `id`, `name`, `symbol`, `type`, `price`, `coin`, and `dividend_yield`.
+- `asset_type` — reference table of valid asset types (`id`, `type`, `label`); drives the asset creation form, type filters, and validation.
+- `personal_assets` — user-owned assets with the same core fields plus `user_id`, `created_at`, and `updated_at`; they carry a `dividend_yield` but never a payment schedule.
+- `dividend_payment_months` — payment months from 1 to 12 for platform (system) assets only.
 - `providers` — user-owned financial providers with type `bank`, `broker`, or `other`.
 - `accounts` — provider-owned accounts with type `loan`, `interest_account`, `bank_account`, or `asset_account`; balances use the account currency and loans may have a `finish_date` stored as `YYYYMMDD`.
 - `account_holdings` — holdings linked to either a platform asset or a personal asset, never both. The unique relationship is account + asset.
@@ -110,14 +110,15 @@ All routes are under `/api`. The route is implemented by `functions/api/[[path]]
 | Method | Path | Access | Behavior |
 |---|---|---|---|
 | GET | `/api/assets` | Member | Returns all platform assets plus the current user's personal assets, including dividend metadata for platform assets. |
-| POST | `/api/assets` | Admin | Creates a platform asset. |
+| GET | `/api/asset-types` | Member | Returns the valid asset types (`id`, `type`, `label`) from the `asset_type` table. |
+| POST | `/api/assets` | Admin | Creates a platform asset with an optional dividend yield and payment months. |
 | PUT/PATCH | `/api/assets/{id}` | Admin | Updates a platform asset, dividend yield, and payment months. |
-| DELETE | `/api/assets/{id}` | Admin | Deletes a platform asset and its related holdings/dividend rows. |
+| DELETE | `/api/assets/{id}` | Admin | Deletes a platform asset and its related holdings/payment-month rows. |
 | POST | `/api/assets/{id}/price` | Admin | Fetches the quote price from Finnhub. |
-| POST | `/api/personal-assets` | Member | Creates a user-owned personal asset. |
-| PUT/PATCH | `/api/personal-assets/{id}` | Owner/Admin | Updates a personal asset. |
+| POST | `/api/personal-assets` | Member | Creates a user-owned personal asset with an optional dividend yield (no payment schedule). |
+| PUT/PATCH | `/api/personal-assets/{id}` | Owner/Admin | Updates a personal asset and its dividend yield (no payment schedule). |
 | DELETE | `/api/personal-assets/{id}` | Owner/Admin | Deletes a personal asset. |
-| GET | `/api/dividends` | Member | Returns assets with a configured yield or payment schedule. |
+| GET | `/api/dividends` | Member | Returns platform assets with a configured yield or payment schedule. |
 
 ### Providers, accounts, and holdings
 
@@ -152,6 +153,7 @@ Goal validation enforces the dependency chain (`sub2` requires `sub1`, `sub3` re
 | POST | `/api/admin/users/{id}/password` | Admin | Resets another user's password. |
 | PATCH | `/api/admin/users/{id}/role` | Admin | Changes another user's role; an admin cannot change their own role. |
 | POST | `/api/me/password` | Member | Changes the current user's password. |
+| PATCH | `/api/me/profile` | Member | Updates the current user's profile settings (`fire_expenses`, the monthly expenses used for the FIRE target). |
 | POST | `/api/admin/import` | Admin | Imports or updates platform assets from rows. |
 | GET | `/api/currency` | Member | Lists stored exchange rates. |
 | POST | `/api/admin/update-currency` | Admin | Refreshes ExchangeRate-API data at most once per UTC day. |
@@ -206,13 +208,13 @@ Account cards become clickable for account history when snapshots exist. The acc
 
 ### Assets
 
-Assets has separate **System Assets** and **Personal Assets** tabs. Each tab has its own search and type filter. Platform assets are administrator-managed; personal assets are private to their owner and can also be managed by an administrator. Personal assets have no dividend schedule and are visually distinguished in holding displays.
+Assets has separate **System Assets** and **Personal Assets** tabs. Each tab has its own search and type filter. Platform assets are administrator-managed; personal assets are private to their owner and can also be managed by an administrator. Personal assets have no dividend schedule and are visually distinguished in holding displays. The asset type options (creation form, filters) are loaded from the `asset_type` reference table and cached at startup, so adding a type there surfaces it across the UI.
 
 The administrator-only price updates support choosing between Twelve Data (7 calls/min), Massive.com (4 calls/min), and Finnhub.io (1 call every 2s). The bulk update feature is limited to USD stocks, allows selecting the API provider before running, estimates duration, and spaces calls according to the provider's rate limit. If a call fails, exponential backoff retries after 30s, 60s, and 120s. The UI displays progress, per-asset results, and portfolio impact for updated holdings.
 
 ### Dividends
 
-The Dividend Calendar lists assets with a configured yield or payment months and supports Month, Trimester, and Semester filters. The page is populated from the stored asset and dividend data; it does not create or update data during display.
+The Dividend Calendar lists platform (system) assets with a configured yield or payment months and supports Month, Trimester, and Semester filters. Personal assets are excluded because the payment calendar is reserved for system assets. The page is populated from the stored asset and payment data; it does not create or update data during display.
 
 ### My Accounts
 

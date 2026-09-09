@@ -577,6 +577,11 @@ tbody tr:last-child td {
   color: #5ce1e6;
 }
 
+.tag.crypto {
+  background: rgba(255, 92, 114, .15);
+  color: var(--danger);
+}
+
 /* Provider type tags */
 .tag.bank {
   background: rgba(79, 140, 255, .15);

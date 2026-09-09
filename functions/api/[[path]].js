@@ -32,9 +32,8 @@ function stampDay(stamp) { return stamp ? String(stamp).slice(0, 8) : ''; }
 
 function assetsStatement(db) {
   return db.prepare(`SELECT a.id, a.name, a.symbol, a.type, a.price, a.coin,
-    d.dividend_yield, GROUP_CONCAT(DISTINCT dpm.month_paid) AS payment_months
-    FROM assets a LEFT JOIN dividends d ON d.asset_id = a.id
-    LEFT JOIN dividend_payment_months dpm ON dpm.asset_id = a.id
+    a.dividend_yield, GROUP_CONCAT(DISTINCT dpm.month_paid) AS payment_months
+    FROM assets a LEFT JOIN dividend_payment_months dpm ON dpm.asset_id = a.id
     GROUP BY a.id ORDER BY COALESCE(a.symbol, a.name)`);
 }
 function normalizeAssets(items) { return items.map(item => ({ ...item, payment_months: item.payment_months ? item.payment_months.split(',').map(Number).sort((a, b) => a - b) : [] })); }
@@ -42,10 +41,23 @@ function normalizeAssets(items) { return items.map(item => ({ ...item, payment_m
 // Personal assets are scoped to a user and flagged so the frontend can render
 // their display name in [] and apply the right permissions. They use their real
 // positive id; the is_personal flag distinguishes them from platform assets.
+// Personal assets carry a dividend_yield but never a payment schedule.
 function personalAssetsStatement(db, userId) {
   return db.prepare(`SELECT id, name, symbol, type, price, coin, user_id,
-    NULL AS dividend_yield, NULL AS payment_months, 1 AS is_personal
+    dividend_yield, NULL AS payment_months, 1 AS is_personal
     FROM personal_assets WHERE user_id = ? ORDER BY COALESCE(symbol, name)`).bind(userId);
+}
+
+// Asset types are stored in the `asset_type` reference table (id, type, label)
+// and drive the asset creation form, type filters and validation.
+async function assetTypes(db) {
+  const { results } = await db.prepare('SELECT id, type, label FROM asset_type ORDER BY id').all();
+  return results;
+}
+async function validAssetType(db, type) {
+  if (!type) return false;
+  const row = await db.prepare('SELECT 1 FROM asset_type WHERE type = ?').bind(type).first();
+  return Boolean(row);
 }
 
 export async function onRequest(context) {
@@ -79,6 +91,10 @@ export async function onRequest(context) {
       const items = [...platform, ...personal].sort((a, b) => (a.symbol || a.name).localeCompare(b.symbol || b.name));
       return json({ items });
     }
+    if (method === 'GET' && path === 'asset-types') {
+      await requireMember(request, env);
+      return json({ items: await assetTypes(env.myd1db) });
+    }
     if (method === 'POST' && path === 'assets') {
       await requireAdmin(request, env);
       const body = await readBody(request);
@@ -92,15 +108,12 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
 
-      const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin).run();
+      const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
       const assetId = result.meta.last_row_id;
 
       const statements = [];
-      if (dividendYield !== null && Number.isFinite(dividendYield)) {
-        statements.push(env.myd1db.prepare("INSERT INTO dividends (asset_id, dividend_yield) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET dividend_yield = excluded.dividend_yield").bind(assetId, dividendYield));
-      }
       if (months.length > 0) {
         months.forEach(m => {
           statements.push(env.myd1db.prepare("INSERT OR IGNORE INTO dividend_payment_months (asset_id, month_paid) VALUES (?, ?)").bind(assetId, m));
@@ -125,15 +138,12 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
 
-      const updateRes = await env.myd1db.prepare('UPDATE assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, symbol, type, price, coin, id).run();
+      const updateRes = await env.myd1db.prepare('UPDATE assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id).run();
       if (!changed(updateRes)) return fail('Asset not found.', 404);
 
       const statements = [];
-      if (dividendYield !== null && Number.isFinite(dividendYield)) {
-        statements.push(env.myd1db.prepare("INSERT INTO dividends (asset_id, dividend_yield) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET dividend_yield = excluded.dividend_yield").bind(id, dividendYield));
-      }
       if (months.length >= 0) {
         statements.push(env.myd1db.prepare("DELETE FROM dividend_payment_months WHERE asset_id = ?").bind(id));
         months.forEach(m => {
@@ -150,7 +160,6 @@ export async function onRequest(context) {
       const id = Number(path.split('/')[1]);
       await env.myd1db.batch([
         env.myd1db.prepare('DELETE FROM account_holdings WHERE asset_id = ?').bind(id),
-        env.myd1db.prepare('DELETE FROM dividends WHERE asset_id = ?').bind(id),
         env.myd1db.prepare('DELETE FROM dividend_payment_months WHERE asset_id = ?').bind(id),
         env.myd1db.prepare('DELETE FROM assets WHERE id = ?').bind(id)
       ]);
@@ -163,8 +172,9 @@ export async function onRequest(context) {
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
-      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
-      const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin).run();
+      const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
+      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
       return json({ id: result.meta.last_row_id, ok: true }, 201);
     }
     if ((method === 'PUT' || method === 'PATCH') && /^personal-assets\/\d+$/.test(path)) {
@@ -174,10 +184,11 @@ export async function onRequest(context) {
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
-      if (!name || name.length > 50 || !['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
+      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
       const owner = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').first();
       if (!owner) return fail('Personal asset not found.', 404);
-      const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, symbol, type, price, coin, id).run();
+      const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id).run();
       if (!changed(updateRes)) return fail('Failed to update personal asset.', 500);
       return json({ ok: true });
     }
@@ -536,7 +547,7 @@ export async function onRequest(context) {
           months = row.payment_months.split('|').map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
         }
 
-        if (!['stock', 'bond', 'etf', 'cfd', 'commodity'].includes(type)) continue;
+        if (!(await validAssetType(env.myd1db, type))) continue;
 
         // Check if asset exists
         const existing = await env.myd1db.prepare('SELECT id FROM assets WHERE UPPER(symbol) = UPPER(?)').bind(symbol).first();
@@ -544,17 +555,12 @@ export async function onRequest(context) {
         let assetId;
         if (existing) {
           // Update existing asset
-          await env.myd1db.prepare('UPDATE assets SET name = ?, type = ?, price = ?, coin = ? WHERE id = ?').bind(name, type, price, coin, existing.id).run();
+          await env.myd1db.prepare('UPDATE assets SET name = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, existing.id).run();
           assetId = existing.id;
         } else {
           // Create new asset
-          const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin) VALUES (?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin).run();
+          const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
           assetId = result.meta.last_row_id;
-        }
-
-        // Update dividend yield
-        if (dividendYield !== null && Number.isFinite(dividendYield)) {
-          await env.myd1db.prepare('INSERT INTO dividends (asset_id, dividend_yield) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET dividend_yield = excluded.dividend_yield').bind(assetId, dividendYield).run();
         }
 
         // Update payment months

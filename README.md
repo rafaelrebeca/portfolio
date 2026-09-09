@@ -19,12 +19,12 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 
 ## ✨ Key Features
 
-- 📊 **Interactive Dashboard**: Real-time visual overview of net worth, assets, liabilities, cash reserves, loan balances, asset allocations, and projected monthly/annual dividend income. The Growth card cycles through All-Time, YTD, and Month views; account cards show up/down/unchanged indicators, total change, and top movers; breakdown charts switch between Type/Change and Provider/Account views.
-- 💼 **My Portfolio & Holdings**: Detailed view of stock, bond, ETF, CFD, and commodity positions linked to specific accounts. Calculates gain/loss percentage, invested value, and market value, with sortable holdings columns and separate System Assets and Personal Assets sections.
+- 📊 **Interactive Dashboard**: Real-time visual overview of net worth, assets, liabilities, cash reserves, loan balances, asset allocations, and projected monthly/annual dividend income. The Growth card cycles through All-Time, YTD, and Month views; account cards show up/down/unchanged indicators, total change, and top movers; breakdown charts switch between Type/Change and Provider/Account views. The Top Goal Status card shows the leading goal's progress plus an estimated reach date and monthly growth pace when snapshot history exists.
+- 💼 **My Portfolio & Holdings**: Detailed view of positions across the asset types defined in the `asset_type` table (stock, bond, ETF, CFD, commodity, crypto, ...) linked to specific accounts. Calculates gain/loss percentage, invested value, and market value, with sortable holdings columns and separate System Assets and Personal Assets sections.
 - 🏦 **Accounts & Provider Management**: Supports bank accounts, brokerage accounts, high-yield interest accounts, and loan tracking with payoff dates and interest calculations. Account History charts show account values over time.
 - 🧮 **Loan Simulator**: Compare three principal-amortization scenarios—current payments, keeping the original term, and reducing the term—with payment, interest, principal, total-cost, and month-by-month comparisons.
-- 🎯 **Financial Goals Tracker**: Create multi-tiered financial goals linked directly to specific accounts or overall savings milestones. Goals support ordering, up to three milestones, Goal History charts, and goal simulations.
-- 💰 **Dividends Engine**: Track yield percentages and payout schedules by month across all held assets.
+- 🎯 **Financial Goals Tracker**: Create multi-tiered financial goals linked directly to specific accounts or overall savings milestones. Goals support ordering, up to three milestones, Goal History charts, and goal simulations. Each goal shows its monthly growth pace and an estimated reach date (e.g. `Est: Oct 2026 (~8 mos)`) computed from linked-account snapshot history.
+- 💰 **Dividends Engine**: Track yield percentages and payout schedules by month for system assets (the payment calendar is reserved for system assets; personal assets carry a yield but no schedule).
 - 💱 **Multi-Currency & Exchange Rates**: Multi-currency conversion support (USD, EUR, GBP, etc.) using stored ExchangeRate-API rates refreshed at most once per UTC day.
 - 🕰 **Time Travel (Snapshots)**: Save and replay historical daily snapshots of your dashboard to visualize net worth growth over time via calendar, timeline, and playback controls. History supports Global, By Type, By Provider, By Account, and By Growth charts, with Assets/Liabilities labels and cleanup tools to retain the latest snapshot per historical month or year.
 - 📈 **Simulation**: Available once at least one account exists. Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, clickable paths to €0, the next power-of-ten milestone, Path to FIRE (auto) based on average portfolio-level losses, or Path to FIRE (user) using custom profile monthly expenses, plus estimated FIRE progress lines and optional +5% annual-growth scenario.
@@ -48,7 +48,7 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 | **Frontend** | Vanilla HTML5, CSS3 (Custom Variables & Responsive Design), JS (ES Modules) |
 | **Data Visualization** | Chart.js |
 | **Authentication** | Secure `HttpOnly` Session Cookies + `bcrypt` password hashing |
-| **External APIs** | Finnhub (Stock Prices API), ExchangeRate-API (Currency Rates) |
+| **External APIs** | Twelve Data, Massive.com, and Finnhub (US stock prices), ExchangeRate-API (Currency Rates) |
 
 ---
 

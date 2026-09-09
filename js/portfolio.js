@@ -270,6 +270,22 @@ function toast(message) {
 function isWriteAllowed() { return !state.guest; }
 function isAdminUser() { return !state.guest && state.user?.role === 'admin'; }
 function typeLabel(value) { return String(value || '').replaceAll('_', ' '); }
+
+// Fallback asset types used in guest mode (no API access). The live list is
+// cached from the `asset_type` table via /api/asset-types.
+const DEFAULT_ASSET_TYPES = [
+  { id: 1, type: 'stock', label: 'Stock' },
+  { id: 2, type: 'bond', label: 'Bond' },
+  { id: 3, type: 'etf', label: 'ETF' },
+  { id: 4, type: 'cfd', label: 'CFD' },
+  { id: 5, type: 'commodity', label: 'Commodity' },
+  { id: 6, type: 'crypto', label: 'Crypto' }
+];
+function getAssetTypes() { return assetTypesCache.length ? assetTypesCache : DEFAULT_ASSET_TYPES; }
+function assetTypeLabel(type) {
+  const found = getAssetTypes().find(t => t.type === type);
+  return found ? found.label : typeLabel(type);
+}
 function latestValue(holding) { return Number(holding.quantity) * Number(holding.price || 0); }
 function gainLoss(h) {
   if (h.purchase_price == null || Number(h.purchase_price) <= 0 || h.price == null) return '—';
@@ -291,6 +307,7 @@ function gainLossValue(h, currency = 'USD') {
 async function loadData({ refreshSnapshots = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
+    assetTypesCache = [];
     timeTravelList = [];
     invalidateAccountGrowthCache();
     render();
@@ -298,9 +315,9 @@ async function loadData({ refreshSnapshots = false } = {}) {
   }
   hydrateSnapshotCache();
   try {
-    const [assets, providers, accounts, holdings, currencies, goals] = await Promise.all([
+    const [assets, providers, accounts, holdings, currencies, goals, assetTypes] = await Promise.all([
       request('/assets'), request('/providers'), request('/accounts'),
-      request('/holdings'), request('/currency'), request('/goals')
+      request('/holdings'), request('/currency'), request('/goals'), request('/asset-types')
     ]);
     Object.assign(state, {
       assets: assets?.items || [],
@@ -310,6 +327,7 @@ async function loadData({ refreshSnapshots = false } = {}) {
       currencies: currencies?.items || [],
       goals: goals?.items || []
     });
+    assetTypesCache = assetTypes?.items || [];
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
     invalidateAccountGrowthCache();
@@ -419,6 +437,7 @@ let dashboardFilter = null; // { source: 'assetType'|'provider'|'account'|'chang
 let portfolioFilter = null; // { source: 'asset'|'type', value: string } | null
 let holdingsSort = null; // { field: 'asset'|'account'|'quantity'|'purchase_price'|'market_value'|'gain_pct'|'gain_value', dir: 1|-1 } | null
 let activeAssetTab = 'system'; // 'system' or 'personal' — which Assets page tab is shown
+let assetTypesCache = []; // [{ id, type, label }] loaded from /api/asset-types (guest uses a default set)
 let dashboardAllocOthers = [];
 let dashboardProviderOthers = [];
 let dashboardAccountOthers = [];
@@ -2905,7 +2924,7 @@ function renderSystemAssets() {
       <tr>
         <td><strong>${esc(a.symbol || '—')}</strong></td>
         <td>${esc(a.name)}</td>
-        <td><span class="tag ${a.type}">${esc(a.type)}</span></td>
+        <td><span class="tag ${a.type}">${esc(assetTypeLabel(a.type))}</span></td>
         <td>${a.price == null ? '—' : formatCurrency(a.price, a.coin || 'USD')}</td>
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
@@ -2936,7 +2955,7 @@ function renderPersonalAssets() {
       <tr>
         <td><strong>${esc(a.symbol || '—')}</strong></td>
         <td>${esc(a.name)}</td>
-        <td><span class="tag ${a.type}">${esc(a.type)}</span></td>
+        <td><span class="tag ${a.type}">${esc(assetTypeLabel(a.type))}</span></td>
         <td>${a.price == null ? '—' : formatCurrency(a.price, a.coin || 'USD')}</td>
         <td>${a.dividend_yield == null ? '—' : `${a.dividend_yield}%`}</td>
         <td>
@@ -2993,8 +3012,9 @@ function fillDividendPeriodValue() {
 
 function renderDividends() {
   if (!$('#dividendsTable')) return;
-  // Only assets with a real dividend yield (> 0)
-  const items = state.assets.filter(a => a.dividend_yield != null && Number(a.dividend_yield) > 0);
+  // Only system assets with a real dividend yield (> 0); the dividend payment
+  // calendar is reserved for system assets, so personal assets are excluded.
+  const items = state.assets.filter(a => a.is_personal !== 1 && a.dividend_yield != null && Number(a.dividend_yield) > 0);
 
   const periodType = $('#dividendPeriodType')?.value || '';
   const periodValue = Number($('#dividendPeriodValue')?.value);
@@ -3866,7 +3886,28 @@ function fillHoldingAssetSelect(keepAssetId = null) {
   select.innerHTML = assets.length ? assets.map(a => `<option value="${a.id}|${a.is_personal === 1 ? 1 : 0}">${esc(a.symbol || a.name)} — ${a.is_personal === 1 ? `[${esc(a.name)}]` : esc(a.name)}</option>`).join('') : '<option value="">No assets available</option>';
 }
 
+// Populate the asset-type dropdowns (system/personal filters, asset form,
+// holding filter) from the cached asset_type list. Preserves the current
+// selection where possible.
+function populateAssetTypeSelects() {
+  const types = getAssetTypes();
+  const optionHtml = types.map(t => `<option value="${esc(t.type)}">${esc(t.label)}</option>`).join('');
+  const targets = [
+    { select: $('#systemAssetTypeFilter'), keep: true },
+    { select: $('#personalAssetTypeFilter'), keep: true },
+    { select: $('#assetType'), keep: false },
+    { select: $('#holdingAssetTypeFilter'), keep: true }
+  ];
+  targets.forEach(({ select, keep }) => {
+    if (!select) return;
+    const prev = select.value;
+    select.innerHTML = (keep ? '<option value="">All types</option>' : '') + optionHtml;
+    if (prev && types.some(t => t.type === prev)) select.value = prev;
+  });
+}
+
 function fillSelects() {
+  populateAssetTypeSelects();
   if ($('#accountProvider')) {
     $('#accountProvider').innerHTML = state.providers.map(p => `<option value="${p.id}">${esc(p.name)} (${esc(p.type)})</option>`).join('');
   }
@@ -4400,6 +4441,9 @@ function openAssetModal(assetId = null, isPersonal = null) {
     $('#assetCoin').value = 'USD';
   }
   form.dataset.isPersonal = isPersonal ? '1' : '0';
+  // The dividend payment calendar is reserved for system assets only.
+  const monthsField = $('#assetMonthsField');
+  if (monthsField) monthsField.style.display = isPersonal ? 'none' : '';
   openModal('assetModalOverlay');
 }
 

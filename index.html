@@ -181,11 +181,7 @@
                 <input id="systemAssetSearch" class="search-input" placeholder="Search symbol or name...">
                 <select id="systemAssetTypeFilter">
                   <option value="">All types</option>
-                  <option value="stock">Stock</option>
-                  <option value="etf">ETF</option>
-                  <option value="bond">Bond</option>
-                  <option value="cfd">CFD</option>
-                  <option value="commodity">Commodity</option>
+                  <!-- type options populated from the asset_type table -->
                 </select>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -219,11 +215,7 @@
                 <input id="personalAssetSearch" class="search-input" placeholder="Search symbol or name...">
                 <select id="personalAssetTypeFilter">
                   <option value="">All types</option>
-                  <option value="stock">Stock</option>
-                  <option value="etf">ETF</option>
-                  <option value="bond">Bond</option>
-                  <option value="cfd">CFD</option>
-                  <option value="commodity">Commodity</option>
+                  <!-- type options populated from the asset_type table -->
                 </select>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -635,11 +627,7 @@
             placeholder="e.g. AAPL"></div>
         <div class="field"><label>Type</label>
           <select id="assetType" name="type" style="width:100%;" required>
-            <option value="stock">Stock</option>
-            <option value="etf">ETF</option>
-            <option value="bond">Bond</option>
-            <option value="cfd">CFD</option>
-            <option value="commodity">Commodity</option>
+            <!-- type options populated from the asset_type table -->
           </select>
         </div>
         <div class="field"><label>Currency</label>
@@ -651,7 +639,7 @@
             name="price" placeholder="179.62"></div>
         <div class="field"><label>Dividend Yield (%)</label><input type="number" step="0.01" min="0" id="assetYield"
             name="dividend_yield" placeholder="0.52"></div>
-        <div class="field"><label>Payment Months <span style="font-weight:normal;color:var(--muted);">(e.g.
+        <div class="field" id="assetMonthsField"><label>Payment Months <span style="font-weight:normal;color:var(--muted);">(e.g.
               3,6,9,12)</span></label><input type="text" id="assetMonths" name="payment_months" placeholder="3,6,9,12">
         </div>
         <p class="form-error"></p>
@@ -818,11 +806,7 @@
         <div class="field"><label>Filter by Asset Type</label>
           <select id="holdingAssetTypeFilter" style="width:100%;">
             <option value="">All types</option>
-            <option value="stock">Stock</option>
-            <option value="etf">ETF</option>
-            <option value="bond">Bond</option>
-            <option value="cfd">CFD</option>
-            <option value="commodity">Commodity</option>
+            <!-- type options populated from the asset_type table -->
           </select>
         </div>
         <div class="field"><label>Asset</label>
