@@ -292,9 +292,10 @@ The History modal uses the in-memory snapshot list and offers:
 - **By Type** — one line per asset type.
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.
+- **By Account Type** — one line per account type (Bank Account, Interest Account, Asset Account, Loan), summing each snapshot's `accounts` values by `account.type` via `accountTypeLabel()`.
 - **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly or Yearly zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar. The first snapshot has no comparison and is left blank when using All zoom.
 
-By Account, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The chart supports All, Monthly, and Yearly zoom. Monthly/yearly zoom retains the most recent snapshot in each period, while the x-axis is displayed oldest to newest.
+By Account, By Account Type, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The chart supports All, Monthly, and Yearly zoom. Monthly/yearly zoom retains the most recent snapshot in each period, while the x-axis is displayed oldest to newest.
 
 Separate Account History and Goal History modals provide focused per-account and per-goal charts. Chart instances are destroyed when their modal closes or when a new chart is rendered.
 

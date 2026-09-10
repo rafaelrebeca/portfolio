@@ -296,6 +296,15 @@ function assetTypeLabel(type) {
   const found = getAssetTypes().find(t => t.type === type);
   return found ? found.label : typeLabel(type);
 }
+const ACCOUNT_TYPE_LABELS = {
+  bank_account: 'Bank Account',
+  interest_account: 'Interest Account',
+  asset_account: 'Asset Account',
+  loan: 'Loan'
+};
+function accountTypeLabel(type) {
+  return ACCOUNT_TYPE_LABELS[type] || typeLabel(type);
+}
 function latestValue(holding) { return Number(holding.quantity) * Number(holding.price || 0); }
 function gainLoss(h) {
   if (h.purchase_price == null || Number(h.purchase_price) <= 0 || h.price == null) return '—';
@@ -2892,6 +2901,13 @@ function buildHistoryDatasets(points, chartType, growthValues = null) {
         return map;
       }, {});
     }
+    if (chartType === 'byAccountType') {
+      return (p.data.accounts || []).reduce((map, account) => {
+        const label = accountTypeLabel(account.type);
+        map[label] = (map[label] || 0) + Number(account.valueEur || 0);
+        return map;
+      }, {});
+    }
     const key = chartType === 'byType' ? 'byType' : 'byProvider';
     return p.data[key] || {};
   });
@@ -3260,9 +3276,10 @@ function fillDividendPeriodValue() {
 
 function renderDividends() {
   if (!$('#dividendsTable')) return;
-  // Only system assets with a real dividend yield (> 0); the dividend payment
-  // calendar is reserved for system assets, so personal assets are excluded.
-  const items = state.assets.filter(a => a.is_personal !== 1 && a.dividend_yield != null && Number(a.dividend_yield) > 0);
+  // System assets that carry dividend data: either a yield or a payment
+  // schedule. The dividend calendar is reserved for system assets, so personal
+  // assets are excluded.
+  const items = state.assets.filter(a => a.is_personal !== 1 && (a.dividend_yield != null || (a.payment_months || []).length));
 
   const periodType = $('#dividendPeriodType')?.value || '';
   const periodValue = Number($('#dividendPeriodValue')?.value);
