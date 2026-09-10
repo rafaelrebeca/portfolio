@@ -5190,6 +5190,7 @@ async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
               type: a.type,
               coin: a.coin || 'USD',
               price: roundedPrice,
+              dividend_yield: a.dividend_yield,
               payment_months: a.payment_months || []
             })
           });
@@ -6247,6 +6248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           type: a.type,
           coin: a.coin || 'USD',
           price: price === '' ? null : Number(price),
+          dividend_yield: a.dividend_yield,
           payment_months: a.payment_months || []
         })
       });
