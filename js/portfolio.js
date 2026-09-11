@@ -4892,15 +4892,31 @@ function openUpdateAssetModal(assetId) {
   const form = $('#updateAssetForm');
   const progressWrap = $('#updateAssetProgressWrap');
   const err = $('#updateAssetError');
+  const providerSelect = $('#updateAssetProviderSelect');
   if (form) form.reset();
   if (err) err.textContent = '';
+  setUpdateLog(null);
   $('#updateAssetId').value = a.id;
   $('#updateAssetName').textContent = `${a.symbol || a.name} — ${a.name}`;
-  if (form) form.style.display = 'none';
-  if (progressWrap) progressWrap.style.display = '';
+  // Prefill with the current value; the user can fetch a fresh quote with Update.
+  const priceInput = $('#updateAssetPrice');
+  if (priceInput) priceInput.value = a.price == null ? '' : Number(a.price).toFixed(2);
+  if (providerSelect) {
+    providerSelect.disabled = false;
+    providerSelect.value = bulkUpdateSelectedProvider || 'finnhub';
+  }
+  syncUpdateAssetProviderName();
+  if (form) form.style.display = '';
+  if (progressWrap) progressWrap.style.display = 'none';
   setUpdateProgress(0);
   openModal('updateAssetModalOverlay');
-  fetchUpdateAssetPrice(a);
+}
+
+function syncUpdateAssetProviderName() {
+  const key = $('#updateAssetProviderSelect')?.value || bulkUpdateSelectedProvider || 'finnhub';
+  const provider = BULK_PROVIDERS[key];
+  const label = $('#updateAssetProviderName');
+  if (label) label.textContent = provider ? provider.name : key;
 }
 
 function setUpdateProgress(percent) {
@@ -4914,7 +4930,7 @@ async function fetchUpdateAssetPrice(a) {
   setUpdateLog(null);
   const maxRetries = 3;
   const retryDelaysMs = [30000, 60000, 120000];
-  const providerKey = bulkUpdateSelectedProvider || 'finnhub';
+  const providerKey = $('#updateAssetProviderSelect')?.value || bulkUpdateSelectedProvider || 'finnhub';
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       setUpdateProgress(40 + attempt * 15);
@@ -6144,6 +6160,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#bulkUpdateProviderSelect')?.addEventListener('change', e => {
     bulkUpdateSelectedProvider = e.target.value;
     updateBulkUpdateEstimate();
+  });
+  $('#updateAssetProviderSelect')?.addEventListener('change', e => {
+    bulkUpdateSelectedProvider = e.target.value;
+    syncUpdateAssetProviderName();
+  });
+  $('#fetchUpdateAssetPriceBtn')?.addEventListener('click', () => {
+    const a = state.assets.find(item => item.id === Number($('#updateAssetId')?.value));
+    if (!a) return;
+    const form = $('#updateAssetForm');
+    const progressWrap = $('#updateAssetProgressWrap');
+    if (form) form.style.display = 'none';
+    if (progressWrap) progressWrap.style.display = '';
+    setUpdateProgress(0);
+    fetchUpdateAssetPrice(a);
   });
   $('#startBulkUpdateBtn')?.addEventListener('click', () => startBulkUpdate());
   $('#cancelBulkUpdateBtn')?.addEventListener('click', () => handleCancelOrStopBulkUpdate());

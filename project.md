@@ -114,7 +114,7 @@ All routes are under `/api`. The route is implemented by `functions/api/[[path]]
 | POST | `/api/assets` | Admin | Creates a platform asset with an optional dividend yield and payment months. |
 | PUT/PATCH | `/api/assets/{id}` | Admin | Updates a platform asset, dividend yield, and payment months. |
 | DELETE | `/api/assets/{id}` | Admin | Deletes a platform asset and its related holdings/payment-month rows. |
-| POST | `/api/assets/{id}/price` | Admin | Fetches the quote price from Finnhub. |
+| POST | `/api/assets/{id}/price` | Admin | Fetches the quote price from the selected provider (Twelve Data, Massive, or Finnhub; defaults to Finnhub). |
 | POST | `/api/personal-assets` | Member | Creates a user-owned personal asset with an optional dividend yield (no payment schedule). |
 | PUT/PATCH | `/api/personal-assets/{id}` | Owner/Admin | Updates a personal asset and its dividend yield (no payment schedule). |
 | DELETE | `/api/personal-assets/{id}` | Owner/Admin | Deletes a personal asset. |
@@ -210,7 +210,7 @@ Account cards become clickable for account history when snapshots exist. The acc
 
 Assets has separate **System Assets** and **Personal Assets** tabs. Each tab has its own search and type filter. Platform assets are administrator-managed; personal assets are private to their owner and can also be managed by an administrator. Personal assets have no dividend schedule and are visually distinguished in holding displays. The asset type options (creation form, filters) are loaded from the `asset_type` reference table and cached at startup, so adding a type there surfaces it across the UI.
 
-The administrator-only price updates support choosing between Twelve Data (7 calls/min), Massive.com (4 calls/min), and Finnhub.io (1 call every 2s). The bulk update feature is limited to USD stocks, allows selecting the API provider before running, estimates duration, and spaces calls according to the provider's rate limit. If a call fails, exponential backoff retries after 30s, 60s, and 120s. The UI displays progress, per-asset results, and portfolio impact for updated holdings.
+The administrator-only price updates support choosing between Twelve Data (7 calls/min), Massive.com (4 calls/min), and Finnhub.io (1 call every 2s). Both the bulk update and the single-asset manual refresh offer this provider choice. The single-asset modal opens prefilled with the asset's current price and does not fetch on open; an **Update** button next to **Commit** fetches a fresh quote from the selected provider, and **Commit** saves the value in the field. The bulk update feature is limited to USD stocks, allows selecting the API provider before running, estimates duration, and spaces calls according to the provider's rate limit. If a call fails, exponential backoff retries after 30s, 60s, and 120s. The UI displays progress, per-asset results, and portfolio impact for updated holdings.
 
 ### Dividends
 
