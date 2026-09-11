@@ -111,6 +111,81 @@ a {
   font-size: 14px;
 }
 
+/* Date inputs: match the site's dark theme and give the native picker a
+   consistent look. color-scheme tells the browser to render the popup
+   calendar in dark mode; the indicator is restyled to fit the palette. */
+input[type="date"] {
+  color-scheme: dark;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: .65;
+  padding: 2px;
+  border-radius: 6px;
+  transition: opacity .15s ease, background .15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: var(--panel2);
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  color: var(--text);
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+input[type="date"]::-webkit-datetime-edit-text {
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: var(--text);
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field:focus,
+input[type="date"]::-webkit-datetime-edit-day-field:focus,
+input[type="date"]::-webkit-datetime-edit-year-field:focus {
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+
+input[type="date"]:hover {
+  border-color: var(--accent);
+}
+
+input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, .18);
+}
+
+input[type="date"]:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+input[type="date"]:disabled::-webkit-calendar-picker-indicator {
+  cursor: not-allowed;
+}
+
+/* Firefox renders the date field with its own inner text colour. */
+input[type="date"]::-moz-focus-inner {
+  border: 0;
+}
+
 .btn-primary {
   width: 100%;
   padding: 11px;
