@@ -3372,7 +3372,7 @@ function renderAccounts() {
         const finishDate = acc.type === 'loan' && acc.finish_date ? finishDateToInput(acc.finish_date) : '';
         details = `<div class="account-detail-grid">
           <div><div class="dlabel">Balance</div>${valueHTML}</div>
-          <div><div class="dlabel">Interest Rate</div><div class="dvalue">${acc.interest_rate != null ? Number(acc.interest_rate).toFixed(2) : '0.00'}%</div></div>
+          <div><div class="dlabel">Interest Rate</div><div class="dvalue">${acc.interest_rate != null ? Number(acc.interest_rate).toFixed(3) : '0.000'}%</div></div>
           ${acc.type === 'loan' ? `<div><div class="dlabel">Finish Date</div><div class="dvalue">${finishDate || '—'}</div></div>` : ''}
         </div>`;
         if (acc.type === 'loan') {
@@ -5724,7 +5724,7 @@ function openLoanSimModal(accountId) {
   $('#loanSimId').value = acc.id;
   $('#loanSimTitle').textContent = `Loan Simulator: ${acc.name}`;
   $('#loanSimCapital').value = Math.abs(Number(acc.balance || 0)).toFixed(2);
-  $('#loanSimRate').value = Number(acc.interest_rate || 0).toFixed(2);
+  $('#loanSimRate').value = Number(acc.interest_rate || 0).toFixed(3);
   $('#loanSimEndDate').value = finishDateToInput(acc.finish_date);
   $('#loanSimAmount').value = '';
   $('#loanSimMonthlyAmount').value = '';
