@@ -1038,13 +1038,22 @@ function renderDashboardAccounts() {
     const valInEur = accountValue(a, true);
     const prevVal = previousAccountValue(prevData, a.id);
     const changeClass = accountChangeClass(valInEur, prevVal);
+    const delta = prevVal === null ? null : valInEur - prevVal;
+    const deltaClass = delta === null || delta === 0 ? 'zero' : (delta > 0 ? 'pos' : 'neg');
+    const deltaSign = delta === null || delta === 0 ? '±' : (delta > 0 ? '+' : '−');
+    const deltaHtml = delta === null
+      ? ''
+      : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
     return `
           <div class="account-card${hasSnapshots ? ' clickable' : ''} ${changeClass}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${valInEur < 0 ? 'neg' : 'pos'}">${moneyEUR.format(valInEur)}</strong>
             </div>
-            <div class="dlabel">${esc(a.provider_name || providerName(a.provider_id))}</div>
+            <div class="account-card-foot">
+              <div class="dlabel">${esc(a.provider_name || providerName(a.provider_id))}</div>
+              ${deltaHtml}
+            </div>
           </div>
         `;
   }).join('')}
@@ -2353,13 +2362,22 @@ function renderDashboardFromSnapshot(data) {
       const val = Number(a.valueEur || 0);
       const prevVal = previousAccountValue(prev, a.id);
       const changeClass = accountChangeClass(val, prevVal);
+      const delta = prevVal === null ? null : val - prevVal;
+      const deltaClass = delta === null || delta === 0 ? 'zero' : (delta > 0 ? 'pos' : 'neg');
+      const deltaSign = delta === null || delta === 0 ? '±' : (delta > 0 ? '+' : '−');
+      const deltaHtml = delta === null
+        ? ''
+        : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
       return `
           <div class="account-card ${changeClass}">
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${val < 0 ? 'neg' : 'pos'}">${moneyEUR.format(val)}</strong>
             </div>
-            <div class="dlabel">${esc(a.provider || '—')}</div>
+            <div class="account-card-foot">
+              <div class="dlabel">${esc(a.provider || '—')}</div>
+              ${deltaHtml}
+            </div>
           </div>
         `;
     }).join('')}

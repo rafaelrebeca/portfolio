@@ -204,6 +204,8 @@ Account Overview is visible by default and has the `#toggleDashboardAccountsBtn`
 
 Up/down/unchanged status uses the same previous-snapshot comparison as the account-card border colors. Accounts without a comparison are counted as unchanged. The top three movers are ranked by absolute EUR change and exclude accounts without a previous value. The summary and cards update when filters, data, or Time Travel state changes.
 
+Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is omitted when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. The same card layout and difference value are rendered in Time Travel, where the comparison uses the next older snapshot in the list.
+
 Account cards become clickable for account history when snapshots exist. The account history modal plots that account's EUR value through time.
 
 ### Assets

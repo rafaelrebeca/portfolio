@@ -1332,6 +1332,40 @@ select {
   white-space: nowrap;
 }
 
+.account-card-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-card-foot .dlabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-card-delta {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.account-card-delta.pos {
+  color: var(--accent2);
+}
+
+.account-card-delta.neg {
+  color: var(--danger);
+}
+
+.account-card-delta.zero {
+  color: var(--muted);
+}
+
 .account-detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
