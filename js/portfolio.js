@@ -3126,6 +3126,23 @@ function goalProgressFromSnapshot(goal, snapshotAccounts) {
   return Math.min(100, Math.max(0, (current / target) * 100));
 }
 
+// Compute a goal's positive/negative split percentage from a snapshot's account data.
+// Returns null unless the goal has at least one positive and one negative linked account
+// (i.e. a mixed goal), in which case it returns the share of the absolute total held by
+// each side: a goal with -100 and +50 is 66.67% negative and 33.33% positive.
+function goalSplitFromSnapshot(goal, snapshotAccounts) {
+  const linked = (snapshotAccounts || []).filter(a => (goal.account_ids || []).includes(a.id));
+  let posSum = 0, negSum = 0;
+  linked.forEach(acc => {
+    const val = Number(acc.valueEur || 0);
+    if (val > 0) posSum += val; else if (val < 0) negSum += val;
+  });
+  const absNeg = Math.abs(negSum);
+  const total = posSum + absNeg;
+  if (posSum <= 0 || absNeg <= 0 || total <= 0) return null;
+  return { positive: (posSum / total) * 100, negative: (absNeg / total) * 100 };
+}
+
 // Draw the line chart for the selected goal's progress percentage (0-100) across snapshots.
 function renderGoalHistoryChart() {
   const zoom = $('#goalHistoryZoom')?.value || 'all';
@@ -3148,6 +3165,8 @@ function renderGoalHistoryChart() {
     const accounts = (p.data && p.data.accounts) || [];
     return goalProgressFromSnapshot(goal, accounts);
   });
+  const splits = points.map(p => goalSplitFromSnapshot(goal, (p.data && p.data.accounts) || []));
+  const hasSplit = splits.some(s => s !== null);
   const hasData = values.some(v => v !== null);
   if (!hasData) {
     if (empty) { empty.style.display = 'block'; empty.textContent = 'No data for this goal in the available snapshots.'; }
@@ -3160,25 +3179,50 @@ function renderGoalHistoryChart() {
   const ctx = document.getElementById('goalHistoryChart')?.getContext('2d');
   if (!ctx) return;
   if (goalHistoryChartInstance) goalHistoryChartInstance.destroy();
+  const datasets = [{
+    label: 'Progress (%)',
+    data: values,
+    borderColor: CHART_COLORS[0],
+    backgroundColor: CHART_COLORS[0],
+    tension: 0.3,
+    fill: false,
+    spanGaps: true
+  }];
+  // Mixed goals (positive and negative linked accounts) also plot each side's share of the
+  // absolute total, so the balance between them is visible over time.
+  if (hasSplit) {
+    datasets.push({
+      label: 'Positive (%)',
+      data: splits.map(s => (s ? s.positive : null)),
+      borderColor: '#3fd0a3',
+      backgroundColor: '#3fd0a3',
+      borderDash: [5, 4],
+      tension: 0.3,
+      fill: false,
+      spanGaps: true
+    });
+    datasets.push({
+      label: 'Negative (%)',
+      data: splits.map(s => (s ? s.negative : null)),
+      borderColor: '#ff5c72',
+      backgroundColor: '#ff5c72',
+      borderDash: [5, 4],
+      tension: 0.3,
+      fill: false,
+      spanGaps: true
+    });
+  }
   goalHistoryChartInstance = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Progress (%)',
-        data: values,
-        borderColor: CHART_COLORS[0],
-        backgroundColor: CHART_COLORS[0],
-        tension: 0.3,
-        fill: false,
-        spanGaps: true
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${Number(context.raw || 0).toFixed(1)}%` } } },
+      plugins: {
+        legend: { display: hasSplit, labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: context => `${context.dataset.label}: ${Number(context.raw || 0).toFixed(1)}%` } }
+      },
       scales: {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
         y: {

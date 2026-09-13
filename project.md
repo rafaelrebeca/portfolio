@@ -16,7 +16,7 @@ This document describes the current source in `index.html`, `css/portfolio.css`,
 | Frontend | Vanilla HTML, CSS, and an ES-module JavaScript client |
 | Charts | Chart.js loaded by the page shell |
 | Authentication | Session cookie named `portfolio_session`; passwords hashed with bcrypt |
-| External data | Twelve Data, Massive, and Finnhub for US stock prices; ExchangeRate-API for currency rates |
+| External data | Twelve Data (`STOCK_API_KEY_TWELVEDATA`), Massive (`STOCK_API_KEY_MASSIVE`), and Finnhub (`STOCK_API_KEY_FINHUB`) for US stock prices; ExchangeRate-API (`API_KEY`) for currency rates |
 | PWA | `manifest.webmanifest` and `sw.js` |
 
 The application is a single-page interface. `index.html` contains all page shells and modal markup. `js/portfolio.js` owns client state, API calls, rendering, event delegation, calculations, and modal behavior. `css/portfolio.css` contains the visual system and responsive layout. `_routes.json` sends only `/api/*` requests to the Pages Function.
@@ -56,7 +56,7 @@ npm run deploy
 
 `npm run dev` starts Wrangler Pages development for the repository. `npm run deploy` deploys the current directory to the Cloudflare Pages project `portfolio-manager`.
 
-The repository uses `bcryptjs` at runtime and Wrangler as a development dependency. API keys are read by the worker from `env.STOCK_API_KEY` and `env.API_KEY`. In production they should be configured as Cloudflare secrets; local development may provide them through the local Wrangler configuration.
+The repository uses `bcryptjs` at runtime and Wrangler as a development dependency. The worker reads provider-specific credentials from the environment: `env.STOCK_API_KEY_TWELVEDATA` for Twelve Data, `env.STOCK_API_KEY_MASSIVE` for Massive, `env.STOCK_API_KEY_FINHUB` for Finnhub, and `env.API_KEY` for ExchangeRate-API. Each price provider reads only its own variable, with no shared fallback. In production these should be configured as Cloudflare secrets; local development may provide them through the local Wrangler configuration.
 
 ## 4. Data model
 
@@ -204,7 +204,7 @@ Account Overview is visible by default and has the `#toggleDashboardAccountsBtn`
 
 Up/down/unchanged status uses the same previous-snapshot comparison as the account-card border colors. Accounts without a comparison are counted as unchanged. The top three movers are ranked by absolute EUR change and exclude accounts without a previous value. The summary and cards update when filters, data, or Time Travel state changes.
 
-Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is omitted when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. The same card layout and difference value are rendered in Time Travel, where the comparison uses the next older snapshot in the list.
+Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is absent when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. Time Travel renders the same card layout and difference value, comparing against the next older snapshot in the list.
 
 Account cards become clickable for account history when snapshots exist. The account history modal plots that account's EUR value through time.
 
@@ -248,6 +248,8 @@ The By Asset Type and Type by Account modes use the reusable `topNWithOthers(map
 ### Goals
 
 Goals can link to multiple accounts, contain up to three milestones, and be reordered with arrow controls. Positive goals use segmented progress bars; debt goals use a debt-cleared bar with milestone diamond markers. Goal Details and Goal Simulation reuse the same progress and account-value calculations. Goal History plots historical progress from snapshots.
+
+For goals whose linked accounts include both positive and negative values, the Goal History chart plots two dashed lines alongside the Progress (%) line: **Positive (%)** in green and **Negative (%)** in red. Each is that side's share of the goal's absolute total, so a goal with −100 and +50 reads 66.7% negative and 33.3% positive. The two lines sum to 100%. They are absent for goals that are entirely positive or entirely negative, and the chart legend appears only when these lines are present. Snapshots where the goal has no mixed split leave a gap in both lines.
 
 Each goal card and the Goal Details modal display two additional fields computed by `calculateGoalPaceAndEstimate(goal)`:
 

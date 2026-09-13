@@ -238,7 +238,7 @@ export async function onRequest(context) {
       }
 
       if (provider === 'massive') {
-        const apiKey = env.STOCK_API_KEY_MASSIVE || env.STOCK_API_KEY;
+        const apiKey = env.STOCK_API_KEY_MASSIVE;
         if (!apiKey) return fail('STOCK_API_KEY_MASSIVE not configured in environment variables.', 500);
 
         const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(asset.symbol)}/prev?apiKey=${encodeURIComponent(apiKey)}`;
@@ -257,7 +257,7 @@ export async function onRequest(context) {
       }
 
       // Default: finnhub
-      const apiKey = env.STOCK_API_KEY_FINHUB || env.STOCK_API_KEY_TWELVEDATA || env.STOCK_API_KEY;
+      const apiKey = env.STOCK_API_KEY_FINHUB;
       if (!apiKey) return fail('STOCK_API_KEY_FINHUB not configured in environment variables.', 500);
 
       const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(asset.symbol)}&token=${encodeURIComponent(apiKey)}`;
