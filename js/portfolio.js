@@ -5129,6 +5129,45 @@ function appendBulkUpdateLog(line) {
   pre.scrollTop = pre.scrollHeight;
 }
 
+function setBulkUpdateSummaryCards(up = 0, down = 0, impactUsd = 0, impactPct = null) {
+  const upEl = $('#bulkUpdateUpCount');
+  const downEl = $('#bulkUpdateDownCount');
+  const totalEl = $('#bulkUpdateTotalChange');
+  const pctEl = $('#bulkUpdateTotalChangePct');
+  const impactCard = totalEl?.closest('.bulk-card-impact');
+
+  if (upEl) upEl.textContent = String(up);
+  if (downEl) downEl.textContent = String(down);
+
+  const isZero = Math.abs(impactUsd) < 0.005;
+  if (totalEl) {
+    const formatted = formatCurrency(Math.abs(impactUsd), 'USD');
+    if (isZero) {
+      totalEl.textContent = formatted;
+    } else if (impactUsd > 0) {
+      totalEl.textContent = `+${formatted}`;
+    } else {
+      totalEl.textContent = `-${formatted}`;
+    }
+  }
+
+  if (impactCard) {
+    impactCard.classList.remove('pos', 'neg');
+    if (!isZero && impactUsd > 0) impactCard.classList.add('pos');
+    else if (!isZero && impactUsd < 0) impactCard.classList.add('neg');
+  }
+
+  if (pctEl) {
+    if (impactPct != null && !isZero) {
+      pctEl.textContent = `(${impactPct >= 0 ? '+' : ''}${impactPct.toFixed(2)}%)`;
+      pctEl.style.display = '';
+    } else {
+      pctEl.textContent = '';
+      pctEl.style.display = 'none';
+    }
+  }
+}
+
 function openBulkUpdateModal() {
   if (bulkUpdateRunning) {
     openModal('updateAllPricesModalOverlay');
@@ -5139,6 +5178,7 @@ function openBulkUpdateModal() {
   const logWrap = $('#updateAllPricesLogWrap');
   const pre = $('#updateAllPricesLog');
   const progressField = $('#bulkUpdateProgressField');
+  const cardsWrap = $('#bulkUpdateCards');
   const providerSelect = $('#bulkUpdateProviderSelect');
   const startBtn = $('#startBulkUpdateBtn');
   const cancelBtn = $('#cancelBulkUpdateBtn');
@@ -5147,6 +5187,8 @@ function openBulkUpdateModal() {
   if (logWrap) logWrap.style.display = 'none';
   if (pre) pre.textContent = '';
   if (progressField) progressField.style.display = 'none';
+  if (cardsWrap) cardsWrap.style.display = 'none';
+  setBulkUpdateSummaryCards(0, 0, 0, null);
   if (providerSelect) {
     providerSelect.disabled = false;
     providerSelect.value = bulkUpdateSelectedProvider;
@@ -5195,26 +5237,33 @@ async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
   const cancelBtn = $('#cancelBulkUpdateBtn');
   const providerSelect = $('#bulkUpdateProviderSelect');
   const progressField = $('#bulkUpdateProgressField');
+  const cardsWrap = $('#bulkUpdateCards');
   const updateAllPricesBtn = $('#updateAllPricesBtn');
 
   if (startBtn) startBtn.disabled = true;
   if (cancelBtn) cancelBtn.textContent = 'Stop';
   if (providerSelect) providerSelect.disabled = true;
   if (progressField) progressField.style.display = '';
+  if (cardsWrap) cardsWrap.style.display = '';
   if (updateAllPricesBtn) updateAllPricesBtn.disabled = true;
 
   const err = $('#updateAllPricesError');
   const total = eligible.length;
   let updated = 0;
   let failed = 0;
+  let countUp = 0;
+  let countDown = 0;
   let portfolioBefore = 0;
   let portfolioAfter = 0;
+
+  setBulkUpdateSummaryCards(0, 0, 0, null);
 
   try {
     if (total === 0) {
       if (err) err.textContent = 'No USD stocks to update.';
       appendBulkUpdateLog('No USD stocks found to update.');
       setBulkUpdateProgress(0, 0);
+      setBulkUpdateSummaryCards(0, 0, 0, null);
       return;
     }
 
@@ -5287,7 +5336,12 @@ async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
             })
           });
           updated++;
-          const oldPrice = a.price;
+          const oldPrice = a.price != null && !isNaN(Number(a.price)) ? Number(a.price) : null;
+          if (oldPrice != null) {
+            const priceDiff = Math.round((roundedPrice - oldPrice) * 100) / 100;
+            if (priceDiff > 0) countUp++;
+            else if (priceDiff < 0) countDown++;
+          }
           const changePct = (oldPrice != null && oldPrice > 0) ? ((roundedPrice - oldPrice) / oldPrice) * 100 : null;
           const changeStr = changePct == null ? 'n/a' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
           appendBulkUpdateLog(`[OK] ${a.symbol || a.name}: ${roundedPrice.toFixed(2)} (${changeStr})`);
@@ -5295,6 +5349,9 @@ async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
           const qty = state.holdings.filter(h => h.asset_id === a.id).reduce((sum, h) => sum + Number(h.quantity || 0), 0);
           portfolioBefore += qty * (oldPrice != null ? oldPrice : 0);
           portfolioAfter += qty * roundedPrice;
+          const currentImpactUsd = portfolioAfter - portfolioBefore;
+          const currentImpactPct = portfolioBefore > 0 ? (currentImpactUsd / portfolioBefore) * 100 : null;
+          setBulkUpdateSummaryCards(countUp, countDown, currentImpactUsd, currentImpactPct);
         } catch (commitErr) {
           failed++;
           appendBulkUpdateLog(`[ERROR] ${a.symbol || a.name}: failed to save price (${commitErr.message})`);
@@ -5316,6 +5373,7 @@ async function runBulkUpdate(eligible, providerKey = 'twelvedata') {
     const impactUsd = portfolioAfter - portfolioBefore;
     const impactPct = portfolioBefore > 0 ? (impactUsd / portfolioBefore) * 100 : null;
     const impactStr = impactPct == null ? 'n/a' : `${impactPct >= 0 ? '+' : ''}${impactPct.toFixed(2)}%`;
+    setBulkUpdateSummaryCards(countUp, countDown, impactUsd, impactPct);
     appendBulkUpdateLog(`Done. Updated ${updated}, failed ${failed}.`);
     appendBulkUpdateLog(`Portfolio impact: ${impactUsd >= 0 ? '+' : ''}${formatCurrency(impactUsd, 'USD')} (${impactStr})`);
     if (err) err.textContent = failed ? `${failed} asset(s) failed. See console log.` : '';

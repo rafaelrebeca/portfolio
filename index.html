@@ -725,6 +725,21 @@
         <button class="btn-sm" type="button" id="cancelBulkUpdateBtn">Cancel</button>
         <button class="btn-sm primary" type="button" id="startBulkUpdateBtn">Start Update</button>
       </div>
+      <div class="bulk-update-cards" id="bulkUpdateCards" style="display:none; margin-top:16px;">
+        <div class="bulk-card bulk-card-up">
+          <div class="bulk-card-label"><span class="bulk-card-arrow">▲</span> Went Up</div>
+          <div class="bulk-card-value" id="bulkUpdateUpCount">0</div>
+        </div>
+        <div class="bulk-card bulk-card-down">
+          <div class="bulk-card-label"><span class="bulk-card-arrow">▼</span> Went Down</div>
+          <div class="bulk-card-value" id="bulkUpdateDownCount">0</div>
+        </div>
+        <div class="bulk-card bulk-card-impact">
+          <div class="bulk-card-label">Total Change</div>
+          <div class="bulk-card-value" id="bulkUpdateTotalChange">$0.00</div>
+          <div class="bulk-card-pct" id="bulkUpdateTotalChangePct" style="display:none;"></div>
+        </div>
+      </div>
       <details class="update-log" id="updateAllPricesLogWrap" style="display:none; margin-top:16px;">
         <summary>Console log</summary>
         <pre id="updateAllPricesLog"></pre>
