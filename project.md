@@ -181,7 +181,7 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 ### Dashboard
 
-The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
+The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`. The Assets/Liabilities card lists the positive total in green and the negative total in red, and omits a line whose total is zero, so a portfolio with no liabilities shows the assets total alone and a portfolio with neither shows a dash.
 
 The **Top Goal Status** card shows the first goal's completion percentage, its name, and — when snapshot history exists — an estimated reach date and monthly growth pace (e.g. `Est: Oct 2026 (~8 mos) (+$450/mo)`). The estimate is hidden when viewing a past Time Travel snapshot.
 
@@ -292,7 +292,7 @@ The Dashboard header provides previous/next navigation, save, history, calendar,
 
 The History modal uses the in-memory snapshot list and offers:
 
-- **Global** — Global Value, Assets, and Liabilities lines. These display labels map to the stored snapshot fields `debit` and `credit`.
+- **Global** — Global Value, plus Assets and Liabilities lines when the snapshots contain that side. These display labels map to the stored snapshot fields `debit` and `credit`. The Assets line is plotted only when at least one snapshot in the current zoom has a non-zero `debit`, and the Liabilities line only when at least one has a non-zero `credit`; a portfolio with no liabilities therefore shows Global Value and Assets alone.
 - **By Type** — one line per asset type.
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.

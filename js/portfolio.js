@@ -422,7 +422,10 @@ function renderDashboardSummaryCards() {
   if (debitCreditValue) {
     const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
     const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
+    const lines = [];
+    if (debit !== 0) lines.push(`<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span>`);
+    if (credit !== 0) lines.push(`<span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`);
+    debitCreditValue.innerHTML = lines.length ? lines.join('<br>') : '—';
   }
 }
 
@@ -2268,7 +2271,10 @@ function renderDashboardFromSnapshot(data) {
     const credit = Number(d.credit || 0);
     const debitDelta = prev ? formatDelta(debit - Number(prev.debit || 0)) : '';
     const creditDelta = prev ? formatDelta(credit - Number(prev.credit || 0)) : '';
-    debitCreditValue.innerHTML = `<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span><br><span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`;
+    const lines = [];
+    if (debit !== 0) lines.push(`<span class="pos">${moneyEUR.format(debit)}${debitDelta}</span>`);
+    if (credit !== 0) lines.push(`<span class="neg">${moneyEUR.format(credit)}${creditDelta}</span>`);
+    debitCreditValue.innerHTML = lines.length ? lines.join('<br>') : '—';
   }
 
   // Charts (By Type / By Provider) + legends
@@ -2905,11 +2911,19 @@ function buildHistoryDatasets(points, chartType, growthValues = null) {
     }];
   }
   if (chartType === 'global') {
-    return [
-      { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false },
-      { label: 'Assets', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false },
-      { label: 'Liabilities', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false }
+    const datasets = [
+      { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false }
     ];
+    // Assets and Liabilities lines are only plotted when the snapshots actually contain that side.
+    const hasAssets = points.some(p => Number(p.data.debit || 0) !== 0);
+    const hasLiabilities = points.some(p => Number(p.data.credit || 0) !== 0);
+    if (hasAssets) {
+      datasets.push({ label: 'Assets', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false });
+    }
+    if (hasLiabilities) {
+      datasets.push({ label: 'Liabilities', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false });
+    }
+    return datasets;
   }
   const categoryMaps = points.map(p => {
     if (chartType === 'byAccount') {
