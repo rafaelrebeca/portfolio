@@ -665,9 +665,32 @@ function invalidateAccountGrowthCache() {
   invalidateSnapshotDailyGrowths();
 }
 
+// Sum of the asset-account values stored in a snapshot's `accounts` array.
+// Snapshots keep every account's EUR value, so the asset-account portion can be
+// derived retroactively without re-reading holdings.
+function snapshotAssetAccountsValue(snapshot) {
+  const accounts = snapshot?.data?.accounts;
+  if (!Array.isArray(accounts)) return 0;
+  return accounts.reduce((sum, acc) => (
+    acc && acc.type === 'asset_account' ? sum + Number(acc.valueEur || 0) : sum
+  ), 0);
+}
+
+// Growth of a value against the previous value, as an absolute and a percentage.
+function growthPair(value, prevValue) {
+  const growth = value - prevValue;
+  return {
+    growth,
+    percentGrowth: prevValue !== 0 ? (growth / Math.abs(prevValue)) * 100 : 0
+  };
+}
+
 // Reusable calculation of snapshot-to-snapshot daily growth.
 // Returns a Map keyed by snapshot day ('YYYYMMDD') containing:
-// { day, date, globalValue, prevGlobalValue, growth, percentGrowth, isFirst, snapshot, prevDay, isLive }
+// { day, date, globalValue, prevGlobalValue, growth, percentGrowth, isFirst, snapshot, prevDay, isLive,
+//   globalValueExAssets, prevGlobalValueExAssets, growthExAssets, percentGrowthExAssets }
+// The `*ExAssets` fields exclude asset accounts, so the Calendar can switch
+// between the two views without recalculating.
 function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
   const map = new Map();
   if (!snapshots || !snapshots.length) return map;
@@ -680,6 +703,7 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
   for (let i = 0; i < valid.length; i++) {
     const s = valid[i];
     const val = Number(s.data.globalValue || 0);
+    const valExAssets = val - snapshotAssetAccountsValue(s);
     const date = simulationSnapshotDate(s);
     if (i === 0) {
       map.set(s.day, {
@@ -689,6 +713,10 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
         prevGlobalValue: null,
         growth: null,
         percentGrowth: null,
+        globalValueExAssets: valExAssets,
+        prevGlobalValueExAssets: null,
+        growthExAssets: null,
+        percentGrowthExAssets: null,
         isFirst: true,
         snapshot: s,
         prevDay: null
@@ -696,15 +724,19 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
     } else {
       const prev = valid[i - 1];
       const prevVal = Number(prev.data.globalValue || 0);
-      const growth = val - prevVal;
-      const percentGrowth = prevVal !== 0 ? (growth / Math.abs(prevVal)) * 100 : 0;
+      const prevValExAssets = prevVal - snapshotAssetAccountsValue(prev);
       map.set(s.day, {
         day: s.day,
         date,
         globalValue: val,
         prevGlobalValue: prevVal,
-        growth,
-        percentGrowth,
+        ...growthPair(val, prevVal),
+        globalValueExAssets: valExAssets,
+        prevGlobalValueExAssets: prevValExAssets,
+        growthExAssets: valExAssets - prevValExAssets,
+        percentGrowthExAssets: prevValExAssets !== 0
+          ? ((valExAssets - prevValExAssets) / Math.abs(prevValExAssets)) * 100
+          : 0,
         isFirst: false,
         snapshot: s,
         prevDay: prev.day
@@ -717,16 +749,21 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
   if (!map.has(today) && valid.length > 0 && state.accounts.length > 0) {
     const last = valid[valid.length - 1];
     const liveVal = totalPortfolioValue();
+    const liveValExAssets = liveVal - liveAssetAccountsValue();
     const prevVal = Number(last.data.globalValue || 0);
-    const growth = liveVal - prevVal;
-    const percentGrowth = prevVal !== 0 ? (growth / Math.abs(prevVal)) * 100 : 0;
+    const prevValExAssets = prevVal - snapshotAssetAccountsValue(last);
     map.set(today, {
       day: today,
       date: new Date(),
       globalValue: liveVal,
       prevGlobalValue: prevVal,
-      growth,
-      percentGrowth,
+      ...growthPair(liveVal, prevVal),
+      globalValueExAssets: liveValExAssets,
+      prevGlobalValueExAssets: prevValExAssets,
+      growthExAssets: liveValExAssets - prevValExAssets,
+      percentGrowthExAssets: prevValExAssets !== 0
+        ? ((liveValExAssets - prevValExAssets) / Math.abs(prevValExAssets)) * 100
+        : 0,
       isFirst: false,
       isLive: true,
       snapshot: null,
@@ -1027,6 +1064,9 @@ let calendarMonth = null; // { year, month } currently shown in the snapshot cal
 let calendarPicker = false; // whether the calendar is showing the year/month picker instead of the day grid
 let growthCalendarMonth = null; // { year, month } currently shown in the full page growth calendar (month is 0-based)
 let growthCalendarPicker = false; // whether the full page growth calendar is showing the year/month picker
+// Whether the full page growth calendar includes asset accounts in daily growth.
+// 'all' counts every account; 'exAssets' excludes asset accounts.
+let growthCalendarAssetMode = localStorage.getItem('portfolio_growth_calendar_asset_mode') === 'exAssets' ? 'exAssets' : 'all';
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
@@ -1903,6 +1943,14 @@ function totalPortfolioValue() {
   return state.accounts.reduce((sum, acc) => sum + accountValue(acc, true), 0);
 }
 
+// Live EUR value of the asset accounts only, used to derive the
+// asset-accounts-excluded growth variant for today's live entry.
+function liveAssetAccountsValue() {
+  return state.accounts
+    .filter(acc => acc.type === 'asset_account')
+    .reduce((sum, acc) => sum + accountValue(acc, true), 0);
+}
+
 function providerValue(provider) {
   const providerAccounts = state.accounts.filter(a => a.provider_id === provider.id);
   return providerAccounts.reduce((sum, acc) => sum + accountValue(acc, true), 0);
@@ -2772,6 +2820,12 @@ function renderGrowthCalendarPage() {
     return;
   }
 
+  // Pick the growth variant selected by the asset-accounts toggle.
+  const excludeAssets = growthCalendarAssetMode === 'exAssets';
+  const growthOf = entry => (excludeAssets ? entry.growthExAssets : entry.growth);
+  const percentGrowthOf = entry => (excludeAssets ? entry.percentGrowthExAssets : entry.percentGrowth);
+  const valueOf = entry => (excludeAssets ? entry.globalValueExAssets : entry.globalValue);
+
   // Calculate monthly stats
   let totalPositiveGrowth = 0;
   let totalNegativeGrowth = 0;
@@ -2784,16 +2838,17 @@ function renderGrowthCalendarPage() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dayStr = `${monthPrefix}${String(d).padStart(2, '0')}`;
     const entry = dailyGrowths.get(dayStr);
-    if (entry && entry.growth !== null) {
+    const growth = entry ? growthOf(entry) : null;
+    if (entry && growth !== null) {
       recordedDays++;
-      if (entry.growth > 0) {
+      if (growth > 0) {
         upDays++;
-        totalPositiveGrowth += entry.growth;
-        if (!bestDay || entry.growth > bestDay.growth) bestDay = { day: d, growth: entry.growth };
-      } else if (entry.growth < 0) {
+        totalPositiveGrowth += growth;
+        if (!bestDay || growth > bestDay.growth) bestDay = { day: d, growth };
+      } else if (growth < 0) {
         downDays++;
-        totalNegativeGrowth += entry.growth;
-        if (!worstDay || entry.growth < worstDay.growth) worstDay = { day: d, growth: entry.growth };
+        totalNegativeGrowth += growth;
+        if (!worstDay || growth < worstDay.growth) worstDay = { day: d, growth };
       }
     }
   }
@@ -2811,9 +2866,11 @@ function renderGrowthCalendarPage() {
     const entry = dailyGrowths.get(dayStr);
 
     if (entry) {
-      const isPos = entry.growth > 0;
-      const isNeg = entry.growth < 0;
-      const isZero = entry.growth === 0;
+      const growth = growthOf(entry);
+      const percentGrowth = percentGrowthOf(entry);
+      const isPos = growth > 0;
+      const isNeg = growth < 0;
+      const isZero = growth === 0;
       const isBase = entry.isFirst;
 
       let cls = 'growth-cal-cell growth-cal-day';
@@ -2826,18 +2883,19 @@ function renderGrowthCalendarPage() {
       if (entry.snapshot) cls += ' cal-day-interactive';
 
       const signStr = isPos ? '+' : (isNeg ? '−' : '');
-      const growthAmountFormatted = entry.growth !== null
-        ? `${signStr}${moneyEUR.format(Math.abs(entry.growth))}`
+      const growthAmountFormatted = growth !== null
+        ? `${signStr}${moneyEUR.format(Math.abs(growth))}`
         : (isBase ? 'Baseline' : '—');
 
-      const pctFormatted = entry.percentGrowth !== null
-        ? `${entry.percentGrowth >= 0 ? '+' : ''}${entry.percentGrowth.toFixed(2)}%`
+      const pctFormatted = percentGrowth !== null
+        ? `${percentGrowth >= 0 ? '+' : ''}${percentGrowth.toFixed(2)}%`
         : '';
 
       const titleAttr = esc([
         formatSnapshotDay(dayStr),
         isBase ? 'First recorded snapshot (baseline)' : `Growth: ${growthAmountFormatted} ${pctFormatted}`.trim(),
-        `Portfolio Value: ${moneyEUR.format(entry.globalValue)}`,
+        `Portfolio Value: ${moneyEUR.format(valueOf(entry))}`,
+        excludeAssets ? '(Asset accounts excluded)' : '',
         entry.isLive ? '(Today live estimate)' : (entry.snapshot ? 'Click to view snapshot in Time Travel' : '')
       ].filter(Boolean).join(' • '));
 
@@ -2885,6 +2943,11 @@ function renderGrowthCalendarPage() {
           </button>
           <button class="btn-sm icon-btn" type="button" id="growthCalNextMonth" title="Next month">→</button>
           <button class="btn-sm" type="button" id="growthCalTodayBtn" title="Go to current month">Today</button>
+          <button class="btn-sm growth-cal-asset-toggle${excludeAssets ? ' active' : ''}" type="button" id="growthCalAssetToggleBtn"
+            aria-pressed="${excludeAssets ? 'true' : 'false'}"
+            title="${excludeAssets ? 'Asset accounts are excluded from daily growth. Click to include them.' : 'Asset accounts are included in daily growth. Click to exclude them.'}">
+            ${excludeAssets ? 'Assets excluded' : 'Assets included'}
+          </button>
         </div>
 
         <div class="growth-cal-stats">
@@ -2928,6 +2991,11 @@ function renderGrowthCalendarPage() {
   });
   $('#growthCalMonthLabel')?.addEventListener('click', () => {
     growthCalendarPicker = true;
+    renderGrowthCalendarPage();
+  });
+  $('#growthCalAssetToggleBtn')?.addEventListener('click', () => {
+    growthCalendarAssetMode = excludeAssets ? 'all' : 'exAssets';
+    localStorage.setItem('portfolio_growth_calendar_asset_mode', growthCalendarAssetMode);
     renderGrowthCalendarPage();
   });
   $('#growthCalTodayBtn')?.addEventListener('click', () => {

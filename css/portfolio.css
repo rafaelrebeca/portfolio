@@ -2888,6 +2888,22 @@ select {
   font-size: 11px;
 }
 
+.growth-cal-asset-toggle {
+  white-space: nowrap;
+}
+
+.growth-cal-asset-toggle.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.growth-cal-asset-toggle.active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .growth-cal-stats {
   display: flex;
   align-items: center;
