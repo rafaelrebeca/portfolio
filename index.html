@@ -58,6 +58,7 @@
       <div class="sidebar" aria-label="Main navigation">
         <div class="nav-section-label">Personal</div>
         <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
+        <div class="nav-item" id="navCalendar" data-page="calendar">📅 Calendar</div>
         <div class="nav-item" id="navSimulation" data-page="simulation">🧮 Simulation</div>
         <div class="nav-item" id="navGoals" data-page="goals">🎯 Goals</div>
         <div class="nav-item" id="navPortfolio" data-page="portfolio">💼 My Portfolio</div>
@@ -163,6 +164,17 @@
             </div>
             <div id="dashboardAccounts">Loading…</div>
           </div>
+        </div>
+
+        <!-- CALENDAR -->
+        <div class="page" id="page-calendar">
+          <div class="page-head">
+            <div>
+              <div class="page-title">Calendar</div>
+              <div class="page-desc">Daily portfolio growth and snapshot performance</div>
+            </div>
+          </div>
+          <div id="growthCalendarContainer" class="growth-calendar-container"></div>
         </div>
 
         <!-- ASSETS -->

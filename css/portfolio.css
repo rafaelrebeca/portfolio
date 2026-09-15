@@ -2830,6 +2830,383 @@ select {
   }
 }
 
+/* ================= FULL PAGE GROWTH CALENDAR ================= */
+
+.growth-calendar-container {
+  width: 100%;
+}
+
+.growth-cal-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.growth-cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.growth-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.growth-cal-nav .icon-btn {
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.growth-cal-month-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.growth-cal-month-btn:hover {
+  border-color: var(--accent);
+}
+
+.growth-cal-month-btn .cal-caret {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.growth-cal-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.growth-stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel2);
+  min-width: 92px;
+}
+
+.growth-stat-chip .chip-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.growth-stat-chip .chip-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.growth-stat-chip .chip-val .pos,
+.growth-stat-chip .chip-val.pos {
+  color: var(--accent2);
+}
+
+.growth-stat-chip .chip-val .neg,
+.growth-stat-chip .chip-val.neg {
+  color: var(--danger);
+}
+
+.growth-stat-chip.pos {
+  border-color: rgba(63, 208, 163, .45);
+  background: rgba(63, 208, 163, .08);
+}
+
+.growth-stat-chip.neg {
+  border-color: rgba(255, 92, 114, .45);
+  background: rgba(255, 92, 114, .08);
+}
+
+.growth-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.growth-cal-weekday {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  text-align: center;
+  padding-bottom: 4px;
+}
+
+.growth-cal-cell {
+  min-width: 0;
+}
+
+.growth-cal-empty {
+  min-height: 96px;
+}
+
+.growth-cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 96px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+  color: var(--text);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.growth-cal-day.cal-day-interactive {
+  cursor: pointer;
+}
+
+.growth-cal-day.cal-day-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .28);
+}
+
+.cal-day-pos {
+  background: rgba(63, 208, 163, 0.1);
+  border-color: rgba(63, 208, 163, .45);
+}
+
+.cal-day-pos .cal-growth-amount,
+.cal-day-pos .cal-growth-pct {
+  color: #3fd0a3;
+}
+
+.cal-day-pos.cal-day-interactive:hover {
+  border-color: #3fd0a3;
+  box-shadow: 0 6px 16px rgba(63, 208, 163, .18);
+}
+
+.cal-day-neg {
+  background: rgba(255, 92, 114, 0.1);
+  border-color: rgba(255, 92, 114, .45);
+}
+
+.cal-day-neg .cal-growth-amount,
+.cal-day-neg .cal-growth-pct {
+  color: #ff5c72;
+}
+
+.cal-day-neg.cal-day-interactive:hover {
+  border-color: #ff5c72;
+  box-shadow: 0 6px 16px rgba(255, 92, 114, .18);
+}
+
+.cal-day-zero,
+.cal-day-base {
+  background: var(--panel2);
+}
+
+.cal-day-zero .cal-growth-amount,
+.cal-day-base .cal-growth-amount {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cal-day-empty-data {
+  background: transparent;
+  border-style: dashed;
+  opacity: .55;
+}
+
+.cal-day-today {
+  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--accent);
+}
+
+.cal-cell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cal-day-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cal-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 2px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cal-tag-today {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(79, 140, 255, .12);
+}
+
+.cal-tag-live {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: rgba(63, 208, 163, .12);
+}
+
+.cal-cell-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.cal-growth-amount {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.cal-growth-pct {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .85;
+}
+
+.cal-no-data-dash {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.growth-cal-picker-view {
+  max-width: 520px;
+}
+
+.growth-cal-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.growth-cal-picker-year {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.growth-cal-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.growth-cal-picker-month {
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 12px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.growth-cal-picker-month:hover {
+  border-color: var(--accent);
+}
+
+.growth-cal-picker-month.cal-picker-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .growth-cal-day,
+  .growth-cal-empty {
+    min-height: 84px;
+  }
+
+  .cal-growth-amount {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 650px) {
+  .growth-cal-card {
+    padding: 12px;
+  }
+
+  .growth-cal-grid {
+    gap: 5px;
+  }
+
+  .growth-cal-day,
+  .growth-cal-empty {
+    min-height: 68px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .growth-cal-weekday {
+    font-size: 10px;
+  }
+
+  .cal-day-num {
+    font-size: 11px;
+  }
+
+  .cal-growth-amount {
+    font-size: 11px;
+  }
+
+  .cal-growth-pct {
+    font-size: 9px;
+  }
+
+  .cal-tag {
+    display: none;
+  }
+
+  .growth-stat-chip {
+    min-width: 0;
+    padding: 5px 9px;
+  }
+
+  .growth-stat-chip.desktop-only {
+    display: none;
+  }
+}
+
 /* Firefox */
 * {
   scrollbar-width: thin;

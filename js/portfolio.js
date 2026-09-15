@@ -43,7 +43,7 @@ const guestData = {
   users: []
 };
 
-const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], accountGrowths: new Map(), accountGrowthsDirty: true };
+const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], accountGrowths: new Map(), accountGrowthsDirty: true, snapshotDailyGrowths: new Map(), snapshotDailyGrowthsDirty: true };
 let blurMode = false;
 let currentPage = 'dashboard';
 const $ = selector => document.querySelector(selector);
@@ -210,6 +210,7 @@ function setSnapshotList(snapshots) {
   if (accountHistoryData) accountHistoryData = list;
   if (goalHistoryData) goalHistoryData = list;
   invalidateAccountGrowthCache();
+  invalidateSnapshotDailyGrowths();
 }
 
 function hydrateSnapshotCache() {
@@ -394,6 +395,7 @@ async function loadTimeTravelList() {
     renderGrowthCard();
   }
   if ($('#page-simulation')?.classList.contains('active')) renderSimulation();
+  if ($('#page-calendar')?.classList.contains('active')) renderGrowthCalendarPage();
   return refreshed;
 }
 
@@ -660,6 +662,91 @@ function getGlobalAccountGrowths() {
 
 function invalidateAccountGrowthCache() {
   state.accountGrowthsDirty = true;
+  invalidateSnapshotDailyGrowths();
+}
+
+// Reusable calculation of snapshot-to-snapshot daily growth.
+// Returns a Map keyed by snapshot day ('YYYYMMDD') containing:
+// { day, date, globalValue, prevGlobalValue, growth, percentGrowth, isFirst, snapshot, prevDay, isLive }
+function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
+  const map = new Map();
+  if (!snapshots || !snapshots.length) return map;
+
+  const valid = snapshots
+    .filter(s => s && s.day && Number.isFinite(Number(s.data?.globalValue)))
+    .slice()
+    .sort((a, b) => String(a.day).localeCompare(String(b.day))); // oldest -> newest
+
+  for (let i = 0; i < valid.length; i++) {
+    const s = valid[i];
+    const val = Number(s.data.globalValue || 0);
+    const date = simulationSnapshotDate(s);
+    if (i === 0) {
+      map.set(s.day, {
+        day: s.day,
+        date,
+        globalValue: val,
+        prevGlobalValue: null,
+        growth: null,
+        percentGrowth: null,
+        isFirst: true,
+        snapshot: s,
+        prevDay: null
+      });
+    } else {
+      const prev = valid[i - 1];
+      const prevVal = Number(prev.data.globalValue || 0);
+      const growth = val - prevVal;
+      const percentGrowth = prevVal !== 0 ? (growth / Math.abs(prevVal)) * 100 : 0;
+      map.set(s.day, {
+        day: s.day,
+        date,
+        globalValue: val,
+        prevGlobalValue: prevVal,
+        growth,
+        percentGrowth,
+        isFirst: false,
+        snapshot: s,
+        prevDay: prev.day
+      });
+    }
+  }
+
+  // If today does not have a saved snapshot yet, include today's live state relative to the latest snapshot
+  const today = todayDayString();
+  if (!map.has(today) && valid.length > 0 && state.accounts.length > 0) {
+    const last = valid[valid.length - 1];
+    const liveVal = totalPortfolioValue();
+    const prevVal = Number(last.data.globalValue || 0);
+    const growth = liveVal - prevVal;
+    const percentGrowth = prevVal !== 0 ? (growth / Math.abs(prevVal)) * 100 : 0;
+    map.set(today, {
+      day: today,
+      date: new Date(),
+      globalValue: liveVal,
+      prevGlobalValue: prevVal,
+      growth,
+      percentGrowth,
+      isFirst: false,
+      isLive: true,
+      snapshot: null,
+      prevDay: last.day
+    });
+  }
+
+  return map;
+}
+
+function getSnapshotDailyGrowthMap() {
+  if (!state.snapshotDailyGrowths || state.snapshotDailyGrowthsDirty) {
+    state.snapshotDailyGrowths = calculateSnapshotDailyGrowths();
+    state.snapshotDailyGrowthsDirty = false;
+  }
+  return state.snapshotDailyGrowths;
+}
+
+function invalidateSnapshotDailyGrowths() {
+  state.snapshotDailyGrowthsDirty = true;
 }
 
 // Estimate average monthly expenses from portfolio-level losses across the
@@ -938,6 +1025,8 @@ const CURRENCIES_PER_PAGE = 20; // currencies shown per page in the Currency tab
 let currencyPage = 0; // current page index (0-based) of the currency list
 let calendarMonth = null; // { year, month } currently shown in the snapshot calendar (month is 0-based)
 let calendarPicker = false; // whether the calendar is showing the year/month picker instead of the day grid
+let growthCalendarMonth = null; // { year, month } currently shown in the full page growth calendar (month is 0-based)
+let growthCalendarPicker = false; // whether the full page growth calendar is showing the year/month picker
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
@@ -1916,6 +2005,7 @@ function render() {
     if ($('#navTools')) $('#navTools').style.display = admin ? 'flex' : 'none';
     if ($('#navUsers')) $('#navUsers').style.display = admin ? 'flex' : 'none';
     updateNavVisibility();
+    if (currentPage === 'calendar' || $('#page-calendar')?.classList.contains('active')) renderGrowthCalendarPage();
     return;
   }
 
@@ -1945,6 +2035,7 @@ function render() {
   renderPortfolioCards();
   renderPortfolioCharts();
   renderSimulation();
+  if (currentPage === 'calendar' || $('#page-calendar')?.classList.contains('active')) renderGrowthCalendarPage();
 
   const write = isWriteAllowed();
   const admin = isAdminUser();
@@ -2611,6 +2702,251 @@ function renderSnapshotCalendar(container) {
   });
 }
 
+// Render the full-page Growth Calendar for the currently selected month.
+// Shows each day with its net worth growth, highlighted in green for positive and red for negative.
+function renderGrowthCalendarPage() {
+  const container = $('#growthCalendarContainer');
+  if (!container) return;
+
+  hydrateSnapshotCache();
+  if (timeTravelList.length === 0 && !state.guest && state.user && !snapshotsLoading) {
+    loadTimeTravelList().then(() => {
+      if (currentPage === 'calendar') renderGrowthCalendarPage();
+    });
+  }
+
+  const now = new Date();
+  if (!growthCalendarMonth) {
+    growthCalendarMonth = { year: now.getUTCFullYear(), month: now.getUTCMonth() };
+  }
+
+  const { year, month } = growthCalendarMonth;
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const startWeekday = firstDay.getUTCDay(); // 0 = Sunday
+  const monthLabel = firstDay.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthPrefix = `${year}${String(month + 1).padStart(2, '0')}`;
+  const todayStr = todayDayString();
+  const dailyGrowths = getSnapshotDailyGrowthMap();
+
+  if (growthCalendarPicker) {
+    container.innerHTML = `
+      <div class="growth-cal-card growth-cal-picker-view">
+        <div class="growth-cal-picker-head">
+          <button class="btn-sm" type="button" id="growthCalPickerYearPrev" title="Previous year">←</button>
+          <span class="growth-cal-picker-year">${esc(String(year))}</span>
+          <button class="btn-sm" type="button" id="growthCalPickerYearNext" title="Next year">→</button>
+          <button class="btn-sm" type="button" id="growthCalPickerClose" style="margin-left: auto;">Done</button>
+        </div>
+        <div class="growth-cal-picker-grid">
+          ${monthNames.map((name, i) => `
+            <button class="growth-cal-picker-month ${i === month ? 'cal-picker-current' : ''}" type="button" data-pick-growth-month="${i}">
+              <span class="month-title">${name}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    $('#growthCalPickerYearPrev')?.addEventListener('click', () => {
+      growthCalendarMonth = { year: year - 1, month };
+      renderGrowthCalendarPage();
+    });
+    $('#growthCalPickerYearNext')?.addEventListener('click', () => {
+      growthCalendarMonth = { year: year + 1, month };
+      renderGrowthCalendarPage();
+    });
+    $('#growthCalPickerClose')?.addEventListener('click', () => {
+      growthCalendarPicker = false;
+      renderGrowthCalendarPage();
+    });
+    container.querySelectorAll('[data-pick-growth-month]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        growthCalendarMonth = { year, month: Number(btn.dataset.pickGrowthMonth) };
+        growthCalendarPicker = false;
+        renderGrowthCalendarPage();
+      });
+    });
+    return;
+  }
+
+  // Calculate monthly stats
+  let totalPositiveGrowth = 0;
+  let totalNegativeGrowth = 0;
+  let upDays = 0;
+  let downDays = 0;
+  let recordedDays = 0;
+  let bestDay = null;
+  let worstDay = null;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayStr = `${monthPrefix}${String(d).padStart(2, '0')}`;
+    const entry = dailyGrowths.get(dayStr);
+    if (entry && entry.growth !== null) {
+      recordedDays++;
+      if (entry.growth > 0) {
+        upDays++;
+        totalPositiveGrowth += entry.growth;
+        if (!bestDay || entry.growth > bestDay.growth) bestDay = { day: d, growth: entry.growth };
+      } else if (entry.growth < 0) {
+        downDays++;
+        totalNegativeGrowth += entry.growth;
+        if (!worstDay || entry.growth < worstDay.growth) worstDay = { day: d, growth: entry.growth };
+      }
+    }
+  }
+  const netMonthGrowth = totalPositiveGrowth + totalNegativeGrowth;
+
+  // Build Day Cells
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) {
+    cells += '<div class="growth-cal-cell growth-cal-empty"></div>';
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayStr = `${monthPrefix}${String(d).padStart(2, '0')}`;
+    const isToday = dayStr === todayStr;
+    const entry = dailyGrowths.get(dayStr);
+
+    if (entry) {
+      const isPos = entry.growth > 0;
+      const isNeg = entry.growth < 0;
+      const isZero = entry.growth === 0;
+      const isBase = entry.isFirst;
+
+      let cls = 'growth-cal-cell growth-cal-day';
+      if (isPos) cls += ' cal-day-pos';
+      else if (isNeg) cls += ' cal-day-neg';
+      else if (isZero) cls += ' cal-day-zero';
+      else if (isBase) cls += ' cal-day-base';
+
+      if (isToday) cls += ' cal-day-today';
+      if (entry.snapshot) cls += ' cal-day-interactive';
+
+      const signStr = isPos ? '+' : (isNeg ? '−' : '');
+      const growthAmountFormatted = entry.growth !== null
+        ? `${signStr}${moneyEUR.format(Math.abs(entry.growth))}`
+        : (isBase ? 'Baseline' : '—');
+
+      const pctFormatted = entry.percentGrowth !== null
+        ? `${entry.percentGrowth >= 0 ? '+' : ''}${entry.percentGrowth.toFixed(2)}%`
+        : '';
+
+      const titleAttr = esc([
+        formatSnapshotDay(dayStr),
+        isBase ? 'First recorded snapshot (baseline)' : `Growth: ${growthAmountFormatted} ${pctFormatted}`.trim(),
+        `Portfolio Value: ${moneyEUR.format(entry.globalValue)}`,
+        entry.isLive ? '(Today live estimate)' : (entry.snapshot ? 'Click to view snapshot in Time Travel' : '')
+      ].filter(Boolean).join(' • '));
+
+      cells += `
+        <div class="${cls}"${entry.snapshot ? ` data-cal-view-snapshot="${esc(dayStr)}"` : ''} title="${titleAttr}">
+          <div class="cal-cell-header">
+            <span class="cal-day-num">${d}</span>
+            <div class="cal-badges">
+              ${entry.isLive ? '<span class="cal-tag cal-tag-live">Live</span>' : ''}
+              ${isToday ? '<span class="cal-tag cal-tag-today">Today</span>' : ''}
+            </div>
+          </div>
+          <div class="cal-cell-body">
+            <div class="cal-growth-amount">${growthAmountFormatted}</div>
+            ${pctFormatted ? `<div class="cal-growth-pct">${pctFormatted}</div>` : ''}
+          </div>
+        </div>
+      `;
+    } else {
+      let cls = 'growth-cal-cell growth-cal-day cal-day-empty-data';
+      if (isToday) cls += ' cal-day-today';
+
+      cells += `
+        <div class="${cls}">
+          <div class="cal-cell-header">
+            <span class="cal-day-num">${d}</span>
+            ${isToday ? '<div class="cal-badges"><span class="cal-tag cal-tag-today">Today</span></div>' : ''}
+          </div>
+          <div class="cal-cell-body">
+            <div class="cal-no-data-dash">—</div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = `
+    <div class="growth-cal-card">
+      <div class="growth-cal-toolbar">
+        <div class="growth-cal-nav">
+          <button class="btn-sm icon-btn" type="button" id="growthCalPrevMonth" title="Previous month">←</button>
+          <button class="growth-cal-month-btn" type="button" id="growthCalMonthLabel" title="Click to choose month and year">
+            <span class="month-name">${esc(monthLabel)}</span>
+            <span class="cal-caret">▾</span>
+          </button>
+          <button class="btn-sm icon-btn" type="button" id="growthCalNextMonth" title="Next month">→</button>
+          <button class="btn-sm" type="button" id="growthCalTodayBtn" title="Go to current month">Today</button>
+        </div>
+
+        <div class="growth-cal-stats">
+          <div class="growth-stat-chip ${netMonthGrowth > 0 ? 'pos' : (netMonthGrowth < 0 ? 'neg' : '')}">
+            <span class="chip-label">Month Net</span>
+            <span class="chip-val">${recordedDays > 0 ? (netMonthGrowth >= 0 ? '+' : '−') + moneyEUR.format(Math.abs(netMonthGrowth)) : '—'}</span>
+          </div>
+          <div class="growth-stat-chip">
+            <span class="chip-label">Days</span>
+            <span class="chip-val"><span class="pos">▲ ${upDays}</span> <span class="neg">▼ ${downDays}</span></span>
+          </div>
+          ${bestDay ? `
+          <div class="growth-stat-chip desktop-only">
+            <span class="chip-label">Best Day</span>
+            <span class="chip-val pos">+${moneyEUR.format(bestDay.growth)}</span>
+          </div>
+          ` : ''}
+          ${worstDay ? `
+          <div class="growth-stat-chip desktop-only">
+            <span class="chip-label">Worst Day</span>
+            <span class="chip-val neg">−${moneyEUR.format(Math.abs(worstDay.growth))}</span>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <div class="growth-cal-grid">
+        ${weekdayNames.map(w => `<div class="growth-cal-weekday">${w}</div>`).join('')}
+        ${cells}
+      </div>
+    </div>
+  `;
+
+  $('#growthCalPrevMonth')?.addEventListener('click', () => {
+    growthCalendarMonth = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
+    renderGrowthCalendarPage();
+  });
+  $('#growthCalNextMonth')?.addEventListener('click', () => {
+    growthCalendarMonth = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 };
+    renderGrowthCalendarPage();
+  });
+  $('#growthCalMonthLabel')?.addEventListener('click', () => {
+    growthCalendarPicker = true;
+    renderGrowthCalendarPage();
+  });
+  $('#growthCalTodayBtn')?.addEventListener('click', () => {
+    const cur = new Date();
+    growthCalendarMonth = { year: cur.getUTCFullYear(), month: cur.getUTCMonth() };
+    growthCalendarPicker = false;
+    renderGrowthCalendarPage();
+  });
+
+  container.querySelectorAll('[data-cal-view-snapshot]').forEach(el => {
+    const day = el.dataset.calViewSnapshot;
+    if (day) {
+      el.addEventListener('click', () => viewSnapshot(day));
+    }
+  });
+
+  applyBlur();
+}
+
 async function saveSnapshot() {
   const btn = $('#timeTravelSaveBtn');
   if (btn) btn.disabled = true;
@@ -2637,6 +2973,8 @@ async function viewSnapshot(day) {
   try {
     timeTravelSnapshot = snapshot;
     closeModal('timeTravelModalOverlay');
+    closeModal('calendarModalOverlay');
+    if (currentPage === 'calendar') showPage('dashboard');
     render();
     toast(`Viewing snapshot from ${formatSnapshotDay(day)}.`);
   } catch (error) {
@@ -2826,20 +3164,20 @@ function applyHistoryZoom(snapshots, zoom) {
 
 // Calculate snapshot-to-snapshot Global Value changes, aggregating all changes in each zoom period.
 function buildHistoryGrowthValues(points, zoom) {
+  const dailyGrowths = getSnapshotDailyGrowthMap();
   if (zoom === 'all') {
-    return points.map((point, index) => {
-      if (index === 0) return null;
-      return Number(point.data?.globalValue || 0) - Number(points[index - 1].data?.globalValue || 0);
+    return points.map(point => {
+      const entry = dailyGrowths.get(point.day);
+      return entry && entry.growth !== null ? entry.growth : null;
     });
   }
 
-  const sourcePoints = historyData.slice().reverse(); // oldest -> newest
   const totalsByPeriod = {};
-  for (let index = 1; index < sourcePoints.length; index++) {
-    const point = sourcePoints[index];
-    const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
-    const delta = Number(point.data?.globalValue || 0) - Number(sourcePoints[index - 1].data?.globalValue || 0);
-    totalsByPeriod[period] = (totalsByPeriod[period] || 0) + delta;
+  for (const [day, item] of dailyGrowths) {
+    if (item.growth !== null && !item.isLive) {
+      const period = zoom === 'monthly' ? day.slice(0, 6) : day.slice(0, 4);
+      totalsByPeriod[period] = (totalsByPeriod[period] || 0) + item.growth;
+    }
   }
   return points.map(point => {
     const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
@@ -4470,6 +4808,7 @@ function showPage(page) {
   // real available width (it can't be measured correctly while the page is hidden).
   if (page === 'currency') renderCurrency();
   if (page === 'simulation') renderSimulation();
+  if (page === 'calendar') renderGrowthCalendarPage();
   applyBlur();
 }
 

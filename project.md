@@ -40,7 +40,7 @@ portfolio/
 
 Important runtime files:
 
-- `index.html` — Dashboard, Assets, Dividends, My Accounts, My Portfolio, Goals, Tools, Users, Profile, Currency, and all modal markup.
+- `index.html` — Dashboard, Calendar, Assets, Dividends, My Accounts, My Portfolio, Goals, Tools, Users, Profile, Currency, and all modal markup.
 - `js/portfolio.js` — state, API wrapper, calculations, renderers, chart construction, filters, event handlers, snapshots, and simulations.
 - `functions/api/[[path]].js` — authentication, authorization, validation, D1 queries, external API calls, and snapshot endpoints.
 - `schema.sql` — local schema reference. The deployed D1 database is managed separately; one-off migrations (e.g. `mig-remove-dividends.sql`) are applied manually with `wrangler d1 execute`.
@@ -173,7 +173,7 @@ Goal validation enforces the dependency chain (`sub2` requires `sub1`, `sub3` re
 
 Navigation is conditionally shown by `updateNavVisibility()`:
 
-- Dashboard and My Accounts are always available.
+- Dashboard, Calendar, and My Accounts are always available.
 - Goals appears when the user has at least one account.
 - My Portfolio, Assets, and Dividends appear when the user has at least one `asset_account`.
 - Tools and Users are admin-only.
@@ -207,6 +207,16 @@ Up/down/unchanged status uses the same previous-snapshot comparison as the accou
 Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is absent when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. Time Travel renders the same card layout and difference value, comparing against the next older snapshot in the list.
 
 Account cards become clickable for account history when snapshots exist. The account history modal plots that account's EUR value through time.
+
+### Calendar
+
+Calendar is a full-page monthly view of daily portfolio growth, placed in the **Personal** navigation section directly below Dashboard. It is always available, like Dashboard and My Accounts.
+
+The toolbar provides previous/next month buttons, a month/year label that opens a picker, and a **Today** button. The picker shows a year stepper and a twelve-month grid; selecting a month closes the picker and renders that month. The month summary chips show the net change for the month, the count of up and down days, and the best and worst single day. The best/worst chips are hidden on narrow screens.
+
+Each day cell shows the day number, the growth amount versus the previous snapshot, and the growth percentage. Cells are color-coded: green (`.cal-day-pos`) for a positive day, red (`.cal-day-neg`) for a negative day, and a neutral style for a zero-change day. The first recorded snapshot is labelled **Baseline** because it has no previous value to compare against. Days with no snapshot render as a dashed empty cell. Today's cell carries an accent ring plus **Today** and, when the value is a live estimate rather than a stored snapshot, **Live** badges.
+
+Clicking a day that has a snapshot enters Time Travel mode for that day and opens the Dashboard, matching the snapshot calendar modal. Days without a snapshot are not clickable. The portfolio value for a day is available in the cell tooltip rather than as a visible line in the cell. Monetary amounts on this page are blurred by privacy mode.
 
 ### Assets
 
@@ -297,7 +307,7 @@ The History modal uses the in-memory snapshot list and offers:
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.
 - **By Account Type** — one line per account type (Bank Account, Interest Account, Asset Account, Loan), summing each snapshot's `accounts` values by `account.type` via `accountTypeLabel()`.
-- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly or Yearly zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar. The first snapshot has no comparison and is left blank when using All zoom.
+- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly or Yearly zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar. The first snapshot has no comparison and is left blank when using All zoom. These values come from the shared snapshot daily growth cache, so they match the Calendar page for the same period.
 
 By Account, By Account Type, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The chart supports All, Monthly, and Yearly zoom. Monthly/yearly zoom retains the most recent snapshot in each period, while the x-axis is displayed oldest to newest.
 
@@ -319,6 +329,12 @@ Three helpers compute per-account monthly growth from snapshot history:
 - `getAccountHistories()` — builds a `Map<accountId, { observations[] }>` from all snapshots (sorted oldest to newest) plus a live observation for each current account.
 - `calculateAccountGrowths(mode)` — iterates the history map and returns a `Map<accountId, { delta, observationsCount, … }>` where `delta` is the EUR monthly change over the account's lifetime (`'all'`) or within the current year/month (`'ytd'` / `'month'`). Used directly by the Simulation Growth Contribution chart for non-`'all'` modes.
 - `getGlobalAccountGrowths()` — memoized wrapper for `calculateAccountGrowths('all')`. The result is stored in `state.accountGrowths` and reused by `calculateGoalPaceAndEstimate()` and the Simulation chart (all-time mode) without recomputation. The cache is invalidated via `invalidateAccountGrowthCache()` whenever snapshots change (`setSnapshotList`) or account/portfolio data is reloaded (`loadData`).
+
+### Snapshot daily growth cache
+
+`getSnapshotDailyGrowthMap()` is the shared engine for day-over-day growth, consumed by both the Calendar page and the History chart's **By Growth** series so the two cannot drift apart. It sorts snapshots chronologically, then for each day computes the change in Global Value versus the previous snapshot, the percentage change against that previous value, and the end-of-day portfolio value. Results are cached in `state.snapshotDailyGrowths` as a `Map` keyed by `YYYYMMDD`, with `state.snapshotDailyGrowthsDirty` tracking validity. The first snapshot has no previous value, so its growth and percentage are `null` and it is flagged as the baseline. When the latest snapshot is not today, a live entry for today is appended from `totalPortfolioValue()` and flagged `isLive`.
+
+`invalidateSnapshotDailyGrowths()` marks the cache dirty and is called whenever snapshots are created, refreshed, or deleted, so the O(N) pass runs once per change rather than once per feature. `buildHistoryGrowthValues(points, zoom)` reads the map directly instead of recalculating, summing the per-day changes within each period for Monthly and Yearly zoom.
 
 ## 10. Privacy and first-run UX
 
