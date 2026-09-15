@@ -4848,8 +4848,10 @@ function applyBlur() {
   if (btn) btn.classList.toggle('active', blurMode);
   if (active) {
     blurNumbers(document.body);
+    blurTitles(document.body);
   } else {
     unblurNumbers(document.body);
+    unblurTitles(document.body);
   }
 }
 
@@ -4943,11 +4945,41 @@ function unblurNumbers(root) {
   root.normalize();
 }
 
+// Native tooltips (title attributes) are not text nodes, so blurNumbers cannot
+// reach them. Replace each monetary amount in a title with "hidden" while
+// privacy mode is active, keeping the original in a data attribute so it can be
+// restored exactly.
+function blurTitles(root) {
+  const nodes = [];
+  if (root.nodeType === Node.ELEMENT_NODE && root.hasAttribute('title')) nodes.push(root);
+  root.querySelectorAll?.('[title]').forEach(el => nodes.push(el));
+  nodes.forEach(el => {
+    const title = el.getAttribute('title');
+    if (!title || !BLUR_CURRENCY_RE.test(title)) return;
+    BLUR_CURRENCY_RE.lastIndex = 0;
+    if (!el.dataset.origTitle) el.dataset.origTitle = title;
+    el.setAttribute('title', title.replace(BLUR_CURRENCY_RE, (match, symbol) => `${symbol}hidden`));
+  });
+}
+
+function unblurTitles(root) {
+  const nodes = [];
+  if (root.nodeType === Node.ELEMENT_NODE && root.hasAttribute('data-orig-title')) nodes.push(root);
+  root.querySelectorAll?.('[data-orig-title]').forEach(el => nodes.push(el));
+  nodes.forEach(el => {
+    el.setAttribute('title', el.dataset.origTitle);
+    delete el.dataset.origTitle;
+  });
+}
+
 let blurObserver = null;
 function initBlurObserver() {
   if (blurObserver) return;
   blurObserver = new MutationObserver(() => {
-    if (blurActive()) blurNumbers(document.body);
+    if (blurActive()) {
+      blurNumbers(document.body);
+      blurTitles(document.body);
+    }
   });
   blurObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
