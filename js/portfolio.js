@@ -1067,6 +1067,11 @@ let growthCalendarPicker = false; // whether the full page growth calendar is sh
 // Whether the full page growth calendar includes asset accounts in daily growth.
 // 'all' counts every account; 'exAssets' excludes asset accounts.
 let growthCalendarAssetMode = localStorage.getItem('portfolio_growth_calendar_asset_mode') === 'exAssets' ? 'exAssets' : 'all';
+// Granularity of the full page growth calendar: 'month' (one cell per day),
+// 'year' (one card per month) or 'allTime' (one card per year).
+let growthCalendarViewMode = ['year', 'allTime'].includes(localStorage.getItem('portfolio_growth_calendar_view_mode'))
+  ? localStorage.getItem('portfolio_growth_calendar_view_mode')
+  : 'month';
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
@@ -2779,6 +2784,19 @@ function renderGrowthCalendarPage() {
   const todayStr = todayDayString();
   const dailyGrowths = getSnapshotDailyGrowthMap();
 
+  // Pick the growth variant selected by the asset-accounts toggle.
+  const excludeAssets = growthCalendarAssetMode === 'exAssets';
+  const growthOf = entry => (excludeAssets ? entry.growthExAssets : entry.growth);
+  const percentGrowthOf = entry => (excludeAssets ? entry.percentGrowthExAssets : entry.percentGrowth);
+  const valueOf = entry => (excludeAssets ? entry.globalValueExAssets : entry.globalValue);
+
+  const viewMode = growthCalendarViewMode;
+  const isAllTime = viewMode === 'allTime';
+  const isYearView = viewMode === 'year';
+
+  // The picker only makes sense when a specific month or year is being shown.
+  if (growthCalendarPicker && isAllTime) growthCalendarPicker = false;
+
   if (growthCalendarPicker) {
     container.innerHTML = `
       <div class="growth-cal-card growth-cal-picker-view">
@@ -2788,6 +2806,9 @@ function renderGrowthCalendarPage() {
           <button class="btn-sm" type="button" id="growthCalPickerYearNext" title="Next year">→</button>
           <button class="btn-sm" type="button" id="growthCalPickerClose" style="margin-left: auto;">Done</button>
         </div>
+        ${isYearView ? `
+        <div class="growth-cal-picker-hint">Showing every month of ${esc(String(year))}.</div>
+        ` : `
         <div class="growth-cal-picker-grid">
           ${monthNames.map((name, i) => `
             <button class="growth-cal-picker-month ${i === month ? 'cal-picker-current' : ''}" type="button" data-pick-growth-month="${i}">
@@ -2795,6 +2816,7 @@ function renderGrowthCalendarPage() {
             </button>
           `).join('')}
         </div>
+        `}
       </div>
     `;
 
@@ -2819,12 +2841,6 @@ function renderGrowthCalendarPage() {
     });
     return;
   }
-
-  // Pick the growth variant selected by the asset-accounts toggle.
-  const excludeAssets = growthCalendarAssetMode === 'exAssets';
-  const growthOf = entry => (excludeAssets ? entry.growthExAssets : entry.growth);
-  const percentGrowthOf = entry => (excludeAssets ? entry.percentGrowthExAssets : entry.percentGrowth);
-  const valueOf = entry => (excludeAssets ? entry.globalValueExAssets : entry.globalValue);
 
   // Calculate monthly stats
   let totalPositiveGrowth = 0;
@@ -2859,6 +2875,7 @@ function renderGrowthCalendarPage() {
   for (let i = 0; i < startWeekday; i++) {
     cells += '<div class="growth-cal-cell growth-cal-empty"></div>';
   }
+
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dayStr = `${monthPrefix}${String(d).padStart(2, '0')}`;
@@ -2932,64 +2949,180 @@ function renderGrowthCalendarPage() {
     }
   }
 
+  // Build the period cards used by the Year and All-time views.
+  const monthSummaries = isYearView ? buildGrowthMonthSummaries(year, dailyGrowths, excludeAssets) : [];
+  const yearSummaries = isAllTime ? buildGrowthYearSummaries(dailyGrowths, excludeAssets) : [];
+  const periodSummaries = isAllTime ? yearSummaries : monthSummaries;
+
+  // Summary chips describe whichever granularity is on screen.
+  const periodNet = periodSummaries.reduce((sum, s) => sum + (s.hasData ? s.growth : 0), 0);
+  const periodUp = periodSummaries.filter(s => s.hasData && s.growth > 0).length;
+  const periodDown = periodSummaries.filter(s => s.hasData && s.growth < 0).length;
+  const periodRecorded = periodSummaries.filter(s => s.hasData).length;
+  const periodBest = periodSummaries.filter(s => s.hasData).reduce((best, s) => (!best || s.growth > best.growth ? s : best), null);
+  const periodWorst = periodSummaries.filter(s => s.hasData).reduce((worst, s) => (!worst || s.growth < worst.growth ? s : worst), null);
+
+  const periodLabel = isAllTime ? 'Year' : 'Month';
+  const periodUnit = isAllTime ? 'Years' : 'Months';
+
+  const chipNet = isAllTime || isYearView ? periodNet : netMonthGrowth;
+  const chipNetLabel = isAllTime ? 'All-Time Net' : (isYearView ? 'Year Net' : 'Month Net');
+  const chipNetHasData = isAllTime || isYearView ? periodRecorded > 0 : recordedDays > 0;
+  const chipUp = isAllTime || isYearView ? periodUp : upDays;
+  const chipDown = isAllTime || isYearView ? periodDown : downDays;
+  const chipUnitLabel = isAllTime || isYearView ? periodUnit : 'Days';
+  const chipBest = isAllTime || isYearView ? periodBest : bestDay;
+  const chipWorst = isAllTime || isYearView ? periodWorst : worstDay;
+
+  // Render one card per month (Year view) or per year (All-time view).
+  const renderPeriodCard = summary => {
+    const title = isAllTime
+      ? String(summary.year)
+      : monthNames[summary.month];
+    const sub = isAllTime
+      ? `${summary.recordedDays} day${summary.recordedDays === 1 ? '' : 's'}`
+      : String(summary.year);
+
+    if (!summary.hasData) {
+      return `
+        <div class="growth-cal-period-card cal-period-empty">
+          <div class="cal-period-head">
+            <span class="cal-period-title">${esc(title)}</span>
+            <span class="cal-period-sub">${esc(sub)}</span>
+          </div>
+          <div class="cal-period-body">
+            <div class="cal-period-amount cal-period-muted">—</div>
+          </div>
+        </div>
+      `;
+    }
+
+    const isPos = summary.growth > 0;
+    const isNeg = summary.growth < 0;
+    const cls = isPos ? 'cal-period-pos' : (isNeg ? 'cal-period-neg' : 'cal-period-zero');
+    const sign = isPos ? '+' : (isNeg ? '−' : '');
+    const amount = `${sign}${moneyEUR.format(Math.abs(summary.growth))}`;
+    const pct = `${summary.percentGrowth >= 0 ? '+' : ''}${summary.percentGrowth.toFixed(2)}%`;
+    const titleAttr = esc([
+      isAllTime ? `Year ${summary.year}` : `${monthNames[summary.month]} ${summary.year}`,
+      `Growth: ${amount} ${pct}`,
+      `${summary.recordedDays} recorded day${summary.recordedDays === 1 ? '' : 's'}`,
+      `▲ ${summary.upCount} ▼ ${summary.downCount}`,
+      excludeAssets ? '(Asset accounts excluded)' : ''
+    ].filter(Boolean).join(' • '));
+
+    return `
+      <div class="growth-cal-period-card ${cls}" title="${titleAttr}">
+        <div class="cal-period-head">
+          <span class="cal-period-title">${esc(title)}</span>
+          <span class="cal-period-sub">${esc(sub)}</span>
+        </div>
+        <div class="cal-period-body">
+          <div class="cal-period-amount">${amount}</div>
+          <div class="cal-period-pct">${pct}</div>
+        </div>
+        <div class="cal-period-foot">
+          <span class="pos">▲ ${summary.upCount}</span>
+          <span class="neg">▼ ${summary.downCount}</span>
+        </div>
+      </div>
+    `;
+  };
+
+  const periodCards = periodSummaries.map(renderPeriodCard).join('');
+  const periodGridClass = isAllTime ? 'growth-cal-year-grid' : 'growth-cal-month-grid';
+  const periodEmptyMessage = isAllTime
+    ? 'No yearly growth recorded yet.'
+    : `No growth recorded in ${esc(String(year))}.`;
+
+  const viewModeButton = (mode, label) => `
+    <button class="growth-cal-view-btn${viewMode === mode ? ' active' : ''}" type="button"
+      data-growth-view="${mode}" aria-pressed="${viewMode === mode ? 'true' : 'false'}">${label}</button>
+  `;
+
+  const navLabel = isAllTime ? 'All Time' : (isYearView ? String(year) : monthLabel);
+  const navLabelTitle = isAllTime
+    ? 'Showing every year with data'
+    : (isYearView ? 'Click to choose year' : 'Click to choose month and year');
+
   container.innerHTML = `
     <div class="growth-cal-card">
       <div class="growth-cal-toolbar">
         <div class="growth-cal-nav">
-          <button class="btn-sm icon-btn" type="button" id="growthCalPrevMonth" title="Previous month">←</button>
-          <button class="growth-cal-month-btn" type="button" id="growthCalMonthLabel" title="Click to choose month and year">
-            <span class="month-name">${esc(monthLabel)}</span>
-            <span class="cal-caret">▾</span>
+          ${isAllTime ? '' : `
+          <button class="btn-sm icon-btn" type="button" id="growthCalPrevMonth" title="${isYearView ? 'Previous year' : 'Previous month'}">←</button>
+          `}
+          <button class="growth-cal-month-btn" type="button" id="growthCalMonthLabel" title="${navLabelTitle}"${isAllTime ? ' disabled' : ''}>
+            <span class="month-name">${esc(navLabel)}</span>
+            ${isAllTime ? '' : '<span class="cal-caret">▾</span>'}
           </button>
-          <button class="btn-sm icon-btn" type="button" id="growthCalNextMonth" title="Next month">→</button>
-          <button class="btn-sm" type="button" id="growthCalTodayBtn" title="Go to current month">Today</button>
+          ${isAllTime ? '' : `
+          <button class="btn-sm icon-btn" type="button" id="growthCalNextMonth" title="${isYearView ? 'Next year' : 'Next month'}">→</button>
+          <button class="btn-sm" type="button" id="growthCalTodayBtn" title="${isYearView ? 'Go to current year' : 'Go to current month'}">Today</button>
+          `}
+          <div class="growth-cal-view-switch" role="group" aria-label="Calendar granularity">
+            ${viewModeButton('month', 'Month')}
+            ${viewModeButton('year', 'Year')}
+            ${viewModeButton('allTime', 'All Time')}
+          </div>
           <button class="btn-sm growth-cal-asset-toggle${excludeAssets ? ' active' : ''}" type="button" id="growthCalAssetToggleBtn"
             aria-pressed="${excludeAssets ? 'true' : 'false'}"
-            title="${excludeAssets ? 'Asset accounts are excluded from daily growth. Click to include them.' : 'Asset accounts are included in daily growth. Click to exclude them.'}">
+            title="${excludeAssets ? 'Asset accounts are excluded from growth. Click to include them.' : 'Asset accounts are included in growth. Click to exclude them.'}">
             ${excludeAssets ? 'Assets excluded' : 'Assets included'}
           </button>
         </div>
 
         <div class="growth-cal-stats">
-          <div class="growth-stat-chip ${netMonthGrowth > 0 ? 'pos' : (netMonthGrowth < 0 ? 'neg' : '')}">
-            <span class="chip-label">Month Net</span>
-            <span class="chip-val">${recordedDays > 0 ? (netMonthGrowth >= 0 ? '+' : '−') + moneyEUR.format(Math.abs(netMonthGrowth)) : '—'}</span>
+          <div class="growth-stat-chip ${chipNet > 0 ? 'pos' : (chipNet < 0 ? 'neg' : '')}">
+            <span class="chip-label">${chipNetLabel}</span>
+            <span class="chip-val">${chipNetHasData ? (chipNet >= 0 ? '+' : '−') + moneyEUR.format(Math.abs(chipNet)) : '—'}</span>
           </div>
           <div class="growth-stat-chip">
-            <span class="chip-label">Days</span>
-            <span class="chip-val"><span class="pos">▲ ${upDays}</span> <span class="neg">▼ ${downDays}</span></span>
+            <span class="chip-label">${chipUnitLabel}</span>
+            <span class="chip-val"><span class="pos">▲ ${chipUp}</span> <span class="neg">▼ ${chipDown}</span></span>
           </div>
-          ${bestDay ? `
+          ${chipBest ? `
           <div class="growth-stat-chip desktop-only">
-            <span class="chip-label">Best Day</span>
-            <span class="chip-val pos">+${moneyEUR.format(bestDay.growth)}</span>
+            <span class="chip-label">Best ${periodLabel}</span>
+            <span class="chip-val pos">+${moneyEUR.format(Math.abs(chipBest.growth))}</span>
           </div>
           ` : ''}
-          ${worstDay ? `
+          ${chipWorst ? `
           <div class="growth-stat-chip desktop-only">
-            <span class="chip-label">Worst Day</span>
-            <span class="chip-val neg">−${moneyEUR.format(Math.abs(worstDay.growth))}</span>
+            <span class="chip-label">Worst ${periodLabel}</span>
+            <span class="chip-val neg">−${moneyEUR.format(Math.abs(chipWorst.growth))}</span>
           </div>
           ` : ''}
         </div>
       </div>
 
+      ${isAllTime || isYearView ? `
+      <div class="growth-cal-period-grid ${periodGridClass}">
+        ${periodCards || `<div class="growth-cal-period-empty">${periodEmptyMessage}</div>`}
+      </div>
+      ` : `
       <div class="growth-cal-grid">
         ${weekdayNames.map(w => `<div class="growth-cal-weekday">${w}</div>`).join('')}
         ${cells}
       </div>
+      `}
     </div>
   `;
 
   $('#growthCalPrevMonth')?.addEventListener('click', () => {
-    growthCalendarMonth = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
+    growthCalendarMonth = isYearView
+      ? { year: year - 1, month }
+      : (month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
     renderGrowthCalendarPage();
   });
   $('#growthCalNextMonth')?.addEventListener('click', () => {
-    growthCalendarMonth = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 };
+    growthCalendarMonth = isYearView
+      ? { year: year + 1, month }
+      : (month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
     renderGrowthCalendarPage();
   });
   $('#growthCalMonthLabel')?.addEventListener('click', () => {
+    if (isAllTime) return;
     growthCalendarPicker = true;
     renderGrowthCalendarPage();
   });
@@ -3003,6 +3136,14 @@ function renderGrowthCalendarPage() {
     growthCalendarMonth = { year: cur.getUTCFullYear(), month: cur.getUTCMonth() };
     growthCalendarPicker = false;
     renderGrowthCalendarPage();
+  });
+  container.querySelectorAll('[data-growth-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      growthCalendarViewMode = btn.dataset.growthView;
+      localStorage.setItem('portfolio_growth_calendar_view_mode', growthCalendarViewMode);
+      growthCalendarPicker = false;
+      renderGrowthCalendarPage();
+    });
   });
 
   container.querySelectorAll('[data-cal-view-snapshot]').forEach(el => {
@@ -3251,6 +3392,66 @@ function buildHistoryGrowthValues(points, zoom) {
     const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
     return totalsByPeriod[period] ?? null;
   });
+}
+
+// Roll the daily growth map up into one summary per calendar month.
+// `prefix` is the 'YYYYMM' key; only days that carry a growth value count, so
+// the baseline snapshot (growth null) and today's live estimate are excluded.
+function aggregateGrowthPeriod(prefix, dailyGrowths, excludeAssets) {
+  const summary = {
+    prefix,
+    growth: 0,
+    startValue: null,
+    endValue: null,
+    upCount: 0,
+    downCount: 0,
+    recordedDays: 0,
+    best: null,
+    worst: null
+  };
+
+  for (const [day, entry] of dailyGrowths) {
+    if (!day.startsWith(prefix)) continue;
+    const growth = excludeAssets ? entry.growthExAssets : entry.growth;
+    if (growth === null || growth === undefined || entry.isLive) continue;
+    const value = excludeAssets ? entry.globalValueExAssets : entry.globalValue;
+    summary.recordedDays++;
+    summary.growth += growth;
+    if (summary.startValue === null) summary.startValue = value;
+    summary.endValue = value;
+    if (growth > 0) summary.upCount++;
+    else if (growth < 0) summary.downCount++;
+    if (!summary.best || growth > summary.best.growth) summary.best = { day, growth };
+    if (!summary.worst || growth < summary.worst.growth) summary.worst = { day, growth };
+  }
+
+  summary.hasData = summary.recordedDays > 0;
+  summary.percentGrowth = summary.hasData && summary.startValue
+    ? ((summary.endValue - summary.startValue) / Math.abs(summary.startValue)) * 100
+    : 0;
+  return summary;
+}
+
+// One summary per month of `year`, oldest first, including months without data.
+function buildGrowthMonthSummaries(year, dailyGrowths, excludeAssets) {
+  return Array.from({ length: 12 }, (_, month) => {
+    const prefix = `${year}${String(month + 1).padStart(2, '0')}`;
+    return { ...aggregateGrowthPeriod(prefix, dailyGrowths, excludeAssets), year, month };
+  });
+}
+
+// One summary per year that has any recorded growth, oldest first.
+function buildGrowthYearSummaries(dailyGrowths, excludeAssets) {
+  const years = new Set();
+  for (const [day, entry] of dailyGrowths) {
+    const growth = excludeAssets ? entry.growthExAssets : entry.growth;
+    if (growth === null || growth === undefined || entry.isLive) continue;
+    years.add(day.slice(0, 4));
+  }
+  return [...years].sort().map(year => ({
+    ...aggregateGrowthPeriod(year, dailyGrowths, excludeAssets),
+    year: Number(year)
+  }));
 }
 
 // Draw the history chart from historyData based on the selected chart type and zoom.

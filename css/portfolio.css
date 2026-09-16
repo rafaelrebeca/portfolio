@@ -2888,8 +2888,171 @@ select {
   font-size: 11px;
 }
 
+.growth-cal-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel2);
+}
+
+.growth-cal-view-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.growth-cal-view-btn:hover {
+  color: var(--text);
+}
+
+.growth-cal-view-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .growth-cal-asset-toggle {
   white-space: nowrap;
+}
+
+.growth-cal-picker-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.growth-cal-period-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.growth-cal-month-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.growth-cal-year-grid {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+.growth-cal-period-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 104px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+  color: var(--text);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.growth-cal-period-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .28);
+}
+
+.growth-cal-period-card.cal-period-pos {
+  background: rgba(63, 208, 163, 0.1);
+  border-color: rgba(63, 208, 163, .45);
+}
+
+.growth-cal-period-card.cal-period-pos .cal-period-amount,
+.growth-cal-period-card.cal-period-pos .cal-period-pct {
+  color: #3fd0a3;
+}
+
+.growth-cal-period-card.cal-period-pos:hover {
+  border-color: #3fd0a3;
+  box-shadow: 0 6px 16px rgba(63, 208, 163, .18);
+}
+
+.growth-cal-period-card.cal-period-neg {
+  background: rgba(255, 92, 114, 0.1);
+  border-color: rgba(255, 92, 114, .45);
+}
+
+.growth-cal-period-card.cal-period-neg .cal-period-amount,
+.growth-cal-period-card.cal-period-neg .cal-period-pct {
+  color: #ff5c72;
+}
+
+.growth-cal-period-card.cal-period-neg:hover {
+  border-color: #ff5c72;
+  box-shadow: 0 6px 16px rgba(255, 92, 114, .18);
+}
+
+.growth-cal-period-card.cal-period-empty {
+  background: transparent;
+  border-style: dashed;
+  opacity: .55;
+}
+
+.cal-period-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cal-period-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cal-period-sub {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cal-period-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.cal-period-amount {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.cal-period-muted {
+  color: var(--muted);
+}
+
+.cal-period-pct {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .85;
+}
+
+.cal-period-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.growth-cal-period-empty {
+  grid-column: 1 / -1;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
 }
 
 .growth-cal-asset-toggle.active {
@@ -3220,6 +3383,33 @@ select {
 
   .growth-stat-chip.desktop-only {
     display: none;
+  }
+
+  .growth-cal-month-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .growth-cal-year-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .growth-cal-period-card {
+    min-height: 88px;
+    padding: 8px 10px;
+  }
+
+  .cal-period-amount {
+    font-size: 13px;
+  }
+
+  .cal-period-pct,
+  .cal-period-foot {
+    font-size: 9px;
+  }
+
+  .growth-cal-view-btn {
+    padding: 5px 7px;
+    font-size: 11px;
   }
 }
 
