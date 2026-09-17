@@ -33,17 +33,19 @@ portfolio/
 ├── _routes.json
 ├── wrangler.toml
 ├── package.json
+├── package-lock.json
 ├── sw.js
 ├── manifest.webmanifest
+├── project.md
 └── icons/
 ```
 
 Important runtime files:
 
-- `index.html` — Dashboard, Calendar, Assets, Dividends, My Accounts, My Portfolio, Goals, Tools, Users, Profile, Currency, and all modal markup.
+- `index.html` — Dashboard, Calendar, Simulation, Goals, My Portfolio, My Accounts, Assets, Dividends, Currency, Profile, Tools, Users, and all modal markup.
 - `js/portfolio.js` — state, API wrapper, calculations, renderers, chart construction, filters, event handlers, snapshots, and simulations.
 - `functions/api/[[path]].js` — authentication, authorization, validation, D1 queries, external API calls, and snapshot endpoints.
-- `schema.sql` — local schema reference. The deployed D1 database is managed separately; one-off migrations (e.g. `mig-remove-dividends.sql`) are applied manually with `wrangler d1 execute`.
+- `schema.sql` — tracked D1 schema reference: table definitions, indexes, triggers, and the `asset_type` seed rows. The deployed D1 database is managed separately; one-off migrations are applied manually with `wrangler d1 execute`.
 - `wrangler.toml` — Pages project, D1 binding, compatibility date, and local variable configuration. Do not commit real credentials or API keys.
 
 ## 3. Local commands
@@ -63,8 +65,8 @@ The repository uses `bcryptjs` at runtime and Wrangler as a development dependen
 The worker uses these D1 tables:
 
 - `users` — `id`, `username`, `password_hash`, `role`, `created_at`, `last_login`, and optional `fire_expenses` (monthly expenses used for the user-configured FIRE target); stored roles are `user` or `admin`.
-- `sessions` — session `token`, `user_id`, and `expires_at`. Sessions expire after seven days.
-- `assets` — platform assets with `id`, `name`, `symbol`, `type`, `price`, `coin`, and `dividend_yield`.
+- `sessions` — session `token`, `user_id`, `created_at`, and `expires_at`. Sessions expire after seven days.
+- `assets` — platform assets with `id`, `name`, `symbol`, `type`, `price`, `coin`, `dividend_yield`, `created_at`, and `updated_at`.
 - `asset_type` — reference table of valid asset types (`id`, `type`, `label`); drives the asset creation form, type filters, and validation.
 - `personal_assets` — user-owned assets with the same core fields plus `user_id`, `created_at`, and `updated_at`; they carry a `dividend_yield` but never a payment schedule.
 - `dividend_payment_months` — payment months from 1 to 12 for platform (system) assets only.
@@ -74,7 +76,7 @@ The worker uses these D1 tables:
 - `goals` — user-owned targets with currency, optional `sub1`/`sub2`/`sub3` milestones, and `order_by`.
 - `goal_link` — links goals to user-owned accounts.
 - `currency` — exchange rates relative to USD.
-- `update_story` — timestamps for external data refreshes, currently used to avoid repeating the daily currency refresh.
+- `update_story` — `what` and `when` timestamps for external data refreshes, currently used to avoid repeating the daily currency refresh.
 - `dashboard_snapshots` — one JSON dashboard snapshot per user per UTC day, keyed by `(user_id, day)`.
 
 Platform assets and personal assets can have the same numeric ID. The frontend therefore always resolves an asset using both its ID and its `is_personal` flag. Holding select values encode both pieces as `<id>|<is_personal>`.
@@ -174,7 +176,7 @@ Goal validation enforces the dependency chain (`sub2` requires `sub1`, `sub3` re
 Navigation is conditionally shown by `updateNavVisibility()`:
 
 - Dashboard, Calendar, and My Accounts are always available.
-- Goals appears when the user has at least one account.
+- Simulation and Goals appear when the user has at least one account. If the last account is removed while Simulation is open, the view returns to Dashboard.
 - My Portfolio, Assets, and Dividends appear when the user has at least one `asset_account`.
 - Tools and Users are admin-only.
 - Profile and Currency are available to authenticated members according to the navigation state.
@@ -249,7 +251,7 @@ Provider and account detail charts convert values to EUR. Their Others tables li
 
 ### Simulation
 
-Simulation is a read-only, principal-only projection of Global Value. It uses the same All-Time Growth monthly pace shown on the Dashboard, calculated with elapsed days so an incomplete calendar month is included, then shows the implied value today, in 1, 5, 10, and 20 years. The clickable Path card toggles between the next increasing power-of-ten milestone, Path to FIRE (auto), and Path to FIRE (user). FIRE (auto) uses the average portfolio-level loss across the full snapshot history as an expense proxy: decreases in overall Global Value between consecutive snapshots are summed and divided by the elapsed months since the first snapshot. This is transfer-neutral, so moving money between accounts without changing Global Value contributes no loss. It targets 25 times annual expenses (`average monthly expenses × 12 × 25`). FIRE (user) uses the user-configured `fire_expenses` from the Profile page (`monthly expenses for FIRE × 12 × 25`). When FIRE targets and a positive growth pace are available, the Historical & Projected Global Value chart also shows Estimated Path to FIRE (auto) and Estimated Path to FIRE (user) lines, capped at each FIRE target when reached. The historical chart displays the first snapshot and the latest snapshot available for each calendar year, while all snapshots remain available for the growth calculation. It includes the original linear current-pace projection plus a purple `Projected +5% Annual Growth` scenario; for each year, that scenario adds 12 months of the current pace to the previous year's value and multiplies the result by 1.05. The Growth Contribution by Account card is clickable and cycles through All-Time, YTD, and Month views. It scans all snapshots to build a distinct account history, then calculates each account's monthly change as `(latest known value - period start value) / months in period`; All-Time uses the account's first known value, while YTD and Month use the value at the start of the current year or month when available. Live values are used as the latest point for existing accounts and deleted accounts end at their last snapshot. It uses top-9-plus-Others grouping; positive and negative changes are shown as separate doughnut datasets, with negative changes represented by absolute values. Hovering Others shows the aggregate and each included account's signed monthly change. When the current Global Value is negative and the historical pace is positive, it also estimates the month and year in which the value reaches €0. The projection ignores interest, dividends, market returns, inflation, and future deposits or withdrawals; a dated snapshot baseline is required for a growth rate.
+Simulation is a read-only, principal-only projection of Global Value. It uses the same All-Time Growth monthly pace shown on the Dashboard, calculated with elapsed days so an incomplete calendar month is included, then shows the implied value today, in 1, 5, 10, and 20 years. The clickable Path card toggles between the next increasing power-of-ten milestone, Path to FIRE (auto), and Path to FIRE (user). FIRE (auto) uses the average portfolio-level loss across the full snapshot history as an expense proxy: decreases in overall Global Value between consecutive snapshots are summed and divided by the elapsed months since the first snapshot. This is transfer-neutral, so moving money between accounts without changing Global Value contributes no loss. It targets 25 times annual expenses (`average monthly expenses × 12 × 25`). FIRE (user) uses the user-configured `fire_expenses` from the Profile page (`monthly expenses for FIRE × 12 × 25`). When FIRE targets and a positive growth pace are available, the Historical & Projected Global Value chart also shows Estimated Path to FIRE (auto) and Estimated Path to FIRE (user) lines, capped at each FIRE target when reached. The historical chart displays the first snapshot and the latest snapshot available for each calendar year, while all snapshots remain available for the growth calculation. It includes a linear current-pace projection plus a purple `Projected +5% Annual Growth` scenario; for each year, that scenario adds 12 months of the current pace to the previous year's value and multiplies the result by 1.05. The Growth Contribution by Account card is clickable and cycles through All-Time, YTD, and Month views. It scans all snapshots to build a distinct account history, then calculates each account's monthly change as `(latest known value - period start value) / months in period`; All-Time uses the account's first known value, while YTD and Month use the value at the start of the current year or month when available. Live values are used as the latest point for existing accounts and deleted accounts end at their last snapshot. It uses top-9-plus-Others grouping; positive and negative changes are shown as separate doughnut datasets, with negative changes represented by absolute values. Hovering Others shows the aggregate and each included account's signed monthly change. When the current Global Value is negative and the historical pace is positive, it also estimates the month and year in which the value reaches €0. The projection ignores interest, dividends, market returns, inflation, and future deposits or withdrawals; a dated snapshot baseline is required for a growth rate.
 
 ### My Portfolio
 
