@@ -7815,6 +7815,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!typing) toggleBlur();
     }
   });
+
+  // "S" saves today's snapshot and "R" refreshes all data, mirroring the
+  // topbar save and refresh buttons.
+  document.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target;
+    const typing = target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    );
+    if (typing) return;
+    if (document.querySelector('.modal-overlay.show')) return;
+
+    const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+    if (key === 's') {
+      const saveBtn = $('#timeTravelSaveBtn');
+      if (saveBtn && saveBtn.disabled) return;
+      event.preventDefault();
+      saveSnapshot();
+    } else if (key === 'r') {
+      const refreshBtn = $('#refreshButton');
+      if (refreshBtn && refreshBtn.classList.contains('spinning')) return;
+      event.preventDefault();
+      refreshBtn?.click();
+    }
+  });
   initBlurObserver();
   applyBlur();
 
