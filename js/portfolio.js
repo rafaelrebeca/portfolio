@@ -3355,14 +3355,33 @@ function toggleHistoryMaximize() {
   if (historyChartInstance) historyChartInstance.resize();
 }
 
-// Apply the zoom filter: keep the most recent snapshot per month or per year.
+// Bucketing key for a zoom level: the part of the 'YYYYMMDD' day that defines
+// one point on the chart. YTD groups by month, Current Month by day.
+function historyZoomPeriodKey(day, zoom) {
+  if (zoom === 'yearly') return day.slice(0, 4);
+  if (zoom === 'currentMonth') return day;
+  return day.slice(0, 6); // monthly and ytd
+}
+
+// Apply the zoom filter: keep the most recent snapshot per period.
+// YTD and Current Month additionally restrict the range to the current year or
+// month, so they show recent detail rather than the whole history.
 function applyHistoryZoom(snapshots, zoom) {
   if (zoom === 'all' || !snapshots.length) return snapshots;
+
+  let scoped = snapshots;
+  if (zoom === 'ytd' || zoom === 'currentMonth') {
+    const today = todayDayString();
+    const rangeStart = zoom === 'ytd' ? `${today.slice(0, 4)}0101` : `${today.slice(0, 6)}01`;
+    scoped = snapshots.filter(s => s.day >= rangeStart && s.day <= today);
+    if (!scoped.length) return [];
+  }
+
   const seen = new Set();
   const result = [];
-  // snapshots are newest-first; keep the first (most recent) per month/year.
-  for (const s of snapshots) {
-    const key = zoom === 'monthly' ? s.day.slice(0, 6) : s.day.slice(0, 4);
+  // snapshots are newest-first; keep the first (most recent) per period.
+  for (const s of scoped) {
+    const key = historyZoomPeriodKey(s.day, zoom);
     if (!seen.has(key)) {
       seen.add(key);
       result.push(s);
@@ -3384,12 +3403,12 @@ function buildHistoryGrowthValues(points, zoom) {
   const totalsByPeriod = {};
   for (const [day, item] of dailyGrowths) {
     if (item.growth !== null && !item.isLive) {
-      const period = zoom === 'monthly' ? day.slice(0, 6) : day.slice(0, 4);
+      const period = historyZoomPeriodKey(day, zoom);
       totalsByPeriod[period] = (totalsByPeriod[period] || 0) + item.growth;
     }
   }
   return points.map(point => {
-    const period = zoom === 'monthly' ? point.day.slice(0, 6) : point.day.slice(0, 4);
+    const period = historyZoomPeriodKey(point.day, zoom);
     return totalsByPeriod[period] ?? null;
   });
 }

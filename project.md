@@ -319,9 +319,19 @@ The History modal uses the in-memory snapshot list and offers:
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.
 - **By Account Type** — one line per account type (Bank Account, Interest Account, Asset Account, Loan), summing each snapshot's `accounts` values by `account.type` via `accountTypeLabel()`.
-- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly or Yearly zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar. The first snapshot has no comparison and is left blank when using All zoom. These values come from the shared snapshot daily growth cache, so they match the Calendar page for the same period.
+- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly, Yearly, or YTD zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar; with Current Month zoom each bar is a single day's change. The first snapshot has no comparison and is left blank when using All zoom. These values come from the shared snapshot daily growth cache, so they match the Calendar page for the same period.
 
-By Account, By Account Type, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The chart supports All, Monthly, and Yearly zoom. Monthly/yearly zoom retains the most recent snapshot in each period, while the x-axis is displayed oldest to newest.
+By Account, By Account Type, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The x-axis is displayed oldest to newest.
+
+All three history charts — Snapshot History, Account History, and Goal History — share the same five zoom levels, applied by `applyHistoryZoom()`:
+
+- **All** — every snapshot.
+- **Monthly** — the most recent snapshot in each calendar month, across all history.
+- **Yearly** — the most recent snapshot in each calendar year, across all history.
+- **YTD** — the most recent snapshot in each month of the current year, from January 1 to today.
+- **Current Month** — every snapshot in the current calendar month, one point per day.
+
+Monthly, Yearly, and YTD bucket by period; Current Month keeps each day. YTD and Current Month additionally restrict the range to the current year or month, so they show recent detail rather than the whole history. Period keys come from `historyZoomPeriodKey()`, which both `applyHistoryZoom()` and `buildHistoryGrowthValues()` use, so the By Growth bars aggregate on the same boundaries as the lines. A zoom with no snapshots in range renders the chart's empty state.
 
 Separate Account History and Goal History modals provide focused per-account and per-goal charts. Chart instances are destroyed when their modal closes or when a new chart is rendered.
 
@@ -348,7 +358,7 @@ Three helpers compute per-account monthly growth from snapshot history:
 
 Each entry carries two variants. The plain fields (`globalValue`, `growth`, `percentGrowth`) count every account. The `*ExAssets` fields (`globalValueExAssets`, `growthExAssets`, `percentGrowthExAssets`) subtract the asset-account portion, derived from the snapshot's own `accounts` array via `snapshotAssetAccountsValue()`, so the split is available retroactively without re-reading holdings. Today's live entry derives its excluded variant from `liveAssetAccountsValue()`. Both variants are computed in the same pass, which is what lets the Calendar toggle switch instantly.
 
-`invalidateSnapshotDailyGrowths()` marks the cache dirty and is called whenever snapshots are created, refreshed, or deleted, so the O(N) pass runs once per change rather than once per feature. `buildHistoryGrowthValues(points, zoom)` reads the map directly instead of recalculating, summing the per-day changes within each period for Monthly and Yearly zoom. It reads the all-accounts fields, so the History chart is unaffected by the Calendar's asset-accounts toggle.
+`invalidateSnapshotDailyGrowths()` marks the cache dirty and is called whenever snapshots are created, refreshed, or deleted, so the O(N) pass runs once per change rather than once per feature. `buildHistoryGrowthValues(points, zoom)` reads the map directly instead of recalculating, summing the per-day changes within each period for Monthly, Yearly, and YTD zoom, and using each day's own change for Current Month. It reads the all-accounts fields, so the History chart is unaffected by the Calendar's asset-accounts toggle.
 
 ## 10. Privacy and first-run UX
 
