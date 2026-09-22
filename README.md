@@ -31,6 +31,7 @@ It operates with zero heavy client frameworks (written in clean Vanilla HTML, CS
 - 📈 **Simulation**: Available once at least one account exists. Explore principal-only Global Value projections at 1, 5, 10, and 20 years using the Dashboard's monthly growth pace, with All-Time/YTD/Month account contribution views, clickable paths to €0, the next power-of-ten milestone, Path to FIRE (auto) based on average portfolio-level losses, or Path to FIRE (user) using custom profile monthly expenses, plus estimated FIRE progress lines and optional +5% annual-growth scenario.
 - 👁 **Privacy Blur Mode**: Quick keyboard shortcut (`H` key or toggle button) to blur sensitive monetary figures when viewing the app in public spaces; monetary chart axes are hidden and tooltip values show `hidden` while visuals remain sharp.
 - ⌨️ **Keyboard Shortcuts**: `H` toggles privacy blur, `S` saves today's snapshot, `R` refreshes all data, and the left/right arrow keys step through snapshots in Time Travel. Single-key shortcuts are ignored while typing in a field or while a modal is open.
+- ⏳ **Loading Modal**: A progress modal covers the app during the initial load, sign-in, and manual refresh, listing each step being performed and checking them off as they complete. It closes automatically when the work finishes.
 - 👤 **Access Control**:
   - **Admin**: User management, database tools, asset price refreshes, global configuration.
   - **User / Member**: Full CRUD over private portfolios, accounts, holdings, and goals. Admin-created accounts can only be `user` or `admin`.

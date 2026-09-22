@@ -278,6 +278,81 @@ function toast(message) {
   toast.timer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
+// ---- Loading modal -------------------------------------------------------
+// Shown while data is being fetched (initial load and manual refresh). It
+// lists the steps being performed, marks them off as they complete, and closes
+// itself when the work finishes. A minimum visible time avoids a flash on fast
+// connections, and a safety timeout guarantees it never gets stuck open.
+const LOADING_MIN_VISIBLE_MS = 600;
+const LOADING_SAFETY_MS = 20000;
+let loadingModalToken = 0;
+let loadingModalShownAt = 0;
+let loadingModalSafetyTimer = null;
+
+function openLoadingModal(title, sub, steps) {
+  const overlay = $('#loadingModalOverlay');
+  if (!overlay) return null;
+  const token = ++loadingModalToken;
+  loadingModalShownAt = Date.now();
+  const titleEl = $('#loadingModalTitle');
+  const subEl = $('#loadingModalSub');
+  const stepsEl = $('#loadingModalSteps');
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = sub;
+  if (stepsEl) {
+    stepsEl.innerHTML = steps
+      .map(step => `<li class="loading-step" data-loading-step="${esc(step.key)}"><span class="loading-step-dot"></span><span>${esc(step.label)}</span></li>`)
+      .join('');
+  }
+  overlay.classList.add('show');
+  clearTimeout(loadingModalSafetyTimer);
+  loadingModalSafetyTimer = setTimeout(() => closeLoadingModal(token), LOADING_SAFETY_MS);
+  return token;
+}
+
+// Mark a step as running or finished. Steps are keyed so the caller can report
+// progress without tracking DOM nodes.
+function setLoadingStep(token, key, state) {
+  if (token !== loadingModalToken) return;
+  const el = document.querySelector(`[data-loading-step="${key}"]`);
+  if (!el) return;
+  el.classList.toggle('active', state === 'active');
+  el.classList.toggle('done', state === 'done');
+}
+
+function setLoadingSub(token, text) {
+  if (token !== loadingModalToken) return;
+  const subEl = $('#loadingModalSub');
+  if (subEl) subEl.textContent = text;
+}
+
+function closeLoadingModal(token) {
+  if (token !== undefined && token !== loadingModalToken) return;
+  clearTimeout(loadingModalSafetyTimer);
+  loadingModalSafetyTimer = null;
+  const overlay = $('#loadingModalOverlay');
+  if (!overlay) return;
+  const elapsed = Date.now() - loadingModalShownAt;
+  const wait = Math.max(0, LOADING_MIN_VISIBLE_MS - elapsed);
+  setTimeout(() => {
+    // A newer load may have started while we waited.
+    if (token !== undefined && token !== loadingModalToken) return;
+    overlay.classList.remove('show');
+  }, wait);
+}
+
+// The steps shown for a full data load, in the order loadData performs them.
+function dataLoadSteps() {
+  const steps = [
+    { key: 'portfolio', label: 'Loading portfolio data' },
+    { key: 'snapshots', label: 'Loading snapshot history' }
+  ];
+  if (state.user && state.user.role === 'admin') {
+    steps.splice(1, 0, { key: 'users', label: 'Loading user accounts' });
+  }
+  return steps;
+}
+
 function isWriteAllowed() { return !state.guest; }
 function isAdminUser() { return !state.guest && state.user?.role === 'admin'; }
 function typeLabel(value) { return String(value || '').replaceAll('_', ' '); }
@@ -324,7 +399,7 @@ function gainLossValue(h, currency = 'USD') {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
-async function loadData({ refreshSnapshots = false } = {}) {
+async function loadData({ refreshSnapshots = false, showLoading = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
     assetTypesCache = [];
@@ -333,6 +408,10 @@ async function loadData({ refreshSnapshots = false } = {}) {
     render();
     return true;
   }
+  const loadingToken = showLoading
+    ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps())
+    : null;
+  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'active');
   hydrateSnapshotCache();
   try {
     const [assets, providers, accounts, holdings, currencies, goals, assetTypes] = await Promise.all([
@@ -352,23 +431,37 @@ async function loadData({ refreshSnapshots = false } = {}) {
     console.error('Failed to load portfolio data:', err);
     invalidateAccountGrowthCache();
     render();
+    closeLoadingModal(loadingToken);
     return false;
   }
+  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'done');
   let snapshotsFresh = true;
   if (state.user && state.user.role === 'admin') {
+    if (loadingToken) setLoadingStep(loadingToken, 'users', 'active');
     try {
       state.users = (await request('/admin/users')).items || [];
     } catch (err) {
       console.error('Failed to load admin users:', err);
       invalidateAccountGrowthCache();
       render();
+      closeLoadingModal(loadingToken);
       return false;
     }
+    if (loadingToken) setLoadingStep(loadingToken, 'users', 'done');
   }
   invalidateAccountGrowthCache();
   render();
-  if (!refreshSnapshots) return true;
+  if (!refreshSnapshots) {
+    closeLoadingModal(loadingToken);
+    return true;
+  }
+  if (loadingToken) {
+    setLoadingStep(loadingToken, 'snapshots', 'active');
+    setLoadingSub(loadingToken, 'Loading snapshot history…');
+  }
   snapshotsFresh = await loadTimeTravelList();
+  if (loadingToken) setLoadingStep(loadingToken, 'snapshots', 'done');
+  closeLoadingModal(loadingToken);
   return snapshotsFresh;
 }
 
@@ -5564,7 +5657,7 @@ async function signIn(event) {
     state.user = (await request('/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) })).user;
     state.guest = false;
     showApp();
-    await loadData({ refreshSnapshots: true });
+    await loadData({ refreshSnapshots: true, showLoading: true });
     toast(`Signed in as ${state.user.username}`);
     maybeShowWelcomeModal();
 
@@ -7793,7 +7886,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.user = me.user;
       state.guest = false;
       showApp();
-      await loadData({ refreshSnapshots: true });
+      await loadData({ refreshSnapshots: true, showLoading: true });
 
       // Update currency rates if admin
       if (state.user.role === 'admin') {
@@ -7816,7 +7909,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (refreshBtn.classList.contains('spinning')) return;
       refreshBtn.classList.add('spinning');
       try {
-        const refreshed = await loadData({ refreshSnapshots: true });
+        const refreshed = await loadData({ refreshSnapshots: true, showLoading: true });
         toast(refreshed ? 'All data refreshed.' : 'Could not fully refresh. Existing data was kept.');
       } finally {
         refreshBtn.classList.remove('spinning');

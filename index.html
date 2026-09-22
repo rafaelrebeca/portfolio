@@ -1635,6 +1635,21 @@
     </div>
   </div>
 
+  <!-- MODAL: Loading (shown while data is being fetched) -->
+  <div class="modal-overlay loading-overlay" id="loadingModalOverlay" role="status" aria-live="polite">
+    <div class="modal loading-modal">
+      <div class="loading-orb" aria-hidden="true">
+        <span class="loading-ring"></span>
+        <span class="loading-ring loading-ring-2"></span>
+        <span class="loading-core"></span>
+      </div>
+      <div class="loading-title" id="loadingModalTitle">Loading</div>
+      <div class="loading-sub" id="loadingModalSub">Preparing your portfolio…</div>
+      <ul class="loading-steps" id="loadingModalSteps"></ul>
+      <div class="loading-bar" aria-hidden="true"><span class="loading-bar-fill"></span></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
   <script type="module" src="js/portfolio.js"></script>
 </body>

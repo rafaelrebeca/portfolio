@@ -366,6 +366,14 @@ The topbar provides navigation, refresh, help, logout, and the privacy toggle. P
 
 Two further single-key shortcuts mirror the topbar buttons: `S` saves today's snapshot (the same action as the 💾 button) and `R` refreshes all data (the same action as the ⟳ button). Both are ignored while a text field, textarea, select, or contenteditable element has focus, while any modal is open, and when a modifier key is held. `S` is also ignored while the save button is disabled, and `R` while a refresh is already running.
 
+### Loading modal
+
+A loading modal covers the app while data is being fetched, so a slow connection shows what is happening instead of a frozen screen. It appears on the initial page load, on sign-in, and on a manual refresh (the ⟳ button or the `R` shortcut). It does not appear in guest mode, which loads from local demo data, nor for the many `loadData()` calls that follow a write, which refresh in place without blocking.
+
+The modal lists the steps `loadData()` performs and marks each one off as it completes: **Loading portfolio data**, then **Loading user accounts** (admin only), then **Loading snapshot history**. The step list is built by `dataLoadSteps()`, which adds the admin step only when the signed-in user has the `admin` role. The subtitle changes as the load moves from portfolio data to snapshot history.
+
+`openLoadingModal()` returns a token that `setLoadingStep()`, `setLoadingSub()`, and `closeLoadingModal()` use to ignore stale updates, so a load that finishes after a newer one has started cannot close the newer modal. The modal closes itself when the work finishes, including on failure, and a 20-second safety timeout guarantees it never stays stuck open. A 600 ms minimum visible time prevents a flash on fast connections.
+
 Privacy covers two surfaces. `blurNumbers()` walks text nodes and wraps each amount in a `.blur-num` span. `blurTitles()` handles native `title` tooltips, which are attributes rather than text nodes and therefore invisible to the text walker: it replaces each monetary amount in a title with `hidden` (keeping the currency symbol) and stores the original in `data-orig-title` so `unblurTitles()` can restore it exactly. Both run from `applyBlur()` and from the MutationObserver, so tooltips stay hidden across re-renders. This is what keeps the Calendar day-cell tooltips from leaking portfolio values while privacy mode is active.
 
 The welcome/help modal provides a seven-tab feature guide. Regular users see the onboarding tab on first use when they have no providers; guests see an isolated demo guide on every guest login. The guide covers onboarding and privacy, Dashboard insights, providers and accounts, portfolio assets and dividends, goals, simulations, currency, and admin data tools. History and Time Travel remain documented in their dedicated views.
