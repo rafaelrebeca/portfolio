@@ -3366,7 +3366,6 @@ select {
 .cal-day-zero .cal-growth-amount,
 .cal-day-base .cal-growth-amount {
   color: var(--muted);
-  font-size: 12px;
   font-weight: 600;
 }
 
@@ -3385,43 +3384,15 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .cal-day-num {
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
-}
-
-.cal-badges {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.cal-tag {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  padding: 2px 5px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.cal-tag-today {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(79, 140, 255, .12);
-}
-
-.cal-tag-live {
-  border-color: var(--accent2);
-  color: var(--accent2);
-  background: rgba(63, 208, 163, .12);
+  flex: 0 0 auto;
 }
 
 .cal-cell-body {
@@ -3432,16 +3403,25 @@ select {
 }
 
 .cal-growth-amount {
-  font-size: 14px;
+  /* Fluid size: the amount scales down with the cell width so it stays on one
+     line instead of wrapping mid-number, which made cells uneven and hard to
+     scan. The clamp floor keeps it legible on the narrowest phones. */
+  font-size: clamp(8px, 0.95vw, 14px);
   font-weight: 700;
   line-height: 1.2;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .cal-growth-pct {
   font-size: 11px;
   font-weight: 600;
   opacity: .85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cal-no-data-dash {
@@ -3497,10 +3477,6 @@ select {
   .growth-cal-empty {
     min-height: 84px;
   }
-
-  .cal-growth-amount {
-    font-size: 13px;
-  }
 }
 
 @media (max-width: 650px) {
@@ -3527,17 +3503,10 @@ select {
     font-size: 11px;
   }
 
-  .cal-growth-amount {
-    font-size: 11px;
-  }
-
   .cal-growth-pct {
     font-size: 9px;
   }
 
-  .cal-tag {
-    display: none;
-  }
 
   .growth-stat-chip {
     min-width: 0;

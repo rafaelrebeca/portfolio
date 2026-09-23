@@ -3013,10 +3013,6 @@ function renderGrowthCalendarPage() {
         <div class="${cls}"${entry.snapshot ? ` data-cal-view-snapshot="${esc(dayStr)}"` : ''} title="${titleAttr}">
           <div class="cal-cell-header">
             <span class="cal-day-num">${d}</span>
-            <div class="cal-badges">
-              ${entry.isLive ? '<span class="cal-tag cal-tag-live">Live</span>' : ''}
-              ${isToday ? '<span class="cal-tag cal-tag-today">Today</span>' : ''}
-            </div>
           </div>
           <div class="cal-cell-body">
             <div class="cal-growth-amount">${growthAmountFormatted}</div>
@@ -3032,7 +3028,6 @@ function renderGrowthCalendarPage() {
         <div class="${cls}">
           <div class="cal-cell-header">
             <span class="cal-day-num">${d}</span>
-            ${isToday ? '<div class="cal-badges"><span class="cal-tag cal-tag-today">Today</span></div>' : ''}
           </div>
           <div class="cal-cell-body">
             <div class="cal-no-data-dash">—</div>
@@ -3055,7 +3050,9 @@ function renderGrowthCalendarPage() {
   const periodBest = periodSummaries.filter(s => s.hasData).reduce((best, s) => (!best || s.growth > best.growth ? s : best), null);
   const periodWorst = periodSummaries.filter(s => s.hasData).reduce((worst, s) => (!worst || s.growth < worst.growth ? s : worst), null);
 
-  const periodLabel = isAllTime ? 'Year' : 'Month';
+  // The best/worst chip label follows the granularity on screen: single days in
+  // Month view, months in Year view, years in All-time view.
+  const periodLabel = isAllTime ? 'Year' : (isYearView ? 'Month' : 'Day');
   const periodUnit = isAllTime ? 'Years' : 'Months';
 
   const chipNet = isAllTime || isYearView ? periodNet : netMonthGrowth;
@@ -3177,13 +3174,13 @@ function renderGrowthCalendarPage() {
           ${chipBest ? `
           <div class="growth-stat-chip desktop-only">
             <span class="chip-label">Best ${periodLabel}</span>
-            <span class="chip-val pos">+${moneyEUR.format(Math.abs(chipBest.growth))}</span>
+            <span class="chip-val ${chipBest.growth >= 0 ? 'pos' : 'neg'}">${chipBest.growth >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(chipBest.growth))}</span>
           </div>
           ` : ''}
           ${chipWorst ? `
           <div class="growth-stat-chip desktop-only">
             <span class="chip-label">Worst ${periodLabel}</span>
-            <span class="chip-val neg">−${moneyEUR.format(Math.abs(chipWorst.growth))}</span>
+            <span class="chip-val ${chipWorst.growth >= 0 ? 'pos' : 'neg'}">${chipWorst.growth >= 0 ? '+' : '−'}${moneyEUR.format(Math.abs(chipWorst.growth))}</span>
           </div>
           ` : ''}
         </div>
