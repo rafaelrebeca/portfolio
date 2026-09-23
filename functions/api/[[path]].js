@@ -21,6 +21,57 @@ async function requireMember(request, env) { const user = await requireUser(requ
 async function requireAdmin(request, env) { const user = await requireUser(request, env); if (user.role !== 'admin') throw Object.assign(new Error('Administrator access required.'), { status: 403 }); return user; }
 const changed = result => result.meta?.changes > 0;
 
+// One-time-per-goal migration of the legacy `goals.sub1/sub2/sub3` columns into
+// the `subgoals` table. Runs on every goals read; goals whose sub-goal columns
+// are already null are skipped, so it is idempotent and cheap once migrated.
+// Sub-goals keep their original order via the inserted row order.
+async function migrateGoalSubgoals(env, userId) {
+  const { results } = await env.myd1db.prepare(
+    'SELECT id, sub1, sub2, sub3 FROM goals WHERE user_id = ? AND (sub1 IS NOT NULL OR sub2 IS NOT NULL OR sub3 IS NOT NULL)'
+  ).bind(userId).all();
+  if (!results.length) return;
+
+  const statements = [];
+  for (const goal of results) {
+    for (const value of [goal.sub1, goal.sub2, goal.sub3]) {
+      if (value === null || value === undefined) continue;
+      statements.push(
+        env.myd1db.prepare('INSERT INTO subgoals (user_id, goal_id, value) VALUES (?, ?, ?)').bind(userId, goal.id, Number(value))
+      );
+    }
+    statements.push(
+      env.myd1db.prepare('UPDATE goals SET sub1 = NULL, sub2 = NULL, sub3 = NULL WHERE id = ? AND user_id = ?').bind(goal.id, userId)
+    );
+  }
+  await env.myd1db.batch(statements);
+}
+
+// Sub-goal values for a goal, ordered by id so the user's original order is kept.
+async function goalSubgoals(env, goalId) {
+  const { results } = await env.myd1db.prepare('SELECT id, value FROM subgoals WHERE goal_id = ? ORDER BY id ASC').bind(goalId).all();
+  return results;
+}
+
+// Validate a submitted sub-goal list against the goal target. Returns an error
+// message or null. Mirrors the rules the legacy sub1/sub2/sub3 columns used:
+// debt goals (value 0) take negative sub-goals, positive goals take ascending
+// positive sub-goals below the target.
+function validateSubgoalValues(value, values) {
+  for (const v of values) {
+    if (!Number.isFinite(v)) return 'Sub-goals must be valid numbers.';
+  }
+  if (value === 0) {
+    if (values.some(v => v >= 0)) return 'For a debt-clearing goal, sub-goals must be negative.';
+    return null;
+  }
+  let prev = 0;
+  for (const v of values) {
+    if (v <= 0 || v >= value || v <= prev) return 'Sub-goals must be positive, less than the target, and in ascending order.';
+    prev = v;
+  }
+  return null;
+}
+
 // Current UTC timestamp in YYYYMMDDHH24MISS format (e.g. 20260815103045)
 function nowStamp() {
   const d = new Date();
@@ -400,11 +451,14 @@ export async function onRequest(context) {
 
     if (method === 'GET' && path === 'goals') {
       const user = await requireMember(request, env);
-      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, sub1, sub2, sub3, order_by, end_date FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
+      // Move any legacy sub1/sub2/sub3 values into the subgoals table before reading.
+      await migrateGoalSubgoals(env, user.id);
+      const { results } = await env.myd1db.prepare('SELECT id, goal_name, value, coin, order_by, end_date FROM goals WHERE user_id = ? ORDER BY order_by ASC, id ASC').bind(user.id).all();
       const items = [];
       for (const g of results) {
         const links = await env.myd1db.prepare('SELECT account_id FROM goal_link WHERE goal_id = ?').bind(g.id).all();
-        items.push({ ...g, account_ids: links.results.map(l => l.account_id) });
+        const subs = await goalSubgoals(env, g.id);
+        items.push({ ...g, subgoals: subs, account_ids: links.results.map(l => l.account_id) });
       }
       return json({ items });
     }
@@ -413,30 +467,15 @@ export async function onRequest(context) {
       const goalId = body.goal_id ? Number(body.goal_id) : null;
       const goalName = clean(body.goal_name), value = Number(body.value), coin = clean(body.coin) || 'USD';
       if (!goalName || goalName.length > 200 || !Number.isFinite(value) || value < 0) return fail('Provide a valid goal name and value.');
-      const sub1 = body.sub1 === null || body.sub1 === undefined || body.sub1 === '' ? null : Number(body.sub1);
-      const sub2 = body.sub2 === null || body.sub2 === undefined || body.sub2 === '' ? null : Number(body.sub2);
-      const sub3 = body.sub3 === null || body.sub3 === undefined || body.sub3 === '' ? null : Number(body.sub3);
-      const subs = [sub1, sub2, sub3];
+      // Sub-goals arrive as an ordered list; blank entries are dropped.
+      const subValues = (Array.isArray(body.subgoals) ? body.subgoals : [])
+        .filter(v => v !== null && v !== undefined && v !== '')
+        .map(Number);
       // Optional target date (YYYY-MM-DD). Empty/blank clears it.
       let endDate = body.end_date === null || body.end_date === undefined || body.end_date === '' ? null : clean(body.end_date);
       if (endDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return fail('Target date must be a valid date (YYYY-MM-DD).');
-      for (const s of subs) {
-        if (s !== null && !Number.isFinite(s)) return fail('Sub-goals must be valid numbers.');
-      }
-      if (value === 0) {
-        // Debt goal: sub-goals must be negative.
-        if (subs.some(s => s !== null && s >= 0)) return fail('For a debt-clearing goal, sub-goals must be negative.');
-      } else {
-        // Positive goal: sub-goals must be positive, < target, and ascending.
-        let prev = 0;
-        for (const s of subs) {
-          if (s === null) continue;
-          if (s <= 0 || s >= value || s <= prev) return fail('Sub-goals must be positive, less than the target, and in ascending order.');
-          prev = s;
-        }
-      }
-      if (sub2 !== null && sub1 === null) return fail('Sub-goal 2 requires Sub-goal 1 to be set.');
-      if (sub3 !== null && sub2 === null) return fail('Sub-goal 3 requires Sub-goal 2 to be set.');
+      const subError = validateSubgoalValues(value, subValues);
+      if (subError) return fail(subError);
       let accountIds = Array.isArray(body.account_ids) ? body.account_ids.map(Number).filter(Number.isInteger) : [];
       if (accountIds.length) {
         const placeholders = accountIds.map(() => '?').join(',');
@@ -446,19 +485,27 @@ export async function onRequest(context) {
       if (goalId && Number.isInteger(goalId)) {
         const existing = await env.myd1db.prepare('SELECT id FROM goals WHERE id = ? AND user_id = ?').bind(goalId, user.id).first();
         if (!existing) return fail('Goal not found.', 404);
-        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, sub1 = ?, sub2 = ?, sub3 = ?, end_date = ? WHERE id = ?').bind(goalName, value, coin, sub1, sub2, sub3, endDate, goalId).run();
+        await env.myd1db.prepare('UPDATE goals SET goal_name = ?, value = ?, coin = ?, end_date = ? WHERE id = ?').bind(goalName, value, coin, endDate, goalId).run();
         await env.myd1db.prepare('DELETE FROM goal_link WHERE goal_id = ?').bind(goalId).run();
         for (const aid of accountIds) {
           await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(goalId, aid).run();
+        }
+        // Replace the sub-goal list wholesale so removals take effect.
+        await env.myd1db.prepare('DELETE FROM subgoals WHERE goal_id = ? AND user_id = ?').bind(goalId, user.id).run();
+        for (const v of subValues) {
+          await env.myd1db.prepare('INSERT INTO subgoals (user_id, goal_id, value) VALUES (?, ?, ?)').bind(user.id, goalId, v).run();
         }
         return json({ id: goalId, ok: true });
       }
       const maxOrder = await env.myd1db.prepare('SELECT COALESCE(MAX(order_by), 0) AS m FROM goals WHERE user_id = ?').bind(user.id).first();
       const orderBy = body.order_by ?? (Number(maxOrder?.m || 0) + 1);
-      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, sub1, sub2, sub3, order_by, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, sub1, sub2, sub3, orderBy, endDate).run();
+      const result = await env.myd1db.prepare('INSERT INTO goals (user_id, goal_name, value, coin, order_by, end_date) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, goalName, value, coin, orderBy, endDate).run();
       const newId = result.meta.last_row_id;
       for (const aid of accountIds) {
         await env.myd1db.prepare('INSERT INTO goal_link (goal_id, account_id) VALUES (?, ?)').bind(newId, aid).run();
+      }
+      for (const v of subValues) {
+        await env.myd1db.prepare('INSERT INTO subgoals (user_id, goal_id, value) VALUES (?, ?, ?)').bind(user.id, newId, v).run();
       }
       return json({ id: newId }, 201);
     }

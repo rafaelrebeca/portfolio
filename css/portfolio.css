@@ -2473,6 +2473,40 @@ select {
   align-items: center;
 }
 
+.goal-subgoals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.goal-subgoal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goal-subgoal-row .goal-subgoal-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-subgoal-remove {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.goal-subgoal-remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.goal-subgoals-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .goal-add-account select {
   min-width: 0;
 }

@@ -149,3 +149,15 @@ CREATE TRIGGER IF NOT EXISTS trg_accounts_updated AFTER UPDATE OF provider_id, n
 FOR EACH ROW BEGIN
   UPDATE accounts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+CREATE TABLE subgoals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    goal_id INTEGER NOT NULL,
+    value REAL NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (goal_id) REFERENCES goals(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);

@@ -37,8 +37,8 @@ const guestData = {
     { coin: 'JPY', value: 149.50 }
   ],
   goals: [
-    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', sub1: 10000, sub2: 15000, sub3: null, account_ids: [1, 2], order_by: 1 },
-    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', sub1: null, sub2: null, sub3: null, account_ids: [3], order_by: 2 }
+    { id: 1, goal_name: 'Emergency Fund', value: 20000, coin: 'USD', subgoals: [{ id: 1, value: 10000 }, { id: 2, value: 15000 }], account_ids: [1, 2], order_by: 1 },
+    { id: 2, goal_name: 'Investment Growth', value: 50000, coin: 'USD', subgoals: [], account_ids: [3], order_by: 2 }
   ],
   users: []
 };
@@ -4807,7 +4807,7 @@ function goalOnTrackInfo(goal) {
 // 2. Normal goal (value > 0) with sub-goals -> segmented bar + global % label.
 // 3. Debt goal (value = 0) with sub-goals -> single bar with sub-goal tick marks + tooltips.
 function goalProgressHTML(g, current, target, currency) {
-  const subs = [g.sub1, g.sub2, g.sub3].filter(v => v !== null && v !== undefined && v !== '');
+  const subs = goalSubgoalValues(g);
   const hasSubs = subs.length > 0;
 
   // Debt clearing goal (target === 0)
@@ -4863,7 +4863,7 @@ function goalProgressHTML(g, current, target, currency) {
       </div>`;
   }
 
-  // Normal goal with sub-goals: segmented bar. Segments run 0->sub1->sub2->sub3->target.
+  // Normal goal with sub-goals: segmented bar. Segments run 0 -> each sub-goal -> target.
   const milestones = subs.concat(target);
   let prev = 0;
   const segments = milestones.map(end => {
@@ -5019,8 +5019,9 @@ function renderGoalStats() {
     const target = Number(g.value || 0);
     const current = goalCurrentValue(g);
     const isDebt = target === 0;
+    const firstSub = goalSubgoalValues(g)[0] || 0;
     const pct = isDebt
-      ? (current >= 0 ? 100 : Math.min(Math.abs(current) / Math.max(Math.abs(g.sub1 || 0), 1) * 100, 100))
+      ? (current >= 0 ? 100 : Math.min(Math.abs(current) / Math.max(Math.abs(firstSub), 1) * 100, 100))
       : (target > 0 ? Math.min((current / target) * 100, 100) : 0);
     return Math.max(pct, 0);
   };
@@ -6272,66 +6273,83 @@ function openGoalModal(goalId = null) {
     $('#goalEditId').value = g.id;
     $('#goalName').value = g.goal_name;
     $('#goalValue').value = g.value;
-    $('#goalSub1').value = g.sub1 ?? '';
-    $('#goalSub2').value = g.sub2 ?? '';
-    $('#goalSub3').value = g.sub3 ?? '';
     $('#goalCoin').value = g.coin || 'USD';
     $('#goalEndDate').value = g.end_date || '';
     goalSelectedAccounts = (g.account_ids || []).slice();
+    renderGoalSubgoalsList(goalSubgoalValues(g));
   } else {
     $('#goalModalTitle').textContent = 'New Goal';
     $('#goalEditId').value = '';
     $('#goalCoin').value = 'USD';
     $('#goalEndDate').value = '';
+    renderGoalSubgoalsList([]);
   }
-  updateGoalSubGating();
   renderGoalAccountsList();
   fillGoalAccountSelects();
   openModal('goalModalOverlay');
 }
 
-// Filter sub-goal input to only allow digits and a leading minus sign.
-function filterSubInput(input) {
-  if (!input) return;
-  let v = input.value;
-  v = v.replace(/[^0-9.-]/g, '');
-  v = v.replace(/(?!^)-/g, '');
-  v = v.replace(/(\..*)\./g, '$1');
-  if (v !== input.value) input.value = v;
+// Ordered sub-goal values for a goal. The API returns `subgoals` as rows from
+// the subgoals table; the legacy sub1/sub2/sub3 columns are still read as a
+// fallback so a goal renders correctly before the migration has run.
+function goalSubgoalValues(g) {
+  if (!g) return [];
+  if (Array.isArray(g.subgoals)) return g.subgoals.map(s => Number(s.value));
+  return [g.sub1, g.sub2, g.sub3].filter(v => v !== null && v !== undefined && v !== '');
 }
 
-function updateGoalSubGating() {
-  // No live restrictions while typing; only filter characters.
-  filterSubInput($('#goalSub1'));
-  filterSubInput($('#goalSub2'));
-  filterSubInput($('#goalSub3'));
+// Render the dynamic sub-goal rows in the goal modal. Each row is a value input
+// plus a remove button, so the user can add and delete as many as they want.
+function renderGoalSubgoalsList(values = null) {
+  const list = $('#goalSubgoalsList');
+  if (!list) return;
+  const current = values || [...list.querySelectorAll('.goal-subgoal-input')].map(i => i.value);
+  list.innerHTML = current.map((v, i) => `
+    <div class="goal-subgoal-row">
+      <input type="number" step="0.01" class="goal-subgoal-input" data-subgoal-index="${i}"
+        value="${v === null || v === undefined ? '' : esc(String(v))}" placeholder="Milestone ${i + 1}">
+      <button class="btn-sm icon-btn goal-subgoal-remove" type="button" data-remove-subgoal="${i}"
+        title="Remove sub-goal" aria-label="Remove sub-goal">✕</button>
+    </div>
+  `).join('');
+  updateGoalSubgoalsHint();
+}
+
+// Read the sub-goal values currently in the modal, in row order.
+function readGoalSubgoals() {
+  return [...document.querySelectorAll('#goalSubgoalsList .goal-subgoal-input')]
+    .map(input => (input.value === '' ? null : Number(input.value)));
+}
+
+// Explain the ordering rule that applies to the current target value.
+function updateGoalSubgoalsHint() {
+  const hint = $('#goalSubgoalsHint');
+  if (!hint) return;
+  const value = numeric($('#goalValue')?.value);
+  hint.textContent = value === 0
+    ? 'Debt-clearing goal: sub-goals must be negative.'
+    : 'Sub-goals must be positive, below the target, and in ascending order.';
 }
 
 // Validate sub-goals before saving. Returns an error message or null.
-function validateGoalSubs(value, sub1, sub2, sub3) {
-  const subs = [sub1, sub2, sub3];
-  const has = subs.map(s => s !== null && s !== undefined && s !== '');
-  if (!has[0] && !has[1] && !has[2]) return null;
+function validateGoalSubs(value, subs) {
+  const nums = (subs || []).filter(v => v !== null && v !== undefined && v !== '');
+  if (!nums.length) return null;
 
-  // Dependency chain: sub2 requires sub1, sub3 requires sub2.
-  if (has[1] && !has[0]) return 'Sub-goal 2 requires Sub-goal 1 to be set.';
-  if (has[2] && !has[1]) return 'Sub-goal 3 requires Sub-goal 2 to be set.';
-
-  const nums = subs.map(s => (s === null || s === undefined || s === '' ? null : Number(s)));
   for (const n of nums) {
-    if (n !== null && !Number.isFinite(n)) return 'Sub-goals must be valid numbers.';
+    if (!Number.isFinite(Number(n))) return 'Sub-goals must be valid numbers.';
   }
 
   if (value === 0) {
     // Debt goal: sub-goals must be negative.
-    if (nums.some(n => n !== null && n >= 0)) return 'For a debt-clearing goal, sub-goals must be negative.';
+    if (nums.some(n => Number(n) >= 0)) return 'For a debt-clearing goal, sub-goals must be negative.';
   } else {
-    // Positive goal: sub-goals must be positive, < target, and ascending (goal > sub3 > sub2 > sub1).
+    // Positive goal: sub-goals must be positive, < target, and ascending.
     let prev = 0;
     for (const n of nums) {
-      if (n === null) continue;
-      if (n <= 0 || n >= value || n <= prev) return 'Sub-goals must be positive, less than the target, and in ascending order (target > sub3 > sub2 > sub1).';
-      prev = n;
+      const num = Number(n);
+      if (num <= 0 || num >= value || num <= prev) return 'Sub-goals must be positive, less than the target, and in ascending order.';
+      prev = num;
     }
   }
   return null;
@@ -6897,9 +6915,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#dividendPeriodValue')?.addEventListener('change', renderDividends);
   $('#accountTypeSelect')?.addEventListener('change', toggleAccountFields);
   $('#goalProviderSelect')?.addEventListener('change', fillGoalAccountSelects);
-  $('#goalSub1')?.addEventListener('input', updateGoalSubGating);
-  $('#goalSub2')?.addEventListener('input', updateGoalSubGating);
-  $('#goalSub3')?.addEventListener('input', updateGoalSubGating);
+  // Sub-goals: add a row, remove a row, and keep the ordering hint in sync.
+  $('#addGoalSubgoalBtn')?.addEventListener('click', () => {
+    renderGoalSubgoalsList([...readGoalSubgoals(), null]);
+    $('#goalSubgoalsList .goal-subgoal-input:last-of-type')?.focus();
+  });
+  $('#goalSubgoalsList')?.addEventListener('click', event => {
+    const removeBtn = event.target.closest('[data-remove-subgoal]');
+    if (!removeBtn) return;
+    const values = readGoalSubgoals();
+    values.splice(Number(removeBtn.dataset.removeSubgoal), 1);
+    renderGoalSubgoalsList(values);
+  });
+  $('#goalValue')?.addEventListener('input', updateGoalSubgoalsHint);
   $('#addGoalAccountBtn')?.addEventListener('click', () => {
     const accountSelect = $('#goalAccountSelect');
     const accountId = Number(accountSelect?.value);
@@ -7306,14 +7334,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
     values.value = numeric(values.value);
-    values.sub1 = numeric(values.sub1);
-    values.sub2 = numeric(values.sub2);
-    values.sub3 = numeric(values.sub3);
+    values.subgoals = readGoalSubgoals().filter(v => v !== null && Number.isFinite(v));
     values.end_date = values.end_date || null;
     values.account_ids = goalSelectedAccounts.slice();
     const goalId = values.goal_id ? Number(values.goal_id) : null;
 
-    const subError = validateGoalSubs(values.value, values.sub1, values.sub2, values.sub3);
+    const subError = validateGoalSubs(values.value, values.subgoals);
     if (subError) {
       if (err) err.textContent = subError;
       return;
@@ -7326,16 +7352,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           g.goal_name = values.goal_name;
           g.value = values.value;
           g.coin = values.coin || 'USD';
-          g.sub1 = values.sub1;
-          g.sub2 = values.sub2;
-          g.sub3 = values.sub3;
+          g.subgoals = values.subgoals.map((v, i) => ({ id: i + 1, value: v }));
           g.end_date = values.end_date;
           g.account_ids = values.account_ids;
         }
       } else {
         const newId = Math.max(...guestData.goals.map(g => g.id), 0) + 1;
         const maxOrder = Math.max(...guestData.goals.map(g => g.order_by ?? 0), 0);
-        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', sub1: values.sub1, sub2: values.sub2, sub3: values.sub3, end_date: values.end_date, account_ids: values.account_ids, order_by: maxOrder + 1 });
+        guestData.goals.push({ id: newId, goal_name: values.goal_name, value: values.value, coin: values.coin || 'USD', subgoals: values.subgoals.map((v, i) => ({ id: i + 1, value: v })), end_date: values.end_date, account_ids: values.account_ids, order_by: maxOrder + 1 });
       }
       closeModal('goalModalOverlay');
       await loadData();
@@ -7797,16 +7821,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const id = Number(duplicateGoalBtn.dataset.duplicateGoal);
       const g = state.goals.find(item => item.id === id);
       if (!g) return;
+      const dupSubs = goalSubgoalValues(g);
       if (state.guest) {
         const newId = Math.max(...guestData.goals.map(x => x.id), 0) + 1;
         const maxOrder = Math.max(...guestData.goals.map(x => x.order_by ?? 0), 0);
-        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice(), order_by: maxOrder + 1 });
+        guestData.goals.push({ id: newId, goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', subgoals: dupSubs.map((v, i) => ({ id: i + 1, value: v })), account_ids: (g.account_ids || []).slice(), order_by: maxOrder + 1 });
         await loadData();
         toast('Goal duplicated.');
         return;
       }
       try {
-        await request('/goals', { method: 'POST', body: JSON.stringify({ goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', sub1: g.sub1 ?? null, sub2: g.sub2 ?? null, sub3: g.sub3 ?? null, account_ids: (g.account_ids || []).slice() }) });
+        await request('/goals', { method: 'POST', body: JSON.stringify({ goal_name: g.goal_name, value: g.value, coin: g.coin || 'USD', subgoals: dupSubs, account_ids: (g.account_ids || []).slice() }) });
         await loadData();
         toast('Goal duplicated.');
       } catch (err) {
