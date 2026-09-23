@@ -73,7 +73,8 @@ The worker uses these D1 tables:
 - `providers` — user-owned financial providers with type `bank`, `broker`, or `other`.
 - `accounts` — provider-owned accounts with type `loan`, `interest_account`, `bank_account`, or `asset_account`; balances use the account currency and loans may have a `finish_date` stored as `YYYYMMDD`.
 - `account_holdings` — holdings linked to either a platform asset or a personal asset, never both. The unique relationship is account + asset.
-- `goals` — user-owned targets with currency, optional `sub1`/`sub2`/`sub3` milestones, and `order_by`.
+- `goals` — user-owned targets with currency and `order_by`. The legacy `sub1`/`sub2`/`sub3` milestone columns still exist but are always null once migrated.
+- `subgoals` — a goal's milestones, one row per sub-goal with `user_id`, `goal_id`, and `value`. Order is the row `id`, so a goal can have any number of sub-goals. Both foreign keys cascade on delete and update.
 - `goal_link` — links goals to user-owned accounts.
 - `currency` — exchange rates relative to USD.
 - `update_story` — `what` and `when` timestamps for external data refreshes, currently used to avoid repeating the daily currency refresh.
@@ -144,7 +145,9 @@ Holdings accept platform or personal assets. Personal holdings are ownership-che
 | POST | `/api/goals/reorder` | Member | Persists a complete user-owned goal order from an ID array. |
 | DELETE | `/api/goals/{id}` | Member | Deletes an owned goal and renumbers remaining goals. |
 
-Goal validation enforces the dependency chain (`sub2` requires `sub1`, `sub3` requires `sub2`). Debt goals use negative milestones. Positive goals use positive, ascending milestones below the target.
+Sub-goals are stored in the `subgoals` table and submitted as an ordered `subgoals` array; the API replaces a goal's rows wholesale on update, so removals take effect. Validation requires debt goals (target 0) to use negative milestones, and positive goals to use positive, ascending milestones below the target. There is no fixed limit on how many sub-goals a goal may have.
+
+`GET /api/goals` runs `migrateGoalSubgoals()` before reading. It moves any non-null `goals.sub1`/`sub2`/`sub3` values into `subgoals` and nulls the columns, skipping goals that are already migrated, so it is idempotent and becomes a no-op once every goal has been converted.
 
 ### Admin and currency
 
@@ -271,7 +274,9 @@ The By Asset Type and Type by Account modes use the reusable `topNWithOthers(map
 
 ### Goals
 
-Goals can link to multiple accounts, contain up to three milestones, and be reordered with arrow controls. Positive goals use segmented progress bars; debt goals use a debt-cleared bar with milestone diamond markers. Goal Details and Goal Simulation reuse the same progress and account-value calculations. Goal History plots historical progress from snapshots.
+Goals can link to multiple accounts, hold any number of sub-goals, and be reordered with arrow controls. Positive goals use segmented progress bars; debt goals use a debt-cleared bar with milestone diamond markers. Goal Details and Goal Simulation reuse the same progress and account-value calculations. Goal History plots historical progress from snapshots.
+
+The create/edit modal manages sub-goals as a dynamic list: **+ Add Sub-goal** appends a row and each row has a ✕ button to remove it, so the user can add and delete as many as they want. A hint below the list states the rule for the current target value (negative for a debt goal, positive and ascending below the target otherwise). Sub-goals are read in row order and submitted as an ordered array.
 
 For goals whose linked accounts include both positive and negative values, the Goal History chart plots two dashed lines alongside the Progress (%) line: **Positive (%)** in green and **Negative (%)** in red. Each is that side's share of the goal's absolute total, so a goal with −100 and +50 reads 66.7% negative and 33.3% positive. The two lines sum to 100%. They are absent for goals that are entirely positive or entirely negative, and the chart legend appears only when these lines are present. Snapshots where the goal has no mixed split leave a gap in both lines.
 
