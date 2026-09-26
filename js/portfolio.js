@@ -6629,6 +6629,7 @@ function openLoanSimModal(accountId) {
   $('#loanSimEndDate').value = finishDateToInput(acc.finish_date);
   $('#loanSimAmount').value = '';
   $('#loanSimMonthlyAmount').value = '';
+  $('#loanSimFinalPayment').value = '';
   $('#loanSimResult').innerHTML = '';
   openModal('loanSimModalOverlay');
   runLoanSimulation();
@@ -6657,10 +6658,25 @@ function loanMonthsUntilDate(dateText) {
 }
 
 // Month-by-month evolution calculator for "keep term" scenario with extra monthly payments.
-function gerarEvolucaoComAmortizacaoMensal(capitalInicial, taxaAnual, amortizacaoInicial, amortizacaoMensal, mesesTotais) {
+//
+// Timing: the downpayment (`amortizacaoInicial`) and the monthly extra amortization
+// (`amortizacaoMensal`) are both applied AFTER that month's regular payment, never
+// before it or at the same time. So a 5000 downpayment on a 5000 loan does not settle
+// it on day one: month 1 charges interest on the full 5000 and takes the normal
+// payment, and only then is the downpayment deducted from what is left.
+//
+// When both extras are used, the monthly extra waits: it is skipped in month 1 and
+// starts in month 2, so the downpayment gets the first month to itself. Used on its
+// own, the monthly extra starts in month 1 like the downpayment does.
+//
+// `limitePagamentoFinal` is an optional balance threshold: once the balance after a
+// normal payment lands at or below it, the following month settles the loan in full
+// with a single final payment, so no further months or interest accrue.
+function gerarEvolucaoComAmortizacaoMensal(capitalInicial, taxaAnual, amortizacaoInicial, amortizacaoMensal, mesesTotais, limitePagamentoFinal = 0) {
   const taxaMensal = taxaAnual / 100 / 12;
   const linhas = [];
-  let saldo = Math.max(0, capitalInicial - amortizacaoInicial);
+  let saldo = Math.max(0, capitalInicial);
+  const limite = Number.isFinite(limitePagamentoFinal) && limitePagamentoFinal > 0 ? limitePagamentoFinal : 0;
 
   const dataRef = new Date();
   let anoRef = dataRef.getFullYear();
@@ -6668,6 +6684,7 @@ function gerarEvolucaoComAmortizacaoMensal(capitalInicial, taxaAnual, amortizaca
 
   const limiteMeses = 1200;
   let contador = 0;
+  let amortizacaoInicialPendente = Math.max(0, amortizacaoInicial);
 
   while (saldo > 0.005 && contador < limiteMeses && contador < mesesTotais) {
     contador += 1;
@@ -6679,26 +6696,67 @@ function gerarEvolucaoComAmortizacaoMensal(capitalInicial, taxaAnual, amortizaca
     const juros = saldoAnterior * taxaMensal;
     let prestacaoMesBase = loanPayment(saldoAnterior, taxaAnual, mesesRestantes).total;
     let amortizacaoPrestacao = prestacaoMesBase - juros;
-    let amortizacaoExtra = amortizacaoMensal > 0 ? amortizacaoMensal : 0;
+    let pagamentoFinal = false;
 
-    if (amortizacaoPrestacao + amortizacaoExtra >= saldoAnterior) {
-      amortizacaoPrestacao = Math.min(amortizacaoPrestacao, saldoAnterior);
-      amortizacaoExtra = Math.max(0, saldoAnterior - amortizacaoPrestacao);
+    // The regular payment can never exceed what is still owed.
+    if (amortizacaoPrestacao >= saldoAnterior) {
+      amortizacaoPrestacao = saldoAnterior;
       prestacaoMesBase = juros + amortizacaoPrestacao;
-      saldo = 0;
-    } else {
-      saldo = saldoAnterior - amortizacaoPrestacao - amortizacaoExtra;
+    }
+    saldo = saldoAnterior - amortizacaoPrestacao;
+
+    // Only now, after the regular payment, do the extra amortizations come off.
+    let amortizacaoExtra = 0;
+    if (amortizacaoInicialPendente > 0) {
+      amortizacaoExtra += amortizacaoInicialPendente;
+      amortizacaoInicialPendente = 0;
+    }
+    // With a downpayment in play the monthly extra sits out month 1 and starts in
+    // month 2; on its own it starts in month 1.
+    const mensalAtiva = amortizacaoMensal > 0 && !(contador === 1 && amortizacaoInicial > 0);
+    if (mensalAtiva) {
+      amortizacaoExtra += amortizacaoMensal;
+    }
+    if (amortizacaoExtra > saldo) {
+      amortizacaoExtra = saldo;
+    }
+    saldo -= amortizacaoExtra;
+
+    // The balance has reached the threshold, so settle the remainder next month.
+    if (saldo > 0.005 && limite > 0 && saldo <= limite) {
+      pagamentoFinal = true;
     }
 
     linhas.push({
       ano: anoRef,
       mes: mesRef + 1,
-      saldo: saldo,
+      saldo,
       prestacaoTotal: prestacaoMesBase + amortizacaoExtra,
       prestacaoBase: prestacaoMesBase,
-      juros: juros,
-      amortizacao: amortizacaoPrestacao + amortizacaoExtra
+      juros,
+      amortizacao: amortizacaoPrestacao + amortizacaoExtra,
+      pagamentoFinal
     });
+
+    // Emit the settling month: interest on the remaining balance plus the whole
+    // balance as principal, leaving nothing outstanding.
+    if (pagamentoFinal) {
+      contador += 1;
+      mesRef += 1;
+      if (mesRef > 11) { mesRef = 0; anoRef += 1; }
+      const jurosFinal = saldo * taxaMensal;
+      linhas.push({
+        ano: anoRef,
+        mes: mesRef + 1,
+        saldo: 0,
+        prestacaoTotal: saldo + jurosFinal,
+        prestacaoBase: saldo + jurosFinal,
+        juros: jurosFinal,
+        amortizacao: saldo,
+        pagamentoFinal: true
+      });
+      saldo = 0;
+    }
   }
 
   return linhas;
@@ -6718,16 +6776,21 @@ function runLoanSimulation() {
   const endDate = $('#loanSimEndDate').value;
   const amortization = Number($('#loanSimAmount').value || 0);
   const monthlyAmortization = Number($('#loanSimMonthlyAmount').value || 0);
+  const finalPaymentThreshold = Number($('#loanSimFinalPayment').value || 0);
   const months = loanMonthsUntilDate(endDate);
 
-  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || amortization < 0 || amortization > capital || monthlyAmortization < 0) {
+  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || amortization < 0 || amortization > capital || monthlyAmortization < 0 || finalPaymentThreshold < 0) {
     if (err) err.textContent = 'Check the values and choose a future date for the last payment.';
     result.innerHTML = '';
     return;
   }
 
   const current = loanPayment(capital, rate, months);
-  const newCapital = capital - amortization;
+  // The downpayment lands after the first regular payment, so the first month is
+  // charged on the full capital and only then is the downpayment deducted.
+  const firstMonthInterest = capital * (rate / 100 / 12);
+  const firstMonthPrincipal = Math.min(current.total - firstMonthInterest, capital);
+  const newCapital = Math.max(0, capital - firstMonthPrincipal - amortization);
   const keepTerm = loanPayment(newCapital, rate, months);
   const newTerm = loanRemainingTerm(newCapital, current.total, rate);
   const monthlyRate = rate / 100 / 12;
@@ -6750,7 +6813,7 @@ function runLoanSimulation() {
   const keepPaymentPrincipalPct = current.total > 0 ? Math.round((principalKeepPayment / current.total) * 100) : 0;
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const evolutionLines = gerarEvolucaoComAmortizacaoMensal(capital, rate, amortization, monthlyAmortization, months);
+  const evolutionLines = gerarEvolucaoComAmortizacaoMensal(capital, rate, amortization, monthlyAmortization, months, finalPaymentThreshold);
 
   const lastEvolutionLine = evolutionLines[evolutionLines.length - 1];
   const evolutionPayoffDateStr = lastEvolutionLine ? `${monthNames[lastEvolutionLine.mes - 1]} ${lastEvolutionLine.ano}` : '';
@@ -6758,6 +6821,22 @@ function runLoanSimulation() {
   const evolutionMonthsSaved = months - evolutionMonthsCount;
   const evolutionTotalInterest = evolutionLines.reduce((sum, line) => sum + line.juros, 0);
   const evolutionInterestSaved = interestCurrent - evolutionTotalInterest;
+
+  // Final-payment threshold: compare against the same run without it, so the
+  // summary shows what settling the tail early actually saves.
+  const hasFinalPayment = finalPaymentThreshold > 0 && evolutionLines.some(line => line.pagamentoFinal);
+  let finalPaymentSummary = null;
+  if (hasFinalPayment) {
+    const baselineLines = gerarEvolucaoComAmortizacaoMensal(capital, rate, amortization, monthlyAmortization, months, 0);
+    const baselineInterest = baselineLines.reduce((sum, line) => sum + line.juros, 0);
+    const finalLine = evolutionLines[evolutionLines.length - 1];
+    finalPaymentSummary = {
+      amount: finalLine.prestacaoTotal,
+      date: `${monthNames[finalLine.mes - 1]} ${finalLine.ano}`,
+      monthsSaved: baselineLines.length - evolutionLines.length,
+      interestSaved: baselineInterest - evolutionTotalInterest
+    };
+  }
 
   const newEndDateObj = new Date();
   newEndDateObj.setMonth(newEndDateObj.getMonth() + Math.round(newTerm));
@@ -6767,11 +6846,15 @@ function runLoanSimulation() {
   let tableRowsHtml = '';
   evolutionLines.forEach(line => {
     const isPaid = line.saldo <= 0.005;
+    const rowClass = line.pagamentoFinal ? ' class="loan-sim-final-row"' : '';
+    const balanceCell = line.pagamentoFinal
+      ? `<span class="loan-sim-final-tag">Last payment</span>`
+      : (isPaid ? 'Paid' : formatCurrency(line.saldo, coin));
     tableRowsHtml += `
-      <tr>
+      <tr${rowClass}>
         <td>${line.ano}</td>
         <td>${monthNames[line.mes - 1]}</td>
-        <td>${isPaid ? 'Paid' : formatCurrency(line.saldo, coin)}</td>
+        <td>${balanceCell}</td>
         <td>${formatCurrency(line.prestacaoTotal, coin)}</td>
         <td class="coluna-secundaria">${formatCurrency(line.prestacaoBase, coin)}</td>
         <td>${formatCurrency(line.juros, coin)}</td>
@@ -6834,6 +6917,15 @@ function runLoanSimulation() {
           <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Total Interest Saved</div>
           <div style="font-size:15px; font-weight:600; color:var(--accent); margin-top:2px;">${formatCurrency(evolutionInterestSaved > 0 ? evolutionInterestSaved : 0, coin)}</div>
         </div>
+        ${finalPaymentSummary ? `
+        <div style="background:var(--panel2); border:1px solid var(--accent); border-radius:8px; padding:10px 14px; flex:1; min-width:140px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Last Payment</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text); margin-top:2px;">${formatCurrency(finalPaymentSummary.amount, coin)}</div>
+          <div style="font-size:11px; color:var(--muted); margin-top:2px;">
+            ${finalPaymentSummary.date}${finalPaymentSummary.monthsSaved > 0 ? ` · ${finalPaymentSummary.monthsSaved} month${finalPaymentSummary.monthsSaved === 1 ? '' : 's'} earlier` : ''}${finalPaymentSummary.interestSaved > 0 ? ` · ${formatCurrency(finalPaymentSummary.interestSaved, coin)} interest saved` : ''}
+          </div>
+        </div>
+        ` : ''}
       </div>
       <div class="loan-sim-table-scroll">
         <table class="loan-sim-table">
