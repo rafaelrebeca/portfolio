@@ -6648,13 +6648,14 @@ function loanRemainingTerm(capital, monthlyPayment, annualRate) {
   return rate === 0 ? capital / monthlyPayment : -Math.log(1 - (rate * capital / monthlyPayment)) / Math.log(1 + rate);
 }
 
-// Whole months between today and the given end date (YYYY-MM-DD).
+// Number of monthly payments from the next calendar month through the end-date
+// month, inclusive. The schedule starts with next month's payment, so comparing
+// day-of-month here would incorrectly drop the final payment when the end date
+// falls earlier in the month than today's date.
 function loanMonthsUntilDate(dateText) {
   const today = new Date();
   const end = new Date(dateText + 'T12:00:00');
-  let months = (end.getFullYear() - today.getFullYear()) * 12 + end.getMonth() - today.getMonth();
-  if (end.getDate() < today.getDate()) months -= 1;
-  return months;
+  return (end.getFullYear() - today.getFullYear()) * 12 + end.getMonth() - today.getMonth();
 }
 
 // Month-by-month evolution calculator for "keep term" scenario with extra monthly payments.
