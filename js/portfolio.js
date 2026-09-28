@@ -6786,22 +6786,30 @@ function runLoanSimulation() {
   }
 
   const current = loanPayment(capital, rate, months);
-  // The downpayment lands after the first regular payment, so the first month is
-  // charged on the full capital and only then is the downpayment deducted.
+  // Pay month 1 as usual, then apply the optional downpayment. The comparison
+  // scenarios must only cover the months left after that first payment.
   const firstMonthInterest = capital * (rate / 100 / 12);
   const firstMonthPrincipal = Math.min(current.total - firstMonthInterest, capital);
-  const newCapital = Math.max(0, capital - firstMonthPrincipal - amortization);
-  const keepTerm = loanPayment(newCapital, rate, months);
-  const newTerm = loanRemainingTerm(newCapital, current.total, rate);
+  const balanceAfterFirstPayment = Math.max(0, capital - firstMonthPrincipal);
+  const appliedAmortization = Math.min(amortization, balanceAfterFirstPayment);
+  const newCapital = balanceAfterFirstPayment - appliedAmortization;
+  const remainingMonths = Math.max(0, months - 1);
+  const keepTerm = newCapital > 0 && remainingMonths > 0
+    ? loanPayment(newCapital, rate, remainingMonths)
+    : { interest: 0, principal: 0, total: 0 };
+  const remainingTermKeepPayment = newCapital > 0
+    ? loanRemainingTerm(newCapital, current.total, rate)
+    : 0;
+  const newTerm = 1 + remainingTermKeepPayment;
   const monthlyRate = rate / 100 / 12;
   const interestKeepPayment = newCapital * monthlyRate;
-  const principalKeepPayment = current.total - interestKeepPayment;
+  const principalKeepPayment = Math.min(Math.max(0, current.total - interestKeepPayment), newCapital);
   const interestCurrent = current.total * months - capital;
-  const interestKeepTerm = keepTerm.total * months - newCapital;
-  const interestTotalKeepPayment = current.total * newTerm - newCapital;
+  const interestKeepTerm = firstMonthInterest + (keepTerm.total * remainingMonths - newCapital);
+  const interestTotalKeepPayment = firstMonthInterest + (current.total * remainingTermKeepPayment - newCapital);
   const totalCurrent = current.total * months;
-  const totalKeepTerm = amortization + keepTerm.total * months;
-  const totalKeepPayment = amortization + current.total * newTerm;
+  const totalKeepTerm = current.total + appliedAmortization + keepTerm.total * remainingMonths;
+  const totalKeepPayment = current.total + appliedAmortization + current.total * remainingTermKeepPayment;
 
   const currentInterestPct = current.total > 0 ? Math.round((current.interest / current.total) * 100) : 0;
   const currentPrincipalPct = current.total > 0 ? Math.round((current.principal / current.total) * 100) : 0;
@@ -6841,7 +6849,7 @@ function runLoanSimulation() {
   const newEndDateObj = new Date();
   newEndDateObj.setMonth(newEndDateObj.getMonth() + Math.round(newTerm));
   const newEndDateStr = `${monthNames[newEndDateObj.getMonth()]} ${newEndDateObj.getFullYear()}`;
-  const monthsSavedStr = (months - newTerm).toFixed(1).replace(/\.0$/, '');
+  const monthsSavedStr = Math.max(0, months - newTerm).toFixed(1).replace(/\.0$/, '');
 
   let tableRowsHtml = '';
   evolutionLines.forEach(line => {
@@ -6884,14 +6892,14 @@ function runLoanSimulation() {
             <span class="detalhe-prestacao">${formatCurrency(keepTerm.interest, coin)} (${keepTermInterestPct}%) interest + ${formatCurrency(keepTerm.principal, coin)} (${keepTermPrincipalPct}%) amortization</span>
           </dd>
           <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestKeepTerm, coin)}</dd>
-          <dt>Total payments to end</dt><dd>${formatCurrency(keepTerm.total * months, coin)}</dd>
+          <dt>Total payments to end</dt><dd>${formatCurrency(current.total + keepTerm.total * remainingMonths, coin)}</dd>
           <dt>Total incl. amortization</dt><dd>${formatCurrency(totalKeepTerm, coin)}</dd>
         </dl>
       </section>
       <section class="loan-sim-section loan-sim-highlight">
         <h4>Amortize &amp; keep the payment</h4>
         <dl>
-          <dt>New estimated term</dt><dd>${newEndDateStr} (-${monthsSavedStr} months)</dd>
+          <dt>New estimated term</dt><dd>${newEndDateStr}${Number(monthsSavedStr) > 0 ? ` (-${monthsSavedStr} months)` : ''}</dd>
           <dt>New breakdown</dt><dd>${formatCurrency(interestKeepPayment, coin)} (${keepPaymentInterestPct}%) interest + ${formatCurrency(principalKeepPayment, coin)} (${keepPaymentPrincipalPct}%) amortization</dd>
           <dt>Total interest saved</dt><dd>${formatCurrency(interestCurrent - interestTotalKeepPayment, coin)}</dd>
           <dt>Total payments to end</dt><dd>${formatCurrency(current.total * newTerm, coin)}</dd>
