@@ -1514,6 +1514,34 @@
     </div>
   </div>
 
+  <!-- MODAL: Growth Calendar filters -->
+  <div class="modal-overlay" id="growthCalendarFiltersModalOverlay">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>⚙️ Advanced Calendar Filters</h3>
+        <button class="modal-close" type="button" id="closeGrowthCalendarFiltersBtn" title="Close and apply" aria-label="Close and apply">✕</button>
+      </div>
+      <p class="modal-copy">Choose one or more accounts and account types. When both are selected, an account must match both filters.</p>
+      <div class="growth-cal-filters growth-cal-filters-modal">
+        <div class="growth-cal-filter-field">
+          <label for="growthCalAccountFilter">Accounts</label>
+          <select id="growthCalAccountFilter" multiple size="6"
+            title="Hold Ctrl or Command to select multiple accounts"></select>
+        </div>
+        <div class="growth-cal-filter-field">
+          <label for="growthCalTypeFilter">Account types</label>
+          <select id="growthCalTypeFilter" multiple size="6"
+            title="Hold Ctrl or Command to select multiple account types"></select>
+        </div>
+      </div>
+      <div class="growth-cal-filter-modal-help">Use Ctrl/Command to select multiple values. Empty selections include all accounts or types.</div>
+      <div class="modal-actions">
+        <button class="btn-sm" type="button" id="growthCalClearFiltersBtn">Clear filters</button>
+        <button class="btn-sm btn-primary" type="button" id="growthCalApplyFiltersBtn">Apply filters</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Time Travel History (line chart of snapshots over time) -->
   <div class="modal-overlay" id="historyModalOverlay">
     <div class="modal" style="max-width:640px;">

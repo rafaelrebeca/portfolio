@@ -3139,6 +3139,86 @@ select {
   white-space: nowrap;
 }
 
+.growth-cal-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -4px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+}
+
+.growth-cal-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.growth-cal-filter-field label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.growth-cal-filter-field select {
+  min-width: 190px;
+  min-height: 76px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.growth-cal-filter-field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.growth-cal-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 2px;
+}
+
+.growth-cal-filter-help {
+  max-width: 190px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.growth-cal-filters-modal {
+  align-items: stretch;
+  margin: 0;
+}
+
+.growth-cal-filters-modal .growth-cal-filter-field {
+  flex: 1 1 220px;
+}
+
+.growth-cal-filters-modal .growth-cal-filter-field select {
+  width: 100%;
+  min-height: 132px;
+}
+
+.growth-cal-filter-modal-help {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .growth-cal-picker-hint {
   color: var(--muted);
   font-size: 13px;
@@ -3498,6 +3578,12 @@ select {
   font-weight: 700;
 }
 
+.growth-cal-picker-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .growth-cal-picker-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3523,6 +3609,30 @@ select {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.growth-cal-picker-year-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.growth-cal-picker-month .month-subtitle {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.growth-cal-picker-month.cal-picker-current .month-subtitle {
+  color: rgba(255, 255, 255, .82);
+}
+
+.growth-cal-picker-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
 }
 
 @media (max-width: 900px) {

@@ -769,6 +769,41 @@ function snapshotAssetAccountsValue(snapshot) {
   ), 0);
 }
 
+function growthCalendarFiltersActive(filters) {
+  return Boolean(filters?.accountIds?.size || filters?.accountTypes?.size);
+}
+
+function growthCalendarAccountMatches(account, filters) {
+  if (!account) return false;
+  if (filters?.accountIds?.size && !filters.accountIds.has(String(account.id))) return false;
+  if (filters?.accountTypes?.size && !filters.accountTypes.has(String(account.type || ''))) return false;
+  return true;
+}
+
+function snapshotGrowthValue(snapshot, filters, excludeAssets = false) {
+  if (!growthCalendarFiltersActive(filters)) {
+    const globalValue = Number(snapshot?.data?.globalValue || 0);
+    return excludeAssets ? globalValue - snapshotAssetAccountsValue(snapshot) : globalValue;
+  }
+  return (snapshot?.data?.accounts || []).reduce((sum, account) => {
+    if (!growthCalendarAccountMatches(account, filters)) return sum;
+    if (excludeAssets && account.type === 'asset_account') return sum;
+    return sum + Number(account.valueEur || 0);
+  }, 0);
+}
+
+function liveGrowthValue(filters, excludeAssets = false) {
+  if (!growthCalendarFiltersActive(filters)) {
+    const liveValue = totalPortfolioValue();
+    return excludeAssets ? liveValue - liveAssetAccountsValue() : liveValue;
+  }
+  return state.accounts.reduce((sum, account) => {
+    if (!growthCalendarAccountMatches(account, filters)) return sum;
+    if (excludeAssets && account.type === 'asset_account') return sum;
+    return sum + accountValue(account, true);
+  }, 0);
+}
+
 // Growth of a value against the previous value, as an absolute and a percentage.
 function growthPair(value, prevValue) {
   const growth = value - prevValue;
@@ -784,7 +819,7 @@ function growthPair(value, prevValue) {
 //   globalValueExAssets, prevGlobalValueExAssets, growthExAssets, percentGrowthExAssets }
 // The `*ExAssets` fields exclude asset accounts, so the Calendar can switch
 // between the two views without recalculating.
-function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
+function calculateSnapshotDailyGrowths(snapshots = timeTravelList, filters = null) {
   const map = new Map();
   if (!snapshots || !snapshots.length) return map;
 
@@ -795,8 +830,8 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
 
   for (let i = 0; i < valid.length; i++) {
     const s = valid[i];
-    const val = Number(s.data.globalValue || 0);
-    const valExAssets = val - snapshotAssetAccountsValue(s);
+    const val = snapshotGrowthValue(s, filters);
+    const valExAssets = snapshotGrowthValue(s, filters, true);
     const date = simulationSnapshotDate(s);
     if (i === 0) {
       map.set(s.day, {
@@ -816,8 +851,8 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
       });
     } else {
       const prev = valid[i - 1];
-      const prevVal = Number(prev.data.globalValue || 0);
-      const prevValExAssets = prevVal - snapshotAssetAccountsValue(prev);
+      const prevVal = snapshotGrowthValue(prev, filters);
+      const prevValExAssets = snapshotGrowthValue(prev, filters, true);
       map.set(s.day, {
         day: s.day,
         date,
@@ -841,10 +876,10 @@ function calculateSnapshotDailyGrowths(snapshots = timeTravelList) {
   const today = todayDayString();
   if (!map.has(today) && valid.length > 0 && state.accounts.length > 0) {
     const last = valid[valid.length - 1];
-    const liveVal = totalPortfolioValue();
-    const liveValExAssets = liveVal - liveAssetAccountsValue();
-    const prevVal = Number(last.data.globalValue || 0);
-    const prevValExAssets = prevVal - snapshotAssetAccountsValue(last);
+    const liveVal = liveGrowthValue(filters);
+    const liveValExAssets = liveGrowthValue(filters, true);
+    const prevVal = snapshotGrowthValue(last, filters);
+    const prevValExAssets = snapshotGrowthValue(last, filters, true);
     map.set(today, {
       day: today,
       date: new Date(),
@@ -873,6 +908,16 @@ function getSnapshotDailyGrowthMap() {
     state.snapshotDailyGrowthsDirty = false;
   }
   return state.snapshotDailyGrowths;
+}
+
+function getGrowthCalendarDailyGrowthMap() {
+  const filters = {
+    accountIds: growthCalendarAccountFilter,
+    accountTypes: growthCalendarTypeFilter
+  };
+  return growthCalendarFiltersActive(filters)
+    ? calculateSnapshotDailyGrowths(timeTravelList, filters)
+    : getSnapshotDailyGrowthMap();
 }
 
 function invalidateSnapshotDailyGrowths() {
@@ -1160,6 +1205,16 @@ let growthCalendarPicker = false; // whether the full page growth calendar is sh
 // Whether the full page growth calendar includes asset accounts in daily growth.
 // 'all' counts every account; 'exAssets' excludes asset accounts.
 let growthCalendarAssetMode = localStorage.getItem('portfolio_growth_calendar_asset_mode') === 'exAssets' ? 'exAssets' : 'all';
+function readGrowthCalendarFilter(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return new Set(Array.isArray(value) ? value.map(String) : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+let growthCalendarAccountFilter = readGrowthCalendarFilter('portfolio_growth_calendar_accounts');
+let growthCalendarTypeFilter = readGrowthCalendarFilter('portfolio_growth_calendar_account_types');
 // Granularity of the full page growth calendar: 'month' (one cell per day),
 // 'year' (one card per month) or 'allTime' (one card per year).
 let growthCalendarViewMode = ['year', 'allTime'].includes(localStorage.getItem('portfolio_growth_calendar_view_mode'))
@@ -1232,6 +1287,56 @@ function historyLineOptions(labels) {
       }
     }
   };
+}
+
+function growthCalendarFilterOptions() {
+  const accounts = new Map();
+  const types = new Map();
+  const addAccount = account => {
+    if (!account || account.id === undefined || account.id === null) return;
+    const id = String(account.id);
+    accounts.set(id, { id, name: account.name || `Account ${id}`, type: account.type || '' });
+    if (account.type) types.set(String(account.type), accountTypeLabel(account.type));
+  };
+  state.accounts.forEach(addAccount);
+  timeTravelList.forEach(snapshot => (snapshot.data?.accounts || []).forEach(addAccount));
+  return {
+    accounts: [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    types: [...types.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }))
+  };
+}
+
+function renderGrowthCalendarFilterModal(filterOptions) {
+  const accountSelect = $('#growthCalAccountFilter');
+  const typeSelect = $('#growthCalTypeFilter');
+  if (!accountSelect || !typeSelect) return;
+  accountSelect.innerHTML = filterOptions.accounts.length
+    ? filterOptions.accounts.map(account => `<option value="${esc(account.id)}"${growthCalendarAccountFilter.has(account.id) ? ' selected' : ''}>${esc(account.name)}</option>`).join('')
+    : '<option disabled>No accounts available</option>';
+  typeSelect.innerHTML = filterOptions.types.length
+    ? filterOptions.types.map(type => `<option value="${esc(type.value)}"${growthCalendarTypeFilter.has(type.value) ? ' selected' : ''}>${esc(type.label)}</option>`).join('')
+    : '<option disabled>No account types available</option>';
+}
+
+function updateGrowthCalendarFilter(select, target, storageKey) {
+  target.clear();
+  [...select.selectedOptions].forEach(option => target.add(String(option.value)));
+  localStorage.setItem(storageKey, JSON.stringify([...target]));
+}
+
+function applyGrowthCalendarFilters() {
+  closeModal('growthCalendarFiltersModalOverlay');
+  renderGrowthCalendarPage();
+}
+
+function clearGrowthCalendarFilters() {
+  growthCalendarAccountFilter.clear();
+  growthCalendarTypeFilter.clear();
+  localStorage.removeItem('portfolio_growth_calendar_accounts');
+  localStorage.removeItem('portfolio_growth_calendar_account_types');
+  closeModal('growthCalendarFiltersModalOverlay');
+  renderGrowthCalendarPage();
 }
 
 // Reduce a long growth-bar series into chronological buckets. Growth is summed
@@ -2968,7 +3073,9 @@ function renderGrowthCalendarPage() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const monthPrefix = `${year}${String(month + 1).padStart(2, '0')}`;
   const todayStr = todayDayString();
-  const dailyGrowths = getSnapshotDailyGrowthMap();
+  const dailyGrowths = getGrowthCalendarDailyGrowthMap();
+  const filterOptions = growthCalendarFilterOptions();
+  renderGrowthCalendarFilterModal(filterOptions);
 
   // Pick the growth variant selected by the asset-accounts toggle.
   const excludeAssets = growthCalendarAssetMode === 'exAssets';
@@ -2979,6 +3086,7 @@ function renderGrowthCalendarPage() {
   const viewMode = growthCalendarViewMode;
   const isAllTime = viewMode === 'allTime';
   const isYearView = viewMode === 'year';
+  const pickerYearSummaries = isYearView ? buildGrowthYearSummaries(dailyGrowths, excludeAssets) : [];
 
   // The picker only makes sense when a specific month or year is being shown.
   if (growthCalendarPicker && isAllTime) growthCalendarPicker = false;
@@ -2987,13 +3095,25 @@ function renderGrowthCalendarPage() {
     container.innerHTML = `
       <div class="growth-cal-card growth-cal-picker-view">
         <div class="growth-cal-picker-head">
+          ${isYearView ? '<span class="growth-cal-picker-title">Years with data</span>' : `
           <button class="btn-sm" type="button" id="growthCalPickerYearPrev" title="Previous year">←</button>
           <span class="growth-cal-picker-year">${esc(String(year))}</span>
           <button class="btn-sm" type="button" id="growthCalPickerYearNext" title="Next year">→</button>
+          `}
           <button class="btn-sm" type="button" id="growthCalPickerClose" style="margin-left: auto;">Done</button>
         </div>
         ${isYearView ? `
-        <div class="growth-cal-picker-hint">Showing every month of ${esc(String(year))}.</div>
+        <div class="growth-cal-picker-hint">Choose a year with recorded growth.</div>
+        <div class="growth-cal-picker-grid growth-cal-picker-year-grid">
+          ${pickerYearSummaries.length
+            ? pickerYearSummaries.map(summary => `
+              <button class="growth-cal-picker-month ${summary.year === year ? 'cal-picker-current' : ''}" type="button" data-pick-growth-year="${summary.year}">
+                <span class="month-title">${summary.year}</span>
+                <span class="month-subtitle">${summary.recordedDays} day${summary.recordedDays === 1 ? '' : 's'}</span>
+              </button>
+            `).join('')
+            : '<div class="growth-cal-picker-empty">No years with recorded growth.</div>'}
+        </div>
         ` : `
         <div class="growth-cal-picker-grid">
           ${monthNames.map((name, i) => `
@@ -3021,6 +3141,13 @@ function renderGrowthCalendarPage() {
     container.querySelectorAll('[data-pick-growth-month]').forEach(btn => {
       btn.addEventListener('click', () => {
         growthCalendarMonth = { year, month: Number(btn.dataset.pickGrowthMonth) };
+        growthCalendarPicker = false;
+        renderGrowthCalendarPage();
+      });
+    });
+    container.querySelectorAll('[data-pick-growth-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        growthCalendarMonth = { year: Number(btn.dataset.pickGrowthYear), month };
         growthCalendarPicker = false;
         renderGrowthCalendarPage();
       });
@@ -3253,6 +3380,8 @@ function renderGrowthCalendarPage() {
             title="${excludeAssets ? 'Asset accounts are excluded from growth. Click to include them.' : 'Asset accounts are included in growth. Click to exclude them.'}">
             ${excludeAssets ? 'Assets excluded' : 'Assets included'}
           </button>
+          <button class="btn-sm" type="button" id="growthCalAdvancedFiltersBtn"
+            title="Filter growth by account and account type">Advanced filters${growthCalendarFiltersActive({ accountIds: growthCalendarAccountFilter, accountTypes: growthCalendarTypeFilter }) ? ' • active' : ''}</button>
         </div>
 
         <div class="growth-cal-stats">
@@ -3314,6 +3443,7 @@ function renderGrowthCalendarPage() {
     localStorage.setItem('portfolio_growth_calendar_asset_mode', growthCalendarAssetMode);
     renderGrowthCalendarPage();
   });
+  $('#growthCalAdvancedFiltersBtn')?.addEventListener('click', () => openModal('growthCalendarFiltersModalOverlay'));
   $('#growthCalTodayBtn')?.addEventListener('click', () => {
     const cur = new Date();
     growthCalendarMonth = { year: cur.getUTCFullYear(), month: cur.getUTCMonth() };
@@ -7217,6 +7347,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#cleanMonthsBtn')?.addEventListener('click', () => cleanSnapshots('months'));
   $('#cleanYearsBtn')?.addEventListener('click', () => cleanSnapshots('years'));
   $('#closeCalendarBtn')?.addEventListener('click', () => closeModal('calendarModalOverlay'));
+  $('#closeGrowthCalendarFiltersBtn')?.addEventListener('click', applyGrowthCalendarFilters);
+  $('#growthCalAccountFilter')?.addEventListener('change', event => {
+    updateGrowthCalendarFilter(event.target, growthCalendarAccountFilter, 'portfolio_growth_calendar_accounts');
+  });
+  $('#growthCalTypeFilter')?.addEventListener('change', event => {
+    updateGrowthCalendarFilter(event.target, growthCalendarTypeFilter, 'portfolio_growth_calendar_account_types');
+  });
+  $('#growthCalApplyFiltersBtn')?.addEventListener('click', applyGrowthCalendarFilters);
+  $('#growthCalClearFiltersBtn')?.addEventListener('click', clearGrowthCalendarFilters);
   $('#maximizeHistoryBtn')?.addEventListener('click', toggleHistoryMaximize);
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
