@@ -342,9 +342,11 @@ The History modal uses the in-memory snapshot list and offers:
 - **By Provider** — one line per provider.
 - **By Account** — one line per account reconstructed from each snapshot's `accounts` array.
 - **By Account Type** — one line per account type (Bank Account, Interest Account, Asset Account, Loan), summing each snapshot's `accounts` values by `account.type` via `accountTypeLabel()`.
-- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly, Yearly, or YTD zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar; with Current Month zoom each bar is a single day's change. The first snapshot has no comparison and is left blank when using All zoom. These values come from the shared snapshot daily growth cache, so they match the Calendar page for the same period.
+- **By Growth** — a bar for each snapshot's change in Global Value versus the previous snapshot; positive growth is green and negative growth is red. With Monthly, Yearly, or YTD zoom, all snapshot-to-snapshot changes within each period are summed into that period's bar; with Current Month zoom each bar is a single day's change. When the selected series exceeds 30 points, contiguous points are grouped into 30 chronological buckets and their growth values are summed. The first snapshot has no comparison and is left blank when using All zoom unless it is grouped with later points. These values come from the shared snapshot daily growth cache, so they match the Calendar page for the same period.
 
 By Account, By Account Type, By Type, and By Provider use top-9-plus-**Others** grouping. The nine categories with the largest aggregate values are shown individually; all remaining category values are summed into an Others line for each date. The x-axis is displayed oldest to newest.
+
+The Snapshot History line charts and focused Account History line chart use Chart.js LTTB decimation when more than 90 points are available. Each rendered line is capped at 90 points while LTTB preserves the first and last chronological data point; the full snapshot data remains available for zooming and rebuilding the chart. The By Growth bar chart uses semantic 30-bucket aggregation instead of line decimation when its selected series exceeds 30 points.
 
 All three history charts — Snapshot History, Account History, and Goal History — share the same five zoom levels, applied by `applyHistoryZoom()`:
 

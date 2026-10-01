@@ -1177,6 +1177,99 @@ let goalHistoryData = null; // full snapshot data loaded for the goal history ch
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
 let goalHistoryGoalId = null; // the goal id whose history is being shown
 
+const HISTORY_LINE_MAX_POINTS = 90;
+
+// Chart.js decimation requires parsed:false and a linear/time x-axis. Keep the
+// source index as x so the date labels can still be rendered by the tick and
+// tooltip callbacks. LTTB keeps the first and last item from this sorted input.
+function historyLinePoints(values) {
+  return values.reduce((points, value, index) => {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) return points;
+    points.push({ x: index, y: Number(value) });
+    return points;
+  }, []);
+}
+
+function historyLineOptions(labels) {
+  const lastIndex = Math.max(0, labels.length - 1);
+  return {
+    animation: false,
+    parsing: false,
+    normalized: true,
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    plugins: {
+      decimation: {
+        enabled: true,
+        algorithm: 'lttb',
+        samples: HISTORY_LINE_MAX_POINTS,
+        threshold: HISTORY_LINE_MAX_POINTS
+      },
+      tooltip: {
+        callbacks: {
+          title: contexts => {
+            const index = Math.round(Number(contexts[0]?.parsed?.x ?? 0));
+            return labels[index] || '';
+          },
+          label: privacyMoneyTooltipLabel
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'linear',
+        min: 0,
+        max: lastIndex,
+        ticks: {
+          maxTicksLimit: 10,
+          color: '#e6ebf5',
+          callback: value => labels[Math.round(Number(value))] || ''
+        },
+        grid: { color: 'rgba(255,255,255,.05)' }
+      },
+      y: {
+        ticks: { color: '#e6ebf5', callback: privacyMoneyTick },
+        grid: { color: 'rgba(255,255,255,.05)' }
+      }
+    }
+  };
+}
+
+// Reduce a long growth-bar series into chronological buckets. Growth is summed
+// rather than sampled so the chart keeps its financial meaning at lower detail.
+function bucketHistoryGrowth(points, values, maxBuckets = 30) {
+  if (points.length <= maxBuckets) return null;
+  const bucketCount = Math.min(maxBuckets, points.length);
+  const labels = [];
+  const bucketValues = [];
+  const counts = [];
+
+  for (let bucket = 0; bucket < bucketCount; bucket++) {
+    const start = Math.floor(bucket * points.length / bucketCount);
+    const end = Math.floor((bucket + 1) * points.length / bucketCount);
+    let total = 0;
+    let hasGrowth = false;
+    for (let index = start; index < end; index++) {
+      const value = values[index];
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) continue;
+      total += Number(value);
+      hasGrowth = true;
+    }
+    const startLabel = formatSnapshotDay(points[start].day);
+    const endLabel = formatSnapshotDay(points[end - 1].day);
+    labels.push(startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`);
+    bucketValues.push(hasGrowth ? total : null);
+    counts.push(end - start);
+  }
+
+  return { labels, values: bucketValues, counts };
+}
+
+function historyGrowthTooltipLabel(context) {
+  const label = privacyMoneyTooltipLabel(context);
+  const count = context.dataset?._growthBucketCounts?.[context.dataIndex];
+  return count > 1 ? `${label} (${count} snapshots)` : label;
+}
+
 function renderDashboardAccounts() {
   const container = $('#dashboardAccounts');
   if (!container) return;
@@ -3577,29 +3670,35 @@ function renderHistoryChart() {
   const points = applyHistoryZoom(historyData, zoom).slice().reverse(); // oldest -> newest for the x-axis
   const labels = points.map(p => formatSnapshotDay(p.day));
   const growthValues = chartType === 'byGrowth' ? buildHistoryGrowthValues(points, zoom) : null;
-  const datasets = buildHistoryDatasets(points, chartType, growthValues);
+  const growthBuckets = chartType === 'byGrowth' ? bucketHistoryGrowth(points, growthValues, 30) : null;
+  const chartLabels = growthBuckets ? growthBuckets.labels : labels;
+  const datasets = buildHistoryDatasets(points, chartType, growthBuckets ? growthBuckets.values : growthValues);
+  if (growthBuckets && datasets[0]) datasets[0]._growthBucketCounts = growthBuckets.counts;
   if (chartWrap) chartWrap.style.display = 'block';
   if (empty) empty.style.display = 'none';
 
   const ctx = document.getElementById('historyChart')?.getContext('2d');
   if (!ctx) return;
   if (historyChartInstance) historyChartInstance.destroy();
+  const isLineChart = chartType !== 'byGrowth';
+  const lineOptions = isLineChart ? historyLineOptions(chartLabels) : null;
   historyChartInstance = new Chart(ctx, {
     type: chartType === 'byGrowth' ? 'bar' : 'line',
-    data: { labels, datasets },
+    data: { labels: chartLabels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
+      interaction: lineOptions ? lineOptions.interaction : { mode: 'index', intersect: false },
+      ...(lineOptions ? { animation: lineOptions.animation } : {}),
+      ...(lineOptions ? { parsing: lineOptions.parsing, normalized: lineOptions.normalized } : {}),
+      plugins: lineOptions ? {
+        ...lineOptions.plugins,
+        legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } }
+      } : {
         legend: { display: datasets.length > 1, labels: { color: '#e6ebf5' } },
-        tooltip: {
-          callbacks: {
-            label: privacyMoneyTooltipLabel
-          }
-        }
+        tooltip: { callbacks: { label: historyGrowthTooltipLabel } }
       },
-      scales: {
+      scales: lineOptions ? lineOptions.scales : {
         x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
         y: {
           ticks: { color: '#e6ebf5', callback: privacyMoneyTick },
@@ -3628,16 +3727,16 @@ function buildHistoryDatasets(points, chartType, growthValues = null) {
   }
   if (chartType === 'global') {
     const datasets = [
-      { label: 'Global Value', data: points.map(p => p.data.globalValue ?? 0), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false }
+      { label: 'Global Value', data: historyLinePoints(points.map(p => p.data.globalValue ?? 0)), borderColor: colors[0], backgroundColor: colors[0], tension: 0.3, fill: false }
     ];
     // Assets and Liabilities lines are only plotted when the snapshots actually contain that side.
     const hasAssets = points.some(p => Number(p.data.debit || 0) !== 0);
     const hasLiabilities = points.some(p => Number(p.data.credit || 0) !== 0);
     if (hasAssets) {
-      datasets.push({ label: 'Assets', data: points.map(p => p.data.debit ?? 0), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false });
+      datasets.push({ label: 'Assets', data: historyLinePoints(points.map(p => p.data.debit ?? 0)), borderColor: colors[1], backgroundColor: colors[1], tension: 0.3, fill: false });
     }
     if (hasLiabilities) {
-      datasets.push({ label: 'Liabilities', data: points.map(p => p.data.credit ?? 0), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false });
+      datasets.push({ label: 'Liabilities', data: historyLinePoints(points.map(p => p.data.credit ?? 0)), borderColor: colors[2], backgroundColor: colors[2], tension: 0.3, fill: false });
     }
     return datasets;
   }
@@ -3667,9 +3766,9 @@ function buildHistoryDatasets(points, chartType, growthValues = null) {
   const categories = top.labels;
   return categories.map((cat, i) => ({
     label: cat,
-    data: categoryMaps.map(map => cat === 'Others'
+    data: historyLinePoints(categoryMaps.map(map => cat === 'Others'
       ? top.others.reduce((sum, other) => sum + Number(map[other] || 0), 0)
-      : Number(map[cat] || 0)),
+      : Number(map[cat] || 0))),
     borderColor: colors[i % colors.length],
     backgroundColor: colors[i % colors.length],
     tension: 0.3,
@@ -3755,13 +3854,14 @@ function renderAccountHistoryChart() {
   const ctx = document.getElementById('accountHistoryChart')?.getContext('2d');
   if (!ctx) return;
   if (accountHistoryChartInstance) accountHistoryChartInstance.destroy();
+  const chartOptions = historyLineOptions(labels);
   accountHistoryChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [{
         label: 'Value (EUR)',
-        data: values,
+        data: historyLinePoints(values),
         borderColor: CHART_COLORS[0],
         backgroundColor: CHART_COLORS[0],
         tension: 0.3,
@@ -3772,12 +3872,12 @@ function renderAccountHistoryChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
-      scales: {
-        x: { ticks: { maxTicksLimit: 10, color: '#e6ebf5' }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.05)' } }
-      }
+      animation: chartOptions.animation,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      parsing: chartOptions.parsing,
+      normalized: chartOptions.normalized,
+      plugins: { ...chartOptions.plugins, legend: { display: false } },
+      scales: chartOptions.scales
     }
   });
 }
@@ -5250,9 +5350,10 @@ function privacyMoneyTick(value) {
 
 function privacyMoneyTooltipLabel(context) {
   const label = context.dataset?.label || context.label || 'Value';
+  const value = context.parsed?.y ?? (context.raw && typeof context.raw === 'object' ? context.raw.y : context.raw);
   return blurActive()
     ? `${label}: hidden`
-    : `${label}: ${moneyEUR.format(Number(context.raw || 0))}`;
+    : `${label}: ${moneyEUR.format(Number(value || 0))}`;
 }
 
 function configureChartPrivacyDefaults() {
