@@ -1232,7 +1232,7 @@ let goalHistoryData = null; // full snapshot data loaded for the goal history ch
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
 let goalHistoryGoalId = null; // the goal id whose history is being shown
 
-const HISTORY_LINE_MAX_POINTS = 90;
+const HISTORY_LINE_MAX_POINTS = 30;
 
 // Chart.js decimation requires parsed:false and a linear/time x-axis. Keep the
 // source index as x so the date labels can still be rendered by the tick and
@@ -3106,13 +3106,13 @@ function renderGrowthCalendarPage() {
         <div class="growth-cal-picker-hint">Choose a year with recorded growth.</div>
         <div class="growth-cal-picker-grid growth-cal-picker-year-grid">
           ${pickerYearSummaries.length
-            ? pickerYearSummaries.map(summary => `
+          ? pickerYearSummaries.map(summary => `
               <button class="growth-cal-picker-month ${summary.year === year ? 'cal-picker-current' : ''}" type="button" data-pick-growth-year="${summary.year}">
                 <span class="month-title">${summary.year}</span>
                 <span class="month-subtitle">${summary.recordedDays} day${summary.recordedDays === 1 ? '' : 's'}</span>
               </button>
             `).join('')
-            : '<div class="growth-cal-picker-empty">No years with recorded growth.</div>'}
+          : '<div class="growth-cal-picker-empty">No years with recorded growth.</div>'}
         </div>
         ` : `
         <div class="growth-cal-picker-grid">
@@ -3354,6 +3354,10 @@ function renderGrowthCalendarPage() {
   const navLabelTitle = isAllTime
     ? 'Showing every year with data'
     : (isYearView ? 'Click to choose year' : 'Click to choose month and year');
+  const filtersActive = growthCalendarFiltersActive({
+    accountIds: growthCalendarAccountFilter,
+    accountTypes: growthCalendarTypeFilter
+  });
 
   container.innerHTML = `
     <div class="growth-cal-card">
@@ -3380,8 +3384,11 @@ function renderGrowthCalendarPage() {
             title="${excludeAssets ? 'Asset accounts are excluded from growth. Click to include them.' : 'Asset accounts are included in growth. Click to exclude them.'}">
             ${excludeAssets ? 'Assets excluded' : 'Assets included'}
           </button>
-          <button class="btn-sm" type="button" id="growthCalAdvancedFiltersBtn"
-            title="Filter growth by account and account type">Advanced filters${growthCalendarFiltersActive({ accountIds: growthCalendarAccountFilter, accountTypes: growthCalendarTypeFilter }) ? ' • active' : ''}</button>
+          <button class="btn-sm icon-btn growth-cal-filter-btn${filtersActive ? ' active' : ''}" type="button" id="growthCalAdvancedFiltersBtn"
+            aria-label="Advanced calendar filters" aria-pressed="${filtersActive ? 'true' : 'false'}"
+            title="${filtersActive ? 'Advanced filters active' : 'Advanced calendar filters'}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 4.5h19L14.5 12v7.5l-5 2V12L2.5 4.5z"></path></svg>
+          </button>
         </div>
 
         <div class="growth-cal-stats">

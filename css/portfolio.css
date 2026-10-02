@@ -3139,6 +3139,51 @@ select {
   white-space: nowrap;
 }
 
+.growth-cal-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+}
+
+.growth-cal-filter-btn svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linejoin: miter;
+  stroke-width: .8;
+}
+
+.growth-cal-filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, .18);
+}
+
+.growth-cal-filter-btn.active:hover {
+  background: #3d78e6;
+  border-color: #3d78e6;
+  color: #fff;
+}
+
+.growth-cal-clear-filter-btn {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.growth-cal-clear-filter-btn:hover {
+  background: #e04a60;
+  border-color: #e04a60;
+  color: #fff;
+}
+
 .growth-cal-filters {
   display: flex;
   align-items: flex-end;
