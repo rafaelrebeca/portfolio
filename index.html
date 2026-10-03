@@ -1563,9 +1563,10 @@
             <option value="byAccount">By Account</option>
             <option value="byAccountType">By Account Type</option>
             <option value="byGrowth">By Growth</option>
+            <option value="accountRange">All Account Ranges</option>
           </select>
         </div>
-        <div class="field">
+        <div class="field" id="historyZoomField">
           <label>Zoom</label>
           <select id="historyZoom" style="width:100%;">
             <option value="all">All</option>
@@ -1581,6 +1582,7 @@
         <span>Loading snapshots...</span>
       </div>
       <div id="historyChartWrap" style="position:relative;height:320px;margin-top:16px;">
+        <div id="historyAccountRangeView" class="history-account-range-view" hidden></div>
         <canvas id="historyChart"></canvas>
       </div>
       <div id="historyEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>

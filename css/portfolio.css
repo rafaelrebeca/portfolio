@@ -2863,6 +2863,124 @@ select {
   flex-direction: column;
 }
 
+#historyModalOverlay.account-range-chart:not(.maximized) .modal {
+  max-width: 860px !important;
+}
+
+.history-account-range-view {
+  min-width: 700px;
+  padding: 4px 0 12px;
+}
+
+.history-account-range-view[hidden] {
+  display: none;
+}
+
+.account-range-section + .account-range-section {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.account-range-section h4 {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.account-range-head,
+.account-range-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 1.15fr) minmax(180px, 2fr) repeat(3, minmax(84px, 1fr));
+  align-items: center;
+  gap: 12px;
+}
+
+.account-range-head {
+  min-height: 32px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.account-range-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-range-head > :nth-child(n + 3),
+.account-range-value {
+  text-align: right;
+}
+
+.account-range-row {
+  min-height: 36px;
+  border-top: 1px solid rgba(255, 255, 255, .035);
+  font-size: 12px;
+}
+
+.account-range-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.account-range-plot {
+  position: relative;
+  height: 30px;
+  background: linear-gradient(to right, transparent calc(50% - .5px), rgba(255,255,255,.07) calc(50% - .5px), rgba(255,255,255,.07) calc(50% + .5px), transparent calc(50% + .5px));
+}
+
+.account-range-line {
+  position: absolute;
+  top: 15px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(96, 165, 250, .62);
+  transform: translateY(-50%);
+}
+
+.account-range-marker {
+  position: absolute;
+  left: var(--range-x);
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.account-range-marker.endpoint {
+  top: 9px;
+  background: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa;
+}
+
+.account-range-marker.current {
+  top: 1px;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  background: #ef5a6f;
+  box-shadow: 0 0 0 1px #ef5a6f;
+}
+
+.account-range-value {
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-range-value.current-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
 #historyModalOverlay.maximized #historyChartWrap {
   flex: 1;
   height: auto !important;

@@ -3816,7 +3816,37 @@ function renderHistoryChart() {
 
   const ctx = document.getElementById('historyChart')?.getContext('2d');
   if (!ctx) return;
-  if (historyChartInstance) historyChartInstance.destroy();
+  if (historyChartInstance) { historyChartInstance.destroy(); historyChartInstance = null; }
+  const zoomField = $('#historyZoomField');
+  const isAccountRange = chartType === 'accountRange';
+  const rangeView = $('#historyAccountRangeView');
+  const chartCanvas = $('#historyChart');
+  $('#historyModalOverlay')?.classList.toggle('account-range-chart', isAccountRange);
+  if (zoomField) zoomField.style.display = isAccountRange ? 'none' : '';
+  if (isAccountRange) {
+    const accounts = buildAccountRangeData();
+    if (!accounts.length) {
+      if (chartWrap) chartWrap.style.display = 'none';
+      if (empty) { empty.style.display = 'block'; empty.textContent = 'No accounts to display.'; }
+      return;
+    }
+    if (chartCanvas) chartCanvas.style.display = 'none';
+    if (chartWrap) {
+      chartWrap.style.height = 'auto';
+      chartWrap.style.overflow = 'auto';
+    }
+    if (rangeView) {
+      rangeView.hidden = false;
+      rangeView.innerHTML = renderAccountRangeView(accounts);
+    }
+    return;
+  }
+  if (rangeView) rangeView.hidden = true;
+  if (chartCanvas) chartCanvas.style.display = '';
+  if (chartWrap) {
+    chartWrap.style.height = '320px';
+    chartWrap.style.overflow = '';
+  }
   const isLineChart = chartType !== 'byGrowth';
   const lineOptions = isLineChart ? historyLineOptions(chartLabels) : null;
   historyChartInstance = new Chart(ctx, {
@@ -3844,6 +3874,102 @@ function renderHistoryChart() {
       }
     }
   });
+}
+
+// Build min/max from saved snapshots only. Live accounts supply the current
+// marker; deleted accounts use their last recorded snapshot as their current value.
+function buildAccountRangeData() {
+  const byId = new Map();
+  (historyData || []).forEach(snapshot => {
+    (snapshot.data?.accounts || []).forEach(account => {
+      if (account.id === undefined || account.id === null) return;
+      const id = String(account.id);
+      const value = Number(account.valueEur);
+      if (!Number.isFinite(value)) return;
+      const item = byId.get(id) || {
+        id,
+        name: account.name || `Account ${id}`,
+        type: account.type || '',
+        min: value,
+        max: value,
+        lastSnapshotValue: value
+      };
+      item.name = account.name || item.name;
+      item.type = account.type || item.type;
+      item.min = Math.min(item.min, value);
+      item.max = Math.max(item.max, value);
+      byId.set(id, item);
+    });
+  });
+  state.accounts.forEach(account => {
+    const id = String(account.id);
+    const item = byId.get(id) || {
+      id,
+      name: account.name || `Account ${id}`,
+      type: account.type || '',
+      min: null,
+      max: null,
+      lastSnapshotValue: null
+    };
+    item.name = account.name || item.name;
+    item.type = account.type || item.type;
+    item.current = accountValue(account, true);
+    byId.set(id, item);
+  });
+  byId.forEach(item => {
+    if (item.current === undefined) item.current = item.lastSnapshotValue ?? 0;
+  });
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Render separate independently-scaled account sections, alongside exact
+// values so overlapping min/max/current markers remain easy to compare.
+function renderAccountRangeView(accounts) {
+  const sections = [
+    { label: 'Assets & other accounts', accounts: accounts.filter(account => account.type !== 'loan') },
+    { label: 'Loans', accounts: accounts.filter(account => account.type === 'loan') }
+  ].filter(section => section.accounts.length);
+  const formatValue = value => value === null || value === undefined
+    ? '—'
+    : blurActive() ? 'hidden' : moneyEUR.format(value);
+  return sections.map(section => {
+    const values = section.accounts.flatMap(account => [account.min, account.max, account.current]
+      .filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)))
+      .map(Number));
+    let domainMin = Math.min(...values);
+    let domainMax = Math.max(...values);
+    const padding = Math.max((domainMax - domainMin) * 0.04, Math.max(Math.abs(domainMin), Math.abs(domainMax), 1) * 0.015, 1);
+    domainMin -= padding;
+    domainMax += padding;
+    const span = domainMax - domainMin || 1;
+    const position = value => `${Math.max(0, Math.min(100, ((value - domainMin) / span) * 100))}%`;
+    const axis = [domainMin, domainMin + span / 2, domainMax];
+    const nameCounts = new Map();
+    const rows = section.accounts.map(account => {
+      const count = (nameCounts.get(account.name) || 0) + 1;
+      nameCounts.set(account.name, count);
+      const name = count === 1 ? account.name : `${account.name} (${count})`;
+      const min = account.min;
+      const max = account.max;
+      const current = account.current;
+      const rangeStyle = min === null ? '' : `left:${position(min)};width:${Math.max(0.35, ((max - min) / span) * 100)}%`;
+      return `<div class="account-range-row">
+        <div class="account-range-name" title="${esc(name)}">${esc(name)}</div>
+        <div class="account-range-plot" aria-label="${esc(name)} snapshot range">
+          ${min === null ? '' : `<span class="account-range-line" style="${rangeStyle}"></span><span class="account-range-marker endpoint minimum" style="--range-x:${position(min)}" title="Minimum: ${formatValue(min)}"></span><span class="account-range-marker endpoint maximum" style="--range-x:${position(max)}" title="Maximum: ${formatValue(max)}"></span>`}
+          <span class="account-range-marker current" style="--range-x:${position(current)}" title="Current: ${formatValue(current)}"></span>
+        </div>
+        <div class="account-range-value">${formatValue(min)}</div>
+        <div class="account-range-value current-value">${formatValue(current)}</div>
+        <div class="account-range-value">${formatValue(max)}</div>
+      </div>`;
+    }).join('');
+    return `<section class="account-range-section">
+      <h4>${section.label}</h4>
+      <div class="account-range-head"><span>Account</span><span class="account-range-axis">${axis.map(value => `<span>${formatValue(value)}</span>`).join('')}</span><span>Min</span><span>Current</span><span>Max</span></div>
+      ${rows}
+    </section>`;
+  }).join('');
 }
 
 // Build the datasets for the selected chart type.
