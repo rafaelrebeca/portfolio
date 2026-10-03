@@ -3006,6 +3006,10 @@ select {
   height: auto !important;
 }
 
+#accountHistoryModalOverlay.account-range-chart:not(.maximized) .modal {
+  max-width: 860px !important;
+}
+
 #goalHistoryModalOverlay.maximized {
   padding: 12px;
 }

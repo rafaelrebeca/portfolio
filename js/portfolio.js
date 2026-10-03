@@ -1227,6 +1227,7 @@ let accountHistoryChartInstance = null; // Chart.js instance for the account his
 let accountHistoryData = null; // full snapshot data loaded for the account history chart
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
+let accountHistoryViewMode = 'line'; // 'line' or 'range' for the focused account history modal
 let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
 let goalHistoryData = null; // full snapshot data loaded for the goal history chart
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
@@ -3878,9 +3879,9 @@ function renderHistoryChart() {
 
 // Build min/max from saved snapshots only. Live accounts supply the current
 // marker; deleted accounts use their last recorded snapshot as their current value.
-function buildAccountRangeData() {
+function buildAccountRangeData(snapshots = historyData || [], liveAccounts = state.accounts) {
   const byId = new Map();
-  (historyData || []).forEach(snapshot => {
+  snapshots.forEach(snapshot => {
     (snapshot.data?.accounts || []).forEach(account => {
       if (account.id === undefined || account.id === null) return;
       const id = String(account.id);
@@ -3901,7 +3902,7 @@ function buildAccountRangeData() {
       byId.set(id, item);
     });
   });
-  state.accounts.forEach(account => {
+  liveAccounts.forEach(account => {
     const id = String(account.id);
     const item = byId.get(id) || {
       id,
@@ -4043,6 +4044,8 @@ async function openAccountHistoryModal(accountId) {
   const account = state.accounts.find(a => a.id === accountId);
   if (!account) return;
   accountHistoryAccountId = accountId;
+  accountHistoryViewMode = 'line';
+  updateAccountHistoryViewToggle();
   const title = $('#accountHistoryTitle');
   if (title) title.textContent = `📈 ${account.name} — History`;
   openModal('accountHistoryModalOverlay');
@@ -4069,7 +4072,7 @@ function closeAccountHistoryModal() {
   accountHistoryMaximized = false;
   accountHistoryAccountId = null;
   const overlay = $('#accountHistoryModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
+  if (overlay) overlay.classList.remove('maximized', 'account-range-chart');
   closeModal('accountHistoryModalOverlay');
 }
 
@@ -4090,14 +4093,43 @@ function toggleAccountHistoryMaximize() {
 
 // Draw the line chart for the selected account's value evolution across snapshots.
 function renderAccountHistoryChart() {
-  const zoom = $('#accountHistoryZoom')?.value || 'all';
   const empty = $('#accountHistoryEmpty');
   const chartWrap = $('#accountHistoryChartWrap');
-  if (!accountHistoryData || !accountHistoryData.length || !accountHistoryAccountId) {
+  const rangeView = $('#accountHistoryRangeView');
+  const chartCanvas = $('#accountHistoryChart');
+  const zoomField = $('#accountHistoryZoom')?.closest('.field');
+  $('#accountHistoryModalOverlay')?.classList.toggle('account-range-chart', accountHistoryViewMode === 'range');
+  if (!accountHistoryAccountId || (accountHistoryViewMode === 'line' && (!accountHistoryData || !accountHistoryData.length))) {
     if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display.'; }
     if (chartWrap) chartWrap.style.display = 'none';
     return;
   }
+  if (accountHistoryViewMode === 'range') {
+    if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
+    if (zoomField) zoomField.style.display = 'none';
+    if (chartWrap) {
+      chartWrap.style.display = 'block';
+      chartWrap.style.height = 'auto';
+      chartWrap.style.overflow = 'auto';
+    }
+    if (chartCanvas) chartCanvas.style.display = 'none';
+    if (empty) empty.style.display = 'none';
+    const account = buildAccountRangeData(accountHistoryData || [], [state.accounts.find(item => String(item.id) === String(accountHistoryAccountId))]
+      .filter(Boolean)).find(item => String(item.id) === String(accountHistoryAccountId));
+    if (rangeView) {
+      rangeView.hidden = false;
+      rangeView.innerHTML = account ? renderAccountRangeView([account]) : '';
+    }
+    return;
+  }
+  if (zoomField) zoomField.style.display = '';
+  if (rangeView) rangeView.hidden = true;
+  if (chartCanvas) chartCanvas.style.display = '';
+  if (chartWrap) {
+    chartWrap.style.height = '320px';
+    chartWrap.style.overflow = '';
+  }
+  const zoom = $('#accountHistoryZoom')?.value || 'all';
   const points = applyHistoryZoom(accountHistoryData, zoom).slice().reverse(); // oldest -> newest
   const labels = points.map(p => formatSnapshotDay(p.day));
   const values = points.map(p => {
@@ -4116,6 +4148,7 @@ function renderAccountHistoryChart() {
   const ctx = document.getElementById('accountHistoryChart')?.getContext('2d');
   if (!ctx) return;
   if (accountHistoryChartInstance) accountHistoryChartInstance.destroy();
+  accountHistoryChartInstance = null;
   const chartOptions = historyLineOptions(labels);
   accountHistoryChartInstance = new Chart(ctx, {
     type: 'line',
@@ -4142,6 +4175,22 @@ function renderAccountHistoryChart() {
       scales: chartOptions.scales
     }
   });
+}
+
+function updateAccountHistoryViewToggle() {
+  const button = $('#accountHistoryViewToggleBtn');
+  if (!button) return;
+  const showingRange = accountHistoryViewMode === 'range';
+  const action = showingRange ? 'line chart' : 'range chart';
+  button.textContent = showingRange ? 'Show line' : 'Show range';
+  button.title = `Switch to ${action}`;
+  button.setAttribute('aria-label', `Switch to ${action}`);
+}
+
+function toggleAccountHistoryView() {
+  accountHistoryViewMode = accountHistoryViewMode === 'range' ? 'line' : 'range';
+  updateAccountHistoryViewToggle();
+  renderAccountHistoryChart();
 }
 
 // Open the goal history modal and load all snapshot data for the goal's value over time.
@@ -4544,6 +4593,7 @@ function renderAccounts() {
           <span class="aname">${esc(acc.name)} <span class="tag ${acc.type}">${esc(label)}</span></span>
           <div style="display:flex;gap:6px;">
             ${headActions}
+            <button class="btn-sm action-icon-btn" data-open-account-history="${acc.id}" title="Account history" aria-label="View ${esc(acc.name)} history">📈</button>
             <button class="btn-sm action-icon-btn" data-edit-account="${acc.id}" title="Edit">✏️</button>
             <button class="btn-sm action-icon-btn danger" data-delete-account="${acc.id}" title="Delete">🗑️</button>
           </div>
@@ -7495,6 +7545,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
+  $('#accountHistoryViewToggleBtn')?.addEventListener('click', toggleAccountHistoryView);
   $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
   $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
   $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
@@ -8175,6 +8226,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const editAccountBtn = event.target.closest('[data-edit-account]');
     if (editAccountBtn) {
       openAccountModal(Number(editAccountBtn.dataset.editAccount));
+      return;
+    }
+
+    // Open the focused history modal from the My Accounts card action.
+    const accountHistoryBtn = event.target.closest('[data-open-account-history]');
+    if (accountHistoryBtn) {
+      openAccountHistoryModal(Number(accountHistoryBtn.dataset.openAccountHistory));
       return;
     }
 
