@@ -3943,7 +3943,6 @@ function renderAccountRangeView(accounts) {
     domainMax += padding;
     const span = domainMax - domainMin || 1;
     const position = value => `${Math.max(0, Math.min(100, ((value - domainMin) / span) * 100))}%`;
-    const axis = [domainMin, domainMin + span / 2, domainMax];
     const nameCounts = new Map();
     const rows = section.accounts.map(account => {
       const count = (nameCounts.get(account.name) || 0) + 1;
@@ -3966,7 +3965,7 @@ function renderAccountRangeView(accounts) {
     }).join('');
     return `<section class="account-range-section">
       <h4>${section.label}</h4>
-      <div class="account-range-head"><span>Account</span><span class="account-range-axis">${axis.map(value => `<span>${formatValue(value)}</span>`).join('')}</span><span>Min</span><span>Current</span><span>Max</span></div>
+      <div class="account-range-head"><span>Account</span><span class="account-range-axis">Range</span><span>Min</span><span>Current</span><span>Max</span></div>
       ${rows}
     </section>`;
   }).join('');
