@@ -3932,7 +3932,7 @@ function renderAccountRangeView(accounts) {
   ].filter(section => section.accounts.length);
   const formatValue = value => value === null || value === undefined
     ? '—'
-    : blurActive() ? 'hidden' : moneyEUR.format(value);
+    : moneyEUR.format(value);
   return sections.map(section => {
     const values = section.accounts.flatMap(account => [account.min, account.max, account.current]
       .filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)))
