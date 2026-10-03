@@ -359,7 +359,7 @@ All three history charts — Snapshot History, Account History, and Goal History
 
 Monthly, Yearly, and YTD bucket by period; Current Month keeps each day. YTD and Current Month additionally restrict the range to the current year or month, so they show recent detail rather than the whole history. Period keys come from `historyZoomPeriodKey()`, which both `applyHistoryZoom()` and `buildHistoryGrowthValues()` use, so the By Growth bars aggregate on the same boundaries as the lines. A zoom with no snapshots in range renders the chart's empty state.
 
-The focused Account History modal has a toggle between the zoomable line history and an unzoomed min/current/max range view for that account. Goal History remains a focused per-goal line chart. Chart instances are destroyed when their modal closes or when a new chart is rendered.
+The focused Account History modal stacks an unzoomed min/current/max range view above the zoomable line history for that account. Goal History remains a focused per-goal line chart. Chart instances are destroyed when their modal closes or when a new chart is rendered.
 
 ## 9. Calculations and formatting
 

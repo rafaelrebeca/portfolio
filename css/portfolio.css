@@ -3006,8 +3006,18 @@ select {
   height: auto !important;
 }
 
-#accountHistoryModalOverlay.account-range-chart:not(.maximized) .modal {
+#accountHistoryModalOverlay:not(.maximized) .modal {
   max-width: 860px !important;
+}
+
+.account-history-range-section h4 {
+  margin: 14px 0 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.account-history-line-controls {
+  margin-top: 12px;
 }
 
 #goalHistoryModalOverlay.maximized {

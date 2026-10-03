@@ -1227,7 +1227,6 @@ let accountHistoryChartInstance = null; // Chart.js instance for the account his
 let accountHistoryData = null; // full snapshot data loaded for the account history chart
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
-let accountHistoryViewMode = 'line'; // 'line' or 'range' for the focused account history modal
 let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
 let goalHistoryData = null; // full snapshot data loaded for the goal history chart
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
@@ -4044,16 +4043,16 @@ async function openAccountHistoryModal(accountId) {
   const account = state.accounts.find(a => a.id === accountId);
   if (!account) return;
   accountHistoryAccountId = accountId;
-  accountHistoryViewMode = 'line';
-  updateAccountHistoryViewToggle();
   const title = $('#accountHistoryTitle');
   if (title) title.textContent = `📈 ${account.name} — History`;
   openModal('accountHistoryModalOverlay');
   const loading = $('#accountHistoryLoading');
   const chartWrap = $('#accountHistoryChartWrap');
+  const rangeView = $('#accountHistoryRangeView');
   const empty = $('#accountHistoryEmpty');
   if (loading) loading.style.display = 'flex';
   if (chartWrap) chartWrap.style.display = 'none';
+  if (rangeView) rangeView.hidden = true;
   if (empty) empty.style.display = 'none';
   try {
     hydrateSnapshotCache();
@@ -4072,7 +4071,7 @@ function closeAccountHistoryModal() {
   accountHistoryMaximized = false;
   accountHistoryAccountId = null;
   const overlay = $('#accountHistoryModalOverlay');
-  if (overlay) overlay.classList.remove('maximized', 'account-range-chart');
+  if (overlay) overlay.classList.remove('maximized');
   closeModal('accountHistoryModalOverlay');
 }
 
@@ -4091,43 +4090,34 @@ function toggleAccountHistoryMaximize() {
   if (accountHistoryChartInstance) accountHistoryChartInstance.resize();
 }
 
-// Draw the line chart for the selected account's value evolution across snapshots.
+// Draw the account's full-history range and its zoomable value-evolution line chart.
 function renderAccountHistoryChart() {
   const empty = $('#accountHistoryEmpty');
   const chartWrap = $('#accountHistoryChartWrap');
   const rangeView = $('#accountHistoryRangeView');
   const chartCanvas = $('#accountHistoryChart');
-  const zoomField = $('#accountHistoryZoom')?.closest('.field');
-  $('#accountHistoryModalOverlay')?.classList.toggle('account-range-chart', accountHistoryViewMode === 'range');
-  if (!accountHistoryAccountId || (accountHistoryViewMode === 'line' && (!accountHistoryData || !accountHistoryData.length))) {
-    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display.'; }
+  if (!accountHistoryAccountId) {
+    if (rangeView) rangeView.hidden = true;
     if (chartWrap) chartWrap.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No account selected.'; }
     return;
   }
-  if (accountHistoryViewMode === 'range') {
-    if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
-    if (zoomField) zoomField.style.display = 'none';
-    if (chartWrap) {
-      chartWrap.style.display = 'block';
-      chartWrap.style.height = 'auto';
-      chartWrap.style.overflow = 'auto';
-    }
-    if (chartCanvas) chartCanvas.style.display = 'none';
-    if (empty) empty.style.display = 'none';
-    const account = buildAccountRangeData(accountHistoryData || [], [state.accounts.find(item => String(item.id) === String(accountHistoryAccountId))]
-      .filter(Boolean)).find(item => String(item.id) === String(accountHistoryAccountId));
-    if (rangeView) {
-      rangeView.hidden = false;
-      rangeView.innerHTML = account ? renderAccountRangeView([account]) : '';
-    }
-    return;
+  const account = buildAccountRangeData(accountHistoryData || [], [state.accounts.find(item => String(item.id) === String(accountHistoryAccountId))]
+    .filter(Boolean)).find(item => String(item.id) === String(accountHistoryAccountId));
+  if (rangeView) {
+    rangeView.hidden = !account;
+    rangeView.innerHTML = account ? renderAccountRangeView([account]) : '';
   }
-  if (zoomField) zoomField.style.display = '';
-  if (rangeView) rangeView.hidden = true;
   if (chartCanvas) chartCanvas.style.display = '';
   if (chartWrap) {
     chartWrap.style.height = '320px';
     chartWrap.style.overflow = '';
+  }
+  if (!accountHistoryData || !accountHistoryData.length) {
+    if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display in the line chart.'; }
+    return;
   }
   const zoom = $('#accountHistoryZoom')?.value || 'all';
   const points = applyHistoryZoom(accountHistoryData, zoom).slice().reverse(); // oldest -> newest
@@ -4175,22 +4165,6 @@ function renderAccountHistoryChart() {
       scales: chartOptions.scales
     }
   });
-}
-
-function updateAccountHistoryViewToggle() {
-  const button = $('#accountHistoryViewToggleBtn');
-  if (!button) return;
-  const showingRange = accountHistoryViewMode === 'range';
-  const action = showingRange ? 'line chart' : 'range chart';
-  button.textContent = showingRange ? 'Show line' : 'Show range';
-  button.title = `Switch to ${action}`;
-  button.setAttribute('aria-label', `Switch to ${action}`);
-}
-
-function toggleAccountHistoryView() {
-  accountHistoryViewMode = accountHistoryViewMode === 'range' ? 'line' : 'range';
-  updateAccountHistoryViewToggle();
-  renderAccountHistoryChart();
 }
 
 // Open the goal history modal and load all snapshot data for the goal's value over time.
@@ -7545,7 +7519,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
-  $('#accountHistoryViewToggleBtn')?.addEventListener('click', toggleAccountHistoryView);
   $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
   $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
   $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
