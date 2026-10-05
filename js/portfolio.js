@@ -1227,6 +1227,10 @@ let accountHistoryChartInstance = null; // Chart.js instance for the account his
 let accountHistoryData = null; // full snapshot data loaded for the account history chart
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
+let providerHistoryChartInstance = null; // Chart.js instance for the provider history line chart
+let providerHistoryData = null; // full snapshot data loaded for the provider history chart
+let providerHistoryMaximized = false; // whether the provider history modal is maximized (fullscreen)
+let providerHistoryProviderId = null; // the provider whose history is being shown
 let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
 let goalHistoryData = null; // full snapshot data loaded for the goal history chart
 let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
@@ -4167,6 +4171,165 @@ function renderAccountHistoryChart() {
   });
 }
 
+// Open the provider history modal using the totals already saved in each snapshot.
+async function openProviderHistoryModal(providerId) {
+  const provider = state.providers.find(item => String(item.id) === String(providerId));
+  if (!provider) return;
+  providerHistoryProviderId = providerId;
+  const title = $('#providerHistoryTitle');
+  if (title) title.textContent = `📈 ${provider.name} — History`;
+  openModal('providerHistoryModalOverlay');
+  const loading = $('#providerHistoryLoading');
+  const chartWrap = $('#providerHistoryChartWrap');
+  const rangeView = $('#providerHistoryRangeView');
+  const empty = $('#providerHistoryEmpty');
+  if (loading) loading.style.display = 'flex';
+  if (chartWrap) chartWrap.style.display = 'none';
+  if (rangeView) rangeView.hidden = true;
+  if (empty) empty.style.display = 'none';
+  try {
+    hydrateSnapshotCache();
+    providerHistoryData = timeTravelList;
+    renderProviderHistoryChart();
+  } catch (error) {
+    if (empty) { empty.style.display = 'block'; empty.textContent = error.message; }
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+function closeProviderHistoryModal() {
+  if (providerHistoryChartInstance) { providerHistoryChartInstance.destroy(); providerHistoryChartInstance = null; }
+  providerHistoryMaximized = false;
+  providerHistoryProviderId = null;
+  const overlay = $('#providerHistoryModalOverlay');
+  if (overlay) overlay.classList.remove('maximized');
+  closeModal('providerHistoryModalOverlay');
+}
+
+function toggleProviderHistoryMaximize() {
+  const overlay = $('#providerHistoryModalOverlay');
+  if (!overlay) return;
+  providerHistoryMaximized = !providerHistoryMaximized;
+  overlay.classList.toggle('maximized', providerHistoryMaximized);
+  const btn = $('#maximizeProviderHistoryBtn');
+  if (btn) {
+    btn.textContent = providerHistoryMaximized ? '🗗' : '⛶';
+    btn.title = providerHistoryMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', providerHistoryMaximized ? 'Restore' : 'Maximize');
+  }
+  if (providerHistoryChartInstance) providerHistoryChartInstance.resize();
+}
+
+function renderProviderRangeView(provider, snapshots) {
+  const values = snapshots.map(snapshot => {
+    const value = snapshot.data?.byProvider?.[provider.name];
+    return value === undefined || value === null || !Number.isFinite(Number(value)) ? null : Number(value);
+  }).filter(value => value !== null);
+  if (!values.length) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const current = providerValue(provider);
+  const domainMin = Math.min(min, max, current);
+  const domainMax = Math.max(min, max, current);
+  const padding = Math.max((domainMax - domainMin) * 0.04, Math.max(Math.abs(domainMin), Math.abs(domainMax), 1) * 0.015, 1);
+  const low = domainMin - padding;
+  const span = domainMax - domainMin + padding * 2 || 1;
+  const position = value => `${Math.max(0, Math.min(100, ((value - low) / span) * 100))}%`;
+  const formatValue = value => moneyEUR.format(value);
+  const rangeStyle = `left:${position(min)};width:${Math.max(0.35, ((max - min) / span) * 100)}%`;
+  return `<section class="account-range-section">
+    <div class="account-range-head"><span>Provider</span><span class="account-range-axis">Snapshot range</span><span>Min</span><span>Current</span><span>Max</span></div>
+    <div class="account-range-row">
+      <div class="account-range-name" title="${esc(provider.name)}">${esc(provider.name)}</div>
+      <div class="account-range-plot" aria-label="${esc(provider.name)} snapshot range">
+        <span class="account-range-line" style="${rangeStyle}"></span>
+        <span class="account-range-marker endpoint minimum" style="--range-x:${position(min)}" title="Minimum: ${formatValue(min)}"></span>
+        <span class="account-range-marker endpoint maximum" style="--range-x:${position(max)}" title="Maximum: ${formatValue(max)}"></span>
+        <span class="account-range-marker current" style="--range-x:${position(current)}" title="Current: ${formatValue(current)}"></span>
+      </div>
+      <div class="account-range-value">${formatValue(min)}</div>
+      <div class="account-range-value current-value">${formatValue(current)}</div>
+      <div class="account-range-value">${formatValue(max)}</div>
+    </div>
+  </section>`;
+}
+
+function renderProviderHistoryChart() {
+  const empty = $('#providerHistoryEmpty');
+  const chartWrap = $('#providerHistoryChartWrap');
+  const rangeView = $('#providerHistoryRangeView');
+  const chartCanvas = $('#providerHistoryChart');
+  const provider = state.providers.find(item => String(item.id) === String(providerHistoryProviderId));
+  if (!provider) {
+    if (rangeView) rangeView.hidden = true;
+    if (chartWrap) chartWrap.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No provider selected.'; }
+    return;
+  }
+  const snapshots = providerHistoryData || [];
+  const rangeHTML = renderProviderRangeView(provider, snapshots);
+  if (rangeView) {
+    rangeView.hidden = !rangeHTML;
+    rangeView.innerHTML = rangeHTML;
+  }
+  if (chartCanvas) chartCanvas.style.display = '';
+  if (chartWrap) {
+    chartWrap.style.height = '320px';
+    chartWrap.style.overflow = '';
+  }
+  if (!snapshots.length) {
+    if (providerHistoryChartInstance) { providerHistoryChartInstance.destroy(); providerHistoryChartInstance = null; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No snapshots to display in the line chart.'; }
+    return;
+  }
+  const zoom = $('#providerHistoryZoom')?.value || 'all';
+  const points = applyHistoryZoom(snapshots, zoom).slice().reverse();
+  const labels = points.map(snapshot => formatSnapshotDay(snapshot.day));
+  const values = points.map(snapshot => {
+    const value = snapshot.data?.byProvider?.[provider.name];
+    return value === undefined || value === null ? null : Number(value);
+  });
+  if (!values.some(value => value !== null && Number.isFinite(value))) {
+    if (providerHistoryChartInstance) { providerHistoryChartInstance.destroy(); providerHistoryChartInstance = null; }
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'No data for this provider in the available snapshots.'; }
+    if (chartWrap) chartWrap.style.display = 'none';
+    return;
+  }
+  if (chartWrap) chartWrap.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+  const ctx = document.getElementById('providerHistoryChart')?.getContext('2d');
+  if (!ctx) return;
+  if (providerHistoryChartInstance) providerHistoryChartInstance.destroy();
+  const chartOptions = historyLineOptions(labels);
+  providerHistoryChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Value (EUR)',
+        data: historyLinePoints(values),
+        borderColor: CHART_COLORS[0],
+        backgroundColor: CHART_COLORS[0],
+        tension: 0.3,
+        fill: false,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: chartOptions.animation,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      parsing: chartOptions.parsing,
+      normalized: chartOptions.normalized,
+      plugins: { ...chartOptions.plugins, legend: { display: false } },
+      scales: chartOptions.scales
+    }
+  });
+}
+
 // Open the goal history modal and load all snapshot data for the goal's value over time.
 async function openGoalHistoryModal(goalId) {
   const goal = state.goals.find(g => g.id === goalId);
@@ -4593,6 +4756,7 @@ function renderAccounts() {
         <div style="display:flex;gap:6px;">
           <button class="btn-sm action-icon-btn add" data-add-account-provider="${g.provider.id}" title="Add Account">➕</button>
           <button class="btn-sm action-icon-btn" data-provider-details="${g.provider.id}" title="Details">ℹ️</button>
+          <button class="btn-sm action-icon-btn" data-open-provider-history="${g.provider.id}" title="Provider history" aria-label="View ${esc(g.provider.name)} history">📈</button>
           <button class="btn-sm action-icon-btn" data-edit-provider="${g.provider.id}" title="Edit">✏️</button>
           <button class="btn-sm action-icon-btn danger" data-delete-provider="${g.provider.id}" title="Delete">🗑️</button>
         </div>
@@ -7519,6 +7683,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
+  $('#maximizeProviderHistoryBtn')?.addEventListener('click', toggleProviderHistoryMaximize);
+  $('#closeProviderHistoryBtn')?.addEventListener('click', closeProviderHistoryModal);
+  $('#providerHistoryZoom')?.addEventListener('change', renderProviderHistoryChart);
   $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
   $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
   $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
@@ -8139,6 +8306,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const providerDetailsBtn = event.target.closest('[data-provider-details]');
     if (providerDetailsBtn) {
       openProviderDetailsModal(Number(providerDetailsBtn.dataset.providerDetails));
+      return;
+    }
+
+    const providerHistoryBtn = event.target.closest('[data-open-provider-history]');
+    if (providerHistoryBtn) {
+      openProviderHistoryModal(Number(providerHistoryBtn.dataset.openProviderHistory));
       return;
     }
 

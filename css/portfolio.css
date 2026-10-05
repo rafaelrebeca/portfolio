@@ -3010,6 +3010,30 @@ select {
   max-width: 860px !important;
 }
 
+#providerHistoryModalOverlay.maximized {
+  padding: 12px;
+}
+
+#providerHistoryModalOverlay.maximized .modal {
+  position: absolute;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-width: none !important;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+
+#providerHistoryModalOverlay.maximized #providerHistoryChartWrap {
+  flex: 1;
+  height: auto !important;
+}
+
+#providerHistoryModalOverlay:not(.maximized) .modal {
+  max-width: 860px !important;
+}
+
 .account-history-range-section h4 {
   margin: 14px 0 0;
   color: var(--text);
