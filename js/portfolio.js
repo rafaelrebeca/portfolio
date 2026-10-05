@@ -1223,6 +1223,7 @@ let growthCalendarViewMode = ['year', 'allTime'].includes(localStorage.getItem('
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart
 let historyMaximized = false; // whether the history modal is maximized (fullscreen)
+let portfolioRangeMaximized = false;
 let accountHistoryChartInstance = null; // Chart.js instance for the account history line chart
 let accountHistoryData = null; // full snapshot data loaded for the account history chart
 let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
@@ -3928,11 +3929,13 @@ function buildAccountRangeData(snapshots = historyData || [], liveAccounts = sta
 
 // Render separate independently-scaled account sections, alongside exact
 // values so overlapping min/max/current markers remain easy to compare.
-function renderAccountRangeView(accounts) {
-  const sections = [
-    { label: 'Assets & other accounts', accounts: accounts.filter(account => account.type !== 'loan') },
-    { label: 'Loans', accounts: accounts.filter(account => account.type === 'loan') }
-  ].filter(section => section.accounts.length);
+function renderAccountRangeView(accounts, options = {}) {
+  const sections = (options.section
+    ? [{ label: options.section, accounts }]
+    : [
+      { label: 'Assets & other accounts', accounts: accounts.filter(account => account.type !== 'loan') },
+      { label: 'Loans', accounts: accounts.filter(account => account.type === 'loan') }
+    ]).filter(section => section.accounts.length);
   const formatValue = value => value === null || value === undefined
     ? '—'
     : moneyEUR.format(value);
@@ -3973,6 +3976,74 @@ function renderAccountRangeView(accounts) {
       ${rows}
     </section>`;
   }).join('');
+}
+
+function buildPortfolioRangeData() {
+  const metrics = [
+    { id: 'globalValue', name: 'Global Value', key: 'globalValue' },
+    { id: 'assets', name: 'Assets', key: 'debit' },
+    { id: 'liabilities', name: 'Liabilities', key: 'credit' }
+  ].map(metric => ({ ...metric, min: null, max: null, current: 0, type: 'portfolio' }));
+  const byKey = new Map(metrics.map(metric => [metric.key, metric]));
+  (timeTravelList || []).forEach(snapshot => {
+    metrics.forEach(metric => {
+      const raw = snapshot.data?.[metric.key];
+      if (raw === undefined || raw === null || !Number.isFinite(Number(raw))) return;
+      const value = Number(raw);
+      metric.min = metric.min === null ? value : Math.min(metric.min, value);
+      metric.max = metric.max === null ? value : Math.max(metric.max, value);
+    });
+  });
+  let assets = 0;
+  let liabilities = 0;
+  state.accounts.forEach(account => {
+    const value = accountValue(account, true);
+    if (value > 0) assets += value;
+    else liabilities += value;
+  });
+  byKey.get('globalValue').current = totalPortfolioValue();
+  byKey.get('debit').current = assets;
+  byKey.get('credit').current = liabilities;
+  return metrics;
+}
+
+function openPortfolioRangeModal() {
+  hydrateSnapshotCache();
+  const view = $('#portfolioRangeView');
+  if (view) {
+    view.innerHTML = renderAccountRangeView(buildPortfolioRangeData(), { section: 'Portfolio values' });
+    if (blurActive()) {
+      blurNumbers(view);
+      blurTitles(view);
+    }
+  }
+  openModal('portfolioRangeModalOverlay');
+}
+
+function closePortfolioRangeModal() {
+  portfolioRangeMaximized = false;
+  const overlay = $('#portfolioRangeModalOverlay');
+  if (overlay) overlay.classList.remove('maximized');
+  const btn = $('#maximizePortfolioRangeBtn');
+  if (btn) {
+    btn.textContent = '⛶';
+    btn.title = 'Maximize';
+    btn.setAttribute('aria-label', 'Maximize');
+  }
+  closeModal('portfolioRangeModalOverlay');
+}
+
+function togglePortfolioRangeMaximize() {
+  const overlay = $('#portfolioRangeModalOverlay');
+  if (!overlay) return;
+  portfolioRangeMaximized = !portfolioRangeMaximized;
+  overlay.classList.toggle('maximized', portfolioRangeMaximized);
+  const btn = $('#maximizePortfolioRangeBtn');
+  if (btn) {
+    btn.textContent = portfolioRangeMaximized ? '🗗' : '⛶';
+    btn.title = portfolioRangeMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', portfolioRangeMaximized ? 'Restore' : 'Maximize');
+  }
 }
 
 // Build the datasets for the selected chart type.
@@ -7518,7 +7589,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#guestButton')?.addEventListener('click', async () => { state.guest = true; state.user = null; showApp(); await loadData(); toast('Signed in as Guest'); maybeShowWelcomeModal(); });
   $('#logoutButton')?.addEventListener('click', logout);
   document.addEventListener('click', (e) => {
-    if (e.target.closest('#growthCard')) {
+    if (e.target.closest('#globalValueCard, #assetsLiabilitiesCard')) {
+      openPortfolioRangeModal();
+    } else if (e.target.closest('#growthCard')) {
       cycleGrowthCardMode();
     } else if (e.target.closest('#dashboardAllocationCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleDashboardAllocationMode();
@@ -7533,6 +7606,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (e.target.closest('#dashboardBreakdownCard') && !e.target.closest('canvas') && !e.target.closest('.chart-legend')) {
       cycleDashboardBreakdownMode();
     }
+  });
+  ['#globalValueCard', '#assetsLiabilitiesCard'].forEach(selector => {
+    $(selector)?.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openPortfolioRangeModal();
+    });
   });
   $('#helpButton')?.addEventListener('click', () => showWelcomeModal(state.guest));
   $('#profileSaveFireExpensesBtn')?.addEventListener('click', saveProfileFireExpenses);
@@ -7680,6 +7760,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
   $('#historyZoom')?.addEventListener('change', renderHistoryChart);
+  $('#maximizePortfolioRangeBtn')?.addEventListener('click', togglePortfolioRangeMaximize);
+  $('#closePortfolioRangeBtn')?.addEventListener('click', closePortfolioRangeModal);
   $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);

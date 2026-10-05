@@ -121,12 +121,14 @@
               <div class="value" id="allTimeGrowthValue">—</div>
               <div class="delta" id="allTimeGrowthSubtext">no snapshot history</div>
             </div>
-            <div class="card">
+            <div class="card" id="globalValueCard" role="button" tabindex="0" aria-haspopup="dialog"
+              title="View Global Value history ranges">
               <div class="label">Global Value</div>
               <div class="value" id="portfolioValue">—</div>
               <div class="delta up">total net worth</div>
             </div>
-            <div class="card">
+            <div class="card" id="assetsLiabilitiesCard" role="button" tabindex="0" aria-haspopup="dialog"
+              title="View Assets and Liabilities history ranges">
               <div class="label">Assets / Liabilities</div>
               <div class="value" id="debitCreditValue" style="font-size:16px;">—</div>
             </div>
@@ -1586,6 +1588,20 @@
         <canvas id="historyChart"></canvas>
       </div>
       <div id="historyEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
+    </div>
+  </div>
+
+  <!-- MODAL: Portfolio value ranges (Global Value, Assets, and Liabilities) -->
+  <div class="modal-overlay" id="portfolioRangeModalOverlay">
+    <div class="modal" style="max-width:860px;">
+      <div class="modal-head">
+        <h3>📊 Portfolio Value Ranges</h3>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" id="maximizePortfolioRangeBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closePortfolioRangeBtn" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div id="portfolioRangeView" class="history-account-range-view"></div>
     </div>
   </div>
 

@@ -494,6 +494,8 @@ input[type="date"]::-moz-focus-inner {
 }
 
 #growthCard,
+#globalValueCard,
+#assetsLiabilitiesCard,
 #dashboardAllocationCard,
 #dashboardBreakdownCard,
 #portfolioAssetCard,
@@ -504,11 +506,19 @@ input[type="date"]::-moz-focus-inner {
 }
 
 #growthCard:hover,
+#globalValueCard:hover,
+#assetsLiabilitiesCard:hover,
 #dashboardAllocationCard:hover,
 #dashboardBreakdownCard:hover,
 #portfolioAssetCard:hover,
 #portfolioTypeCard:hover {
   border-color: var(--accent);
+}
+
+#globalValueCard:focus-visible,
+#assetsLiabilitiesCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #portfolioTypeCard.filtered {
@@ -2984,6 +2994,26 @@ select {
 #historyModalOverlay.maximized #historyChartWrap {
   flex: 1;
   height: auto !important;
+}
+
+#portfolioRangeModalOverlay.maximized {
+  padding: 12px;
+}
+
+#portfolioRangeModalOverlay.maximized .modal {
+  position: absolute;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-width: none !important;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+
+#portfolioRangeModalOverlay.maximized #portfolioRangeView {
+  flex: 1;
+  overflow: auto;
 }
 
 #accountHistoryModalOverlay.maximized {

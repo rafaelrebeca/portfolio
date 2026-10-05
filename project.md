@@ -188,6 +188,8 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`. The Assets/Liabilities card lists the positive total in green and the negative total in red, and omits a line whose total is zero, so a portfolio with no liabilities shows the assets total alone and a portfolio with neither shows a dash.
 
+The Global Value and Assets/Liabilities cards highlight on hover and open the same Portfolio Value Ranges modal. Its range view shows snapshot-recorded min/max and live current values for Global Value, Assets, and Liabilities.
+
 The **Top Goal Status** card shows the first goal's completion percentage, its name, and — when snapshot history exists — an estimated reach date and monthly growth pace (e.g. `Est: Oct 2026 (~8 mos) (+$450/mo)`). The estimate is hidden when viewing a past Time Travel snapshot.
 
 The two doughnut charts are:
