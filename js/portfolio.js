@@ -3882,8 +3882,9 @@ function renderHistoryChart() {
 }
 
 // Build min/max from saved snapshots only. Live accounts supply the current
-// marker; deleted accounts use their last recorded snapshot as their current value.
+// marker; accounts no longer present in the live list are omitted.
 function buildAccountRangeData(snapshots = historyData || [], liveAccounts = state.accounts) {
+  const liveAccountIds = new Set(liveAccounts.map(account => String(account.id)));
   const byId = new Map();
   snapshots.forEach(snapshot => {
     (snapshot.data?.accounts || []).forEach(account => {
@@ -3896,8 +3897,7 @@ function buildAccountRangeData(snapshots = historyData || [], liveAccounts = sta
         name: account.name || `Account ${id}`,
         type: account.type || '',
         min: value,
-        max: value,
-        lastSnapshotValue: value
+        max: value
       };
       item.name = account.name || item.name;
       item.type = account.type || item.type;
@@ -3913,18 +3913,16 @@ function buildAccountRangeData(snapshots = historyData || [], liveAccounts = sta
       name: account.name || `Account ${id}`,
       type: account.type || '',
       min: null,
-      max: null,
-      lastSnapshotValue: null
+      max: null
     };
     item.name = account.name || item.name;
     item.type = account.type || item.type;
     item.current = accountValue(account, true);
     byId.set(id, item);
   });
-  byId.forEach(item => {
-    if (item.current === undefined) item.current = item.lastSnapshotValue ?? 0;
-  });
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...byId.values()]
+    .filter(item => liveAccountIds.has(item.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Render separate independently-scaled account sections, alongside exact
