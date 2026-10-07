@@ -1478,7 +1478,7 @@ function renderDashboardAccounts() {
       ? ''
       : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
     return `
-          <div class="account-card${hasSnapshots ? ' clickable' : ''} ${changeClass}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
+          <div class="account-card${hasSnapshots ? ' clickable' : ''} ${changeClass}" data-edit-account-context="${a.id}"${hasSnapshots ? ` data-account-history="${a.id}" title="View account history"` : ''}>
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${valInEur < 0 ? 'neg' : 'pos'}">${moneyEUR.format(valInEur)}</strong>
@@ -2815,7 +2815,7 @@ function renderDashboardFromSnapshot(data) {
         ? ''
         : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
       return `
-          <div class="account-card ${changeClass}">
+          <div class="account-card ${changeClass}" data-edit-account-context="${a.id}">
             <div class="account-card-head" style="margin-bottom:4px;">
               <span class="aname">${esc(a.name)} <span class="tag ${a.type}">${esc(typeLabel(a.type))}</span></span>
               <strong class="${val < 0 ? 'neg' : 'pos'}">${moneyEUR.format(val)}</strong>
@@ -8282,6 +8282,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Table Delegation (Edit/Delete Actions & Add to Account)
+  document.addEventListener('contextmenu', event => {
+    const accountCard = event.target.closest('.dashboard-accounts-grid [data-edit-account-context]');
+    if (!accountCard) return;
+    event.preventDefault();
+    openAccountModal(Number(accountCard.dataset.editAccountContext));
+  });
+
   document.addEventListener('click', async event => {
     const toggleDashboardAccountsBtn = event.target.closest('[data-toggle-dashboard-accounts]');
     if (toggleDashboardAccountsBtn) {
