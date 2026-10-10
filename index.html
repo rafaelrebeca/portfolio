@@ -1025,6 +1025,34 @@
     </div>
   </div>
 
+  <!-- MODAL: Interest Simulator -->
+  <div class="modal-overlay" id="interestSimModalOverlay">
+    <div class="modal interest-sim-modal">
+      <div class="modal-head">
+        <h3 id="interestSimTitle">Interest Simulator</h3>
+        <button class="modal-close" type="button" id="closeInterestSimX" title="Close" aria-label="Close">✕</button>
+      </div>
+      <p class="interest-sim-intro">Compound interest projection with optional tax and monthly contributions. Values update automatically.</p>
+      <div class="interest-sim-inputs">
+        <div class="field"><label for="interestSimBalance">Initial balance</label><input type="number" min="0" step="0.01" id="interestSimBalance"></div>
+        <div class="field"><label for="interestSimRate">Interest rate (% per year)</label><input type="number" min="0" step="0.01" id="interestSimRate"></div>
+        <div class="field"><label for="interestSimTax">Tax rate on interest (%)</label><input type="number" min="0" max="100" step="0.01" id="interestSimTax" value="28"></div>
+        <div class="field"><label for="interestSimFrequency">Compounding frequency</label><select id="interestSimFrequency"><option value="yearly">Yearly</option><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+        <div class="field"><label for="interestSimYears">Years to simulate</label><input type="number" min="1" max="100" step="1" id="interestSimYears" value="1"></div>
+        <div class="field"><label for="interestSimContribution">Additional monthly contribution</label><input type="number" min="0" step="0.01" id="interestSimContribution" value="0"></div>
+      </div>
+      <div id="interestSimError" class="form-error" role="alert"></div>
+      <div class="interest-sim-summary" id="interestSimSummary"></div>
+      <div class="interest-sim-chart"><canvas id="interestSimChart"></canvas></div>
+      <section class="interest-sim-table-section">
+        <div class="interest-sim-table-controls"><h4>Interest payment details</h4><input id="interestSimSearch" class="search-input" type="search" placeholder="Search payments…" aria-label="Search interest payments"></div>
+        <div class="interest-sim-table-scroll"><table class="interest-sim-table"><thead><tr><th>Date</th><th>Opening balance</th><th>Interest earned</th><th>Tax paid</th><th>Net interest</th><th>Contribution</th><th>Closing balance</th></tr></thead><tbody id="interestSimPayments"></tbody></table></div>
+        <div id="interestSimTableInfo" class="interest-sim-table-info"></div>
+        <p class="interest-sim-note">This is an estimate. Actual returns may differ due to changing rates, fees, taxes, and deposit timing.</p>
+      </section>
+    </div>
+  </div>
+
   <!-- MODAL: Provider Details (account breakdown) -->
   <div class="modal-overlay" id="providerDetailsModalOverlay">
     <div class="modal" style="max-width:560px;">

@@ -4787,6 +4787,9 @@ function renderAccounts() {
         if (acc.type === 'loan') {
           const simReady = acc.balance != null && acc.coin && acc.interest_rate != null && acc.finish_date;
           headActions = `<button class="btn-sm action-icon-btn" data-loan-sim="${acc.id}" title="Loan simulator"${simReady ? '' : ' disabled'}>⚡</button>`;
+        } else if (acc.type === 'interest_account') {
+          const simReady = acc.balance != null && acc.coin && acc.interest_rate != null;
+          headActions = `<button class="btn-sm action-icon-btn" data-interest-sim="${acc.id}" title="Interest simulator" aria-label="Simulate interest for ${esc(acc.name)}"${simReady ? '' : ' disabled'}>⚡</button>`;
         }
       } else {
         details = `<div class="account-detail-grid">
@@ -5894,7 +5897,8 @@ function refreshChartPrivacy() {
     accountDetailsChartInstance,
     providerDetailsChartInstance,
     goalDetailsChartInstance,
-    goalSimChartInstance
+    goalSimChartInstance,
+    interestSimChartInstance
   ];
   charts.filter(Boolean).forEach(chart => chart.update('none'));
 }
@@ -7221,6 +7225,177 @@ function runGoalSimulation() {
 /* ================= LOAN SIMULATOR ================= */
 
 let loanSimChartInstance = null;
+let interestSimChartInstance = null;
+let interestSimPayments = [];
+let interestSimCurrency = 'EUR';
+
+function openInterestSimModal(accountId) {
+  const acc = state.accounts.find(account => account.id === accountId);
+  if (!acc || acc.type !== 'interest_account' || acc.balance == null || acc.interest_rate == null || !acc.coin) return;
+  $('#interestSimTitle').textContent = `Interest Simulator: ${acc.name}`;
+  $('#interestSimBalance').value = Math.max(0, Number(acc.balance) || 0).toFixed(2);
+  $('#interestSimRate').value = Math.max(0, Number(acc.interest_rate) || 0).toFixed(3);
+  $('#interestSimTax').value = '28';
+  $('#interestSimFrequency').value = 'monthly';
+  $('#interestSimYears').value = '1';
+  $('#interestSimContribution').value = '0';
+  $('#interestSimSearch').value = '';
+  $('#interestSimError').textContent = '';
+  interestSimCurrency = acc.coin || 'EUR';
+  openModal('interestSimModalOverlay');
+  runInterestSimulation();
+}
+
+const INTEREST_SIM_FREQUENCIES = {
+  yearly: { label: 'Yearly', periodsPerYear: 1 },
+  monthly: { label: 'Monthly', periodsPerYear: 12 },
+  weekly: { label: 'Weekly', periodsPerYear: 52 },
+  daily: { label: 'Daily', periodsPerYear: 365 }
+};
+
+function interestSimAddMonths(date, months) {
+  const result = new Date(date);
+  const day = result.getDate();
+  result.setMonth(result.getMonth() + months);
+  if (result.getDate() < day) result.setDate(0);
+  return result;
+}
+
+function interestSimDateLabel(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function renderInterestSimTable() {
+  const tbody = $('#interestSimPayments');
+  if (!tbody) return;
+  const query = ($('#interestSimSearch')?.value || '').trim().toLowerCase();
+  const fmt = value => formatCurrency(value, interestSimCurrency);
+  const filtered = interestSimPayments.filter(payment => [
+    payment.dateLabel, payment.type, payment.openingBalance, payment.grossInterest,
+    payment.tax, payment.netInterest, payment.contribution, payment.closingBalance
+  ].join(' ').toLowerCase().includes(query));
+  tbody.innerHTML = filtered.map(payment => `<tr>
+    <td>${payment.dateLabel}</td><td>${fmt(payment.openingBalance)}</td>
+    <td class="pos">${fmt(payment.grossInterest)}</td><td class="neg">${fmt(payment.tax)}</td>
+    <td class="pos">${fmt(payment.netInterest)}</td><td>${payment.contribution ? fmt(payment.contribution) : '—'}</td>
+    <td><strong>${fmt(payment.closingBalance)}</strong></td>
+  </tr>`).join('');
+  $('#interestSimTableInfo').textContent = filtered.length
+    ? `Showing ${filtered.length.toLocaleString()} of ${interestSimPayments.length.toLocaleString()} periods.`
+    : 'No periods match your search.';
+}
+
+function runInterestSimulation() {
+  const error = $('#interestSimError');
+  if (!error) return;
+  error.textContent = '';
+  const initialBalance = Number($('#interestSimBalance').value);
+  const annualRate = Number($('#interestSimRate').value);
+  const taxPct = Number($('#interestSimTax').value);
+  const years = Math.floor(Number($('#interestSimYears').value));
+  const monthlyContribution = Number($('#interestSimContribution').value || 0);
+  const frequency = INTEREST_SIM_FREQUENCIES[$('#interestSimFrequency').value];
+  if (!Number.isFinite(initialBalance) || initialBalance < 0 || !Number.isFinite(annualRate) || annualRate < 0 ||
+      !Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100 || !Number.isInteger(years) || years < 1 || years > 100 ||
+      !Number.isFinite(monthlyContribution) || monthlyContribution < 0 || !frequency) {
+    error.textContent = 'Enter a non-negative balance, rate and contribution, a tax rate from 0 to 100, and a duration from 1 to 100 years.';
+    $('#interestSimSummary').innerHTML = '';
+    $('#interestSimPayments').innerHTML = '';
+    $('#interestSimTableInfo').textContent = '';
+    interestSimPayments = [];
+    if (interestSimChartInstance) {
+      interestSimChartInstance.destroy();
+      interestSimChartInstance = null;
+    }
+    return;
+  }
+
+  const startDate = new Date();
+  const periodRate = annualRate / 100 / frequency.periodsPerYear;
+  const taxRate = taxPct / 100;
+  const payments = [];
+  const labels = [interestSimDateLabel(startDate)];
+  const balances = [initialBalance];
+  const contributionsTotalSeries = [0];
+  const netInterestSeries = [0];
+  let balance = initialBalance;
+  let totalContributions = 0;
+  let totalGrossInterest = 0;
+  let totalTax = 0;
+  let totalNetInterest = 0;
+  let currentMonth = startDate.getMonth();
+  let currentYear = startDate.getFullYear();
+  let nextContributionDate = interestSimAddMonths(startDate, 1);
+
+  for (let period = 1; period <= years * frequency.periodsPerYear; period++) {
+    let paymentDate;
+    if ($('#interestSimFrequency').value === 'yearly') paymentDate = interestSimAddMonths(startDate, period * 12);
+    else if ($('#interestSimFrequency').value === 'monthly') paymentDate = interestSimAddMonths(startDate, period);
+    else {
+      paymentDate = new Date(startDate);
+      paymentDate.setDate(paymentDate.getDate() + period * ($('#interestSimFrequency').value === 'weekly' ? 7 : 1));
+    }
+    const openingBalance = balance;
+    let contribution = 0;
+    if ($('#interestSimFrequency').value === 'yearly') {
+      while (monthlyContribution > 0 && nextContributionDate <= paymentDate) {
+        contribution += monthlyContribution;
+        nextContributionDate = interestSimAddMonths(nextContributionDate, 1);
+      }
+      balance += contribution;
+      totalContributions += contribution;
+    }
+    const grossInterest = balance * periodRate;
+    const tax = grossInterest * taxRate;
+    const netInterest = grossInterest - tax;
+    balance += netInterest;
+    if ($('#interestSimFrequency').value !== 'yearly') {
+      const monthChanged = paymentDate.getMonth() !== currentMonth || paymentDate.getFullYear() !== currentYear;
+      if (monthChanged && monthlyContribution > 0) {
+        contribution = monthlyContribution;
+        balance += contribution;
+        totalContributions += contribution;
+        currentMonth = paymentDate.getMonth();
+        currentYear = paymentDate.getFullYear();
+      }
+    }
+    totalGrossInterest += grossInterest;
+    totalTax += tax;
+    totalNetInterest += netInterest;
+    payments.push({ dateLabel: interestSimDateLabel(paymentDate), type: frequency.label, openingBalance, grossInterest, tax, netInterest, contribution, closingBalance: balance });
+    labels.push(interestSimDateLabel(paymentDate));
+    balances.push(balance);
+    contributionsTotalSeries.push(totalContributions);
+    netInterestSeries.push(totalNetInterest);
+  }
+  interestSimPayments = payments;
+  const fmt = value => formatCurrency(value, interestSimCurrency);
+  const invested = initialBalance + totalContributions;
+  const totalGain = balance - invested;
+  $('#interestSimSummary').innerHTML = `
+    <div class="interest-sim-metric"><span>Final balance</span><strong>${fmt(balance)}</strong></div>
+    <div class="interest-sim-metric"><span>Total contributions</span><strong>${fmt(totalContributions)}</strong></div>
+    <div class="interest-sim-metric"><span>Gross interest</span><strong class="positive">${fmt(totalGrossInterest)}</strong></div>
+    <div class="interest-sim-metric"><span>Tax paid</span><strong class="negative">${fmt(totalTax)}</strong></div>
+    <div class="interest-sim-metric"><span>Total gain</span><strong class="${totalGain >= 0 ? 'positive' : 'negative'}">${fmt(totalGain)}</strong></div>`;
+  renderInterestSimTable();
+  const canvas = $('#interestSimChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (interestSimChartInstance) interestSimChartInstance.destroy();
+  const chartFmt = value => blurActive() ? '' : formatCurrency(value, interestSimCurrency);
+  const chartTooltip = context => blurActive() ? `${context.dataset.label}: hidden` : `${context.dataset.label}: ${formatCurrency(context.parsed.y, interestSimCurrency)}`;
+  interestSimChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Balance', data: balances, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.14)', borderWidth: 2.5, fill: true, tension: .2, pointRadius: 0 },
+      { label: 'Cumulative contributions', data: contributionsTotalSeries, borderColor: '#fbbf24', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, tension: .2 },
+      { label: 'Cumulative net interest', data: netInterestSeries, borderColor: '#34d399', borderWidth: 2, pointRadius: 0, tension: .2 }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 150 }, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#cbd5e1', usePointStyle: true } }, tooltip: { callbacks: { label: chartTooltip } } },
+      scales: { x: { ticks: { color: '#94a3b8', maxTicksLimit: 10 }, grid: { color: 'rgba(51,65,85,.3)' } }, y: { ticks: { color: '#94a3b8', callback: chartFmt }, grid: { color: 'rgba(51,65,85,.3)' } } } }
+  });
+}
 
 // Convert a stored finish_date (YYYYMMDD) to a date-input value (YYYY-MM-DD).
 function finishDateToInput(dbDate) {
@@ -7795,6 +7970,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     input.addEventListener('input', runLoanSimulation);
     input.addEventListener('change', runLoanSimulation);
   });
+  ['interestSimBalance', 'interestSimRate', 'interestSimTax', 'interestSimYears', 'interestSimContribution'].forEach(id => {
+    $(`#${id}`)?.addEventListener('input', runInterestSimulation);
+    $(`#${id}`)?.addEventListener('change', runInterestSimulation);
+  });
+  $('#interestSimFrequency')?.addEventListener('change', runInterestSimulation);
+  $('#interestSimSearch')?.addEventListener('input', renderInterestSimTable);
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
     closeModal('goalDetailsModalOverlay');
@@ -7838,6 +8019,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeGoalModalX')?.addEventListener('click', () => closeModal('goalModalOverlay'));
   $('#closeGoalSimX')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
   $('#closeLoanSimX')?.addEventListener('click', () => closeModal('loanSimModalOverlay'));
+  $('#closeInterestSimX')?.addEventListener('click', () => closeModal('interestSimModalOverlay'));
   $('#closeGoalDetailsX')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
   $('#closeAccountDetailsX')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
   $('#closeProviderDetailsX')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
@@ -8452,6 +8634,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loanSimBtn = event.target.closest('[data-loan-sim]');
     if (loanSimBtn) {
       openLoanSimModal(Number(loanSimBtn.dataset.loanSim));
+      return;
+    }
+
+    const interestSimBtn = event.target.closest('[data-interest-sim]');
+    if (interestSimBtn) {
+      openInterestSimModal(Number(interestSimBtn.dataset.interestSim));
       return;
     }
 
