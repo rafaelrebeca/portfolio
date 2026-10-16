@@ -431,58 +431,35 @@
           <div id="goalsList"></div>
         </div>
 
-        <!-- TOOLS (admin): Import / Export / Currency Test -->
+        <!-- TOOLS (admin): Data / Currency Test -->
         <div class="page" id="page-tools">
           <div class="page-title">Tools</div>
-          <div class="page-desc">Admin utilities: import, export and currency conversion testing</div>
+          <div class="page-desc">Admin utilities: edit asset data and test currency conversions</div>
           <div class="tools-tabs">
-            <button class="tools-tab active" type="button" data-tools-tab="import">📥 Import</button>
-            <button class="tools-tab" type="button" data-tools-tab="export">📤 Export</button>
+            <button class="tools-tab active" type="button" data-tools-tab="data">📄 Data</button>
             <button class="tools-tab" type="button" data-tools-tab="currency-test">💱 Currency Test</button>
           </div>
 
-          <!-- IMPORT TAB -->
-          <div class="tools-panel" id="tools-panel-import">
-            <div class="page-title">Import Data</div>
-            <div class="page-desc">Upload a CSV file to bulk import/update assets</div>
+          <!-- DATA TAB -->
+          <div class="tools-panel" id="tools-panel-data">
+            <div class="page-title">Asset Data</div>
+            <div class="page-desc">Load your assets as editable CSV text, make changes, then import them.</div>
             <section class="import-card">
               <form id="importForm" class="import-controls">
                 <div class="field">
-                  <label>CSV Format</label>
-                  <code
-                    style="display:block;background:#1a1f2e;padding:8px;border-radius:4px;color:#3fd0a3;font-size:12px;">symbol,name,type,coin,price,yield,payment_months</code>
-                  <small style="display:block;margin-top:4px;color:var(--muted);">Use <strong>|</strong> to separate
-                    payment months (e.g., 3|6|9|12)</small>
+                  <label for="assetCsvText">CSV data</label>
+                  <small class="csv-format-hint">Columns: symbol, name, type, coin, price, yield, payment_months. Use | between payment months (for example, 3|6|9|12).</small>
+                  <textarea id="assetCsvText" class="asset-csv-text" spellcheck="false" aria-label="Editable asset CSV data" placeholder="symbol,name,type,coin,price,yield,payment_months"></textarea>
                 </div>
-                <label class="upload-box" for="csvFile">
-                  <span class="upload-icon">📄</span>
-                  <span><strong>Select a CSV file</strong><small id="csvFileName">No file selected</small></span>
-                  <input type="file" id="csvFile" accept=".csv">
-                </label>
-                <button class="btn-sm primary import-run" type="submit">Run Import</button>
+                <div class="asset-csv-actions">
+                  <button class="btn-sm" id="loadAssetsCsvBtn" type="button">Load current assets</button>
+                  <button class="btn-sm primary import-run" type="submit">Import edited data</button>
+                </div>
               </form>
             </section>
             <div style="margin-top:18px;">
               <div class="page-desc" style="margin-bottom:8px;">Import log</div>
-              <div class="import-log" id="importLog">Waiting for import...</div>
-            </div>
-          </div>
-
-          <!-- EXPORT TAB -->
-          <div class="tools-panel" id="tools-panel-export" style="display:none;">
-            <div class="page-title">Export Data</div>
-            <div class="page-desc">Download a CSV file of your assets in import-ready format</div>
-            <section class="import-card">
-              <div class="import-controls">
-                <div>
-                  <p class="page-desc" style="margin-bottom:12px;">symbol,name,type,coin,price,yield,payment_months</p>
-                  <button class="btn-sm primary" id="exportAssetsBtn">📈 Export Assets</button>
-                </div>
-              </div>
-            </section>
-            <div style="margin-top:18px;">
-              <div class="page-desc" style="margin-bottom:8px;">Export log</div>
-              <div class="import-log" id="exportLog">Ready to export...</div>
+              <div class="import-log" id="importLog" aria-live="polite">Load current assets or paste CSV data to get started.</div>
             </div>
           </div>
 

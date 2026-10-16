@@ -878,6 +878,7 @@ tbody tr:last-child td {
   font-family: monospace;
   max-height: 180px;
   overflow-y: auto;
+  white-space: pre-line;
 }
 
 .import-log .ok {
@@ -1573,6 +1574,39 @@ select {
 
 .import-controls .field {
   margin: 0;
+}
+
+.csv-format-hint {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--muted);
+}
+
+.asset-csv-text {
+  display: block;
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel2);
+  color: var(--text);
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.asset-csv-text:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.asset-csv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .import-controls select {

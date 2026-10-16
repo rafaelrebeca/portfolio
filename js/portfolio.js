@@ -8345,81 +8345,91 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // CSV File Select
-  $('#csvFile')?.addEventListener('change', e => {
-    const filename = e.target.files.length ? e.target.files[0].name : 'No file selected';
-    if ($('#csvFileName')) $('#csvFileName').textContent = filename;
+  // Parse CSV while respecting quoted commas, quotes, and newlines.
+  function parseCSV(text) {
+    text = text.replace(/^\uFEFF/, '');
+    const rows = [];
+    let row = [];
+    let value = '';
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (quoted) {
+        if (char === '"' && text[i + 1] === '"') { value += '"'; i++; }
+        else if (char === '"') quoted = false;
+        else value += char;
+      } else if (char === '"' && value === '') quoted = true;
+      else if (char === ',') { row.push(value.trim()); value = ''; }
+      else if (char === '\n' || char === '\r') {
+        if (char === '\r' && text[i + 1] === '\n') i++;
+        row.push(value.trim());
+        if (row.some(cell => cell !== '')) rows.push(row);
+        row = []; value = '';
+      } else value += char;
+    }
+    if (quoted) throw new Error('CSV contains an unclosed quoted field.');
+    row.push(value.trim());
+    if (row.some(cell => cell !== '')) rows.push(row);
+    return rows;
+  }
+
+  // Load export-ready CSV directly into the editable data field.
+  $('#loadAssetsCsvBtn')?.addEventListener('click', () => {
+    const headers = ['symbol', 'name', 'type', 'coin', 'price', 'yield', 'payment_months'];
+    const rows = state.assets.map(asset => [
+      asset.symbol || '', asset.name || '', asset.type || '', asset.coin || 'USD',
+      asset.price !== null && asset.price !== undefined ? asset.price : '',
+      asset.dividend_yield !== null && asset.dividend_yield !== undefined ? asset.dividend_yield : '',
+      Array.isArray(asset.payment_months) && asset.payment_months.length ? asset.payment_months.join('|') : ''
+    ]);
+    $('#assetCsvText').value = arrayToCSV(headers, rows);
+    $('#importLog').textContent = `Loaded ${rows.length} assets. Edit the CSV above, then select Import edited data.`;
   });
 
   // CSV Import
   $('#importForm')?.addEventListener('submit', async event => {
     event.preventDefault();
-    const fileInput = $('#csvFile');
+    const csvText = $('#assetCsvText')?.value || '';
     const log = $('#importLog');
-    if (!fileInput.files.length) return toast('Select a CSV file first.');
-    const file = fileInput.files[0];
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const now = new Date().toLocaleTimeString();
-
-    const rows = [];
-    lines.forEach((line, index) => {
-      const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
-      // Skip header row
-      if (index === 0 && parts[0]?.toLowerCase() === 'symbol') return;
-      if (!parts[0]) return;
-
-      // Format: symbol,name,type,coin,price,yield,payment_months
-      rows.push({
-        symbol: parts[0],
-        name: parts[1] || '',
-        type: parts[2] || 'stock',
-        coin: parts[3] || 'USD',
-        price: parts[4] ? numeric(parts[4]) : null,
-        yield: parts[5] ? numeric(parts[5]) : null,
-        payment_months: parts[6] || ''
-      });
-    });
+    let parsedRows;
+    try {
+      parsedRows = parseCSV(csvText);
+    } catch (error) {
+      if (log) log.textContent = `[${now}] [ERROR] ${error.message}`;
+      return toast('Could not read CSV data.');
+    }
+    if (parsedRows[0]?.[0]?.toLowerCase() === 'symbol') parsedRows.shift();
+    const rows = parsedRows.filter(parts => parts[0]).map(parts => ({
+      symbol: parts[0], name: parts[1] || '', type: parts[2] || 'stock', coin: parts[3] || 'USD',
+      price: parts[4] ? numeric(parts[4]) : null,
+      yield: parts[5] ? numeric(parts[5]) : null,
+      payment_months: parts[6] || ''
+    }));
+    if (!rows.length) return toast('Add at least one asset row before importing.');
 
     if (state.guest) {
-      if (log) {
-        log.innerHTML = `[${now}] Starting import (Guest demo) — file: ${file.name}<br>` +
-          rows.map(r => `<span class="ok">[OK]</span> Parsed: ${r.symbol} - ${r.name}`).join('<br>') +
-          `<br><span class="ok">[DONE]</span> Import complete — ${rows.length} assets processed (demo only).`;
-      }
+      if (log) log.textContent = `[${now}] Starting import (Guest demo)\n${rows.map(r => `[OK] Parsed: ${r.symbol} - ${r.name}`).join('\n')}\n[DONE] Import complete — ${rows.length} assets processed (demo only).`;
       toast('Import simulated successfully.');
       return;
     }
 
     try {
-      if (log) log.innerHTML = `[${now}] Starting import — file: ${file.name} (${rows.length} rows)...<br>`;
+      if (log) log.textContent = `[${now}] Starting import (${rows.length} rows)...`;
       const result = await request('/admin/import', { method: 'POST', body: JSON.stringify({ rows }) });
-      if (log) log.innerHTML += `<span class="ok">[DONE]</span> ${result.count} assets imported/updated.`;
+      if (log) log.textContent += `\n[DONE] ${result.count} assets imported/updated.`;
       await loadData();
       toast('Import completed.');
     } catch (error) {
-      if (log) log.innerHTML += `<br><span class="warn">[ERROR]</span> ${error.message}`;
+      if (log) log.textContent += `\n[ERROR] ${error.message}`;
     }
   });
-
-  // CSV Export Helper
-  function downloadCSV(data, filename) {
-    const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
 
   function arrayToCSV(headers, rows) {
     const escapeCSV = val => {
       if (val === null || val === undefined) return '';
       const str = String(val);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
       return str;
@@ -8430,38 +8440,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     ].join('\n');
     return csvContent;
   }
-
-  // Export Assets
-  $('#exportAssetsBtn')?.addEventListener('click', () => {
-    const log = $('#exportLog');
-    const now = new Date().toLocaleTimeString();
-
-    try {
-      const headers = ['symbol', 'name', 'type', 'coin', 'price', 'yield', 'payment_months'];
-      const rows = state.assets.map(asset => [
-        asset.symbol || '',
-        asset.name || '',
-        asset.type || '',
-        asset.coin || 'USD',
-        asset.price !== null && asset.price !== undefined ? asset.price : '',
-        asset.dividend_yield !== null && asset.dividend_yield !== undefined ? asset.dividend_yield : '',
-        Array.isArray(asset.payment_months) && asset.payment_months.length > 0 ? asset.payment_months.join('|') : ''
-      ]);
-
-      const csv = arrayToCSV(headers, rows);
-      downloadCSV(csv, 'assets_export.csv');
-
-      if (log) {
-        log.innerHTML = `[${now}] <span class="ok">[SUCCESS]</span> Exported ${rows.length} assets to assets_export.csv`;
-      }
-      toast(`Exported ${rows.length} assets successfully.`);
-    } catch (error) {
-      if (log) {
-        log.innerHTML = `[${now}] <span class="warn">[ERROR]</span> ${error.message}`;
-      }
-      toast('Export failed: ' + error.message);
-    }
-  });
 
   // Table Delegation (Edit/Delete Actions & Add to Account)
   document.addEventListener('contextmenu', event => {

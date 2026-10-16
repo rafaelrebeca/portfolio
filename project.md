@@ -316,7 +316,7 @@ Above the goal list, a **Goal Statistics** card (`renderGoalStats`) summarizes t
 
 ### Tools, Users, Profile, and Currency
 
-- **Tools** is admin-only and has Import, Export, and Currency Test tabs. Import accepts asset CSV data; Export generates import-ready CSV; Currency Test converts up to five rows and shows individual and total results.
+- **Tools** is admin-only and has Data and Currency Test tabs. Data loads import-ready asset CSV into an editable text area and imports the edited rows; Currency Test converts up to five rows and shows individual and total results.
 - **Users** is admin-only and supports user creation, password reset, and role changes between `user` and `admin`, except changing the current administrator's role. Guest mode is available only from the login menu and is not a stored user.
 - **Profile** shows the current username/role, allows setting monthly expenses for FIRE, and provides self-service password reset.
 - **Currency** displays stored exchange rates with search and pagination.
