@@ -7678,7 +7678,12 @@ function runLoanSimulation() {
   const finalPaymentThreshold = Number($('#loanSimFinalPayment').value || 0);
   const months = loanMonthsUntilDate(endDate);
 
-  if (!(capital > 0) || rate < 0 || !endDate || !(months > 0) || amortization < 0 || amortization > capital || monthlyAmortization < 0 || finalPaymentThreshold < 0) {
+  if (!Number.isFinite(capital) || capital <= 0 ||
+      !Number.isFinite(rate) || rate < 0 ||
+      !endDate || !Number.isFinite(months) || months <= 0 ||
+      !Number.isFinite(amortization) || amortization < 0 || amortization > capital ||
+      !Number.isFinite(monthlyAmortization) || monthlyAmortization < 0 ||
+      !Number.isFinite(finalPaymentThreshold) || finalPaymentThreshold < 0) {
     if (err) err.textContent = 'Check the values and choose a future date for the last payment.';
     result.innerHTML = '';
     return;
