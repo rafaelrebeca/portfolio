@@ -159,7 +159,7 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
 
       const result = await env.myd1db.prepare('INSERT INTO assets (name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?)').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
       const assetId = result.meta.last_row_id;
@@ -189,7 +189,7 @@ export async function onRequest(context) {
       } else if (typeof body.payment_months === 'string' && body.payment_months.trim()) {
         months = body.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
       }
-      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
 
       const updateRes = await env.myd1db.prepare('UPDATE assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id).run();
       if (!changed(updateRes)) return fail('Asset not found.', 404);
@@ -224,7 +224,7 @@ export async function onRequest(context) {
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
-      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
       const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
       return json({ id: result.meta.last_row_id, ok: true }, 201);
     }
@@ -236,7 +236,7 @@ export async function onRequest(context) {
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
       const coin = clean(body.coin) || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
-      if (!name || name.length > 50 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 50 characters) and type (stock, bond, etf, cfd, commodity).');
+      if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
       const owner = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').first();
       if (!owner) return fail('Personal asset not found.', 404);
       const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id).run();
@@ -597,7 +597,7 @@ export async function onRequest(context) {
           months = row.payment_months.split('|').map(m => Number(m.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12);
         }
 
-        if (!(await validAssetType(env.myd1db, type))) continue;
+        if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) continue;
 
         // Check if asset exists
         const existing = await env.myd1db.prepare('SELECT id FROM assets WHERE UPPER(symbol) = UPPER(?)').bind(symbol).first();

@@ -614,7 +614,7 @@
       </div>
       <form id="assetForm">
         <input type="hidden" id="assetEditId" name="asset_id">
-        <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required maxlength="50"
+        <div class="field"><label>Name</label><input type="text" id="assetName" name="name" required maxlength="100"
             placeholder="e.g. Apple Inc."></div>
         <div class="field"><label>Symbol</label><input type="text" id="assetSymbol" name="symbol" required
             placeholder="e.g. AAPL"></div>
@@ -916,11 +916,12 @@
       <div class="goal-details-summary" id="goalDetailsSummary"></div>
       <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
       <div class="goal-details-callout" id="goalDetailsCallout"></div>
-      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart"></canvas>
+      <div class="details-chart-row" id="goalDetailsChartRow" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div id="goalDetailsChartWrap" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart" role="button" tabindex="0" aria-label="Toggle goal chart to snapshot history"></canvas>
         </div>
         <div class="chart-legend" id="goalDetailsLegend" style="flex:1;"></div>
       </div>
+      <div id="goalDetailsChartHint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">Click the chart to view snapshot history</div>
       <div class="modal-actions" style="margin-top:20px;">
         <button class="btn-sm primary" type="button" id="goalDetailsSimulateBtn">Simulate</button>
       </div>

@@ -530,6 +530,9 @@ let portfolioAssetChartInstance = null;
 let portfolioTypeChartInstance = null;
 let goalDetailsChartInstance = null;
 let goalDetailsGoalId = null;
+let goalDetailsChartMode = 'donut';
+let goalDetailsDonutData = null;
+let goalDetailsHistoryData = null;
 let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
@@ -6981,6 +6984,100 @@ function validateGoalSubs(value, subs) {
 
 /* ================= GOAL DETAILS ================= */
 
+function renderGoalDetailsChart() {
+  if (goalDetailsChartInstance) {
+    goalDetailsChartInstance.destroy();
+    goalDetailsChartInstance = null;
+  }
+  const canvas = document.getElementById('goalDetailsChart');
+  const ctx = canvas?.getContext('2d');
+  const row = $('#goalDetailsChartRow');
+  const chartWrap = $('#goalDetailsChartWrap');
+  const legend = $('#goalDetailsLegend');
+  const hint = $('#goalDetailsChartHint');
+  if (!ctx || typeof Chart === 'undefined' || !goalDetailsDonutData) return;
+
+  const showingHistory = goalDetailsChartMode === 'history' && goalDetailsHistoryData?.labels?.length;
+  if (row) {
+    row.style.flexDirection = showingHistory ? 'column' : 'row';
+    row.style.alignItems = showingHistory ? 'stretch' : 'center';
+  }
+  if (chartWrap) {
+    chartWrap.style.width = showingHistory ? '100%' : '200px';
+    chartWrap.style.height = showingHistory ? '240px' : '200px';
+  }
+  if (legend) legend.style.display = showingHistory ? 'none' : '';
+  if (hint) hint.textContent = showingHistory ? 'Click the chart to return to the current breakdown' : (goalDetailsHistoryData?.labels?.length ? 'Click the chart to view snapshot history' : 'Snapshot history is not available for this goal');
+  canvas.setAttribute('aria-label', showingHistory ? 'Snapshot history of goal contribution percentages; activate to return to current breakdown' : 'Current goal contribution breakdown; activate to view snapshot history');
+  canvas.style.cursor = goalDetailsHistoryData?.labels?.length ? 'pointer' : 'default';
+
+  if (showingHistory) {
+    const labels = goalDetailsHistoryData.labels;
+    const datasets = goalDetailsHistoryData.series.map((series, index) => ({
+      label: series.label,
+      data: historyLinePoints(series.values),
+      borderColor: CHART_COLORS[index % CHART_COLORS.length],
+      backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+      tension: 0.3,
+      fill: false,
+      spanGaps: true,
+      pointRadius: 0
+    }));
+    const lastIndex = Math.max(0, labels.length - 1);
+    goalDetailsChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        parsing: false,
+        normalized: true,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+          decimation: { enabled: true, algorithm: 'lttb', samples: HISTORY_LINE_MAX_POINTS, threshold: HISTORY_LINE_MAX_POINTS },
+          legend: { display: datasets.length > 1, labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
+          tooltip: {
+            callbacks: {
+              title: contexts => labels[Math.round(Number(contexts[0]?.parsed?.x ?? 0))] || '',
+              label: context => `${context.dataset.label}: ${Number(context.parsed.y || 0).toFixed(1)}%`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear', min: 0, max: lastIndex,
+            ticks: { maxTicksLimit: 10, color: '#e6ebf5', callback: value => labels[Math.round(Number(value))] || '' },
+            grid: { color: 'rgba(255,255,255,.05)' }
+          },
+          y: {
+            min: 0, max: 100,
+            ticks: { color: '#e6ebf5', callback: value => `${value}%` },
+            grid: { color: 'rgba(255,255,255,.05)' }
+          }
+        }
+      }
+    });
+    return;
+  }
+
+  const { labels, data, colors } = goalDetailsDonutData;
+  goalDetailsChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels.length ? labels : ['No Data'],
+      datasets: [{ data: data.length ? data : [1], backgroundColor: data.length ? colors : ['#2a3550'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+}
+
+function toggleGoalDetailsChart() {
+  if (!goalDetailsHistoryData?.labels?.length) return;
+  goalDetailsChartMode = goalDetailsChartMode === 'donut' ? 'history' : 'donut';
+  renderGoalDetailsChart();
+}
+
 function openGoalDetailsModal(goalId) {
   const g = state.goals.find(item => item.id === goalId);
   if (!g) return;
@@ -7046,29 +7143,35 @@ function openGoalDetailsModal(goalId) {
     calloutEl.innerHTML = '';
   }
 
-  // Donut chart
-  if (typeof Chart !== 'undefined') {
-    if (goalDetailsChartInstance) goalDetailsChartInstance.destroy();
-    const ctx = document.getElementById('goalDetailsChart')?.getContext('2d');
-    if (ctx) {
-      goalDetailsChartInstance = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: labels.length ? labels : ['No Data'],
-          datasets: [{
-            data: dataAbs.length ? dataAbs : [1],
-            backgroundColor: dataAbs.length ? colors : ['#2a3550'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } }
-        }
-      });
+  goalDetailsChartMode = 'donut';
+  goalDetailsDonutData = { labels, data: dataAbs, colors };
+  goalDetailsHistoryData = null;
+  try { hydrateSnapshotCache(); } catch (error) { console.warn('Could not load goal chart snapshot history:', error); }
+  const snapshots = (timeTravelList || []).slice().reverse();
+  if (snapshots.length && entries.length) {
+    const accountGroups = entries.map(([label]) => ({
+      label,
+      accounts: linked.filter(acc => `${acc.name} (${acc.provider_name || providerName(acc.provider_id)})` === label)
+    }));
+    const historyLabels = snapshots.map(snapshot => formatSnapshotDay(snapshot.day));
+    const series = accountGroups.map(group => ({
+      label: group.label,
+      values: snapshots.map(snapshot => {
+        const snapshotAccounts = snapshot.data?.accounts || [];
+        const snapshotById = new Map(snapshotAccounts.map(account => [account.id, Number(account.valueEur || 0)]));
+        if (!group.accounts.some(account => snapshotById.has(account.id))) return null;
+        return group.accounts.reduce((sum, account) => sum + (snapshotById.get(account.id) || 0), 0);
+      })
+    }));
+    const totals = snapshots.map((_, index) => series.reduce((sum, item) => sum + Math.abs(item.values[index] || 0), 0));
+    series.forEach(item => {
+      item.values = item.values.map((value, index) => value === null || totals[index] <= 0 ? null : Math.abs(value) / totals[index] * 100);
+    });
+    if (historyLabels.length && series.some(item => item.values.some(value => value !== null))) {
+      goalDetailsHistoryData = { labels: historyLabels, series };
     }
   }
+  renderGoalDetailsChart();
 
   // Legend (reuse dashboard renderLegend which handles negatives + absolute values)
   renderLegend('goalDetailsLegend', labels, data, colors);
@@ -7981,6 +8084,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     closeModal('goalDetailsModalOverlay');
     openGoalSimModal(goalDetailsGoalId);
   });
+  $('#goalDetailsChart')?.addEventListener('click', toggleGoalDetailsChart);
+  $('#goalDetailsChart')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleGoalDetailsChart();
+  });
   $('#closeUserModalBtn')?.addEventListener('click', () => closeModal('userModalOverlay'));
   $('#closeResetPasswordModalBtn')?.addEventListener('click', () => closeModal('resetPasswordModalOverlay'));
   // Modal header X close buttons
@@ -8407,6 +8516,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       payment_months: parts[6] || ''
     }));
     if (!rows.length) return toast('Add at least one asset row before importing.');
+    const invalidName = rows.find(row => !row.name.trim() || row.name.trim().length > 100);
+    if (invalidName) {
+      const message = 'Asset names must contain 1–100 characters.';
+      if (log) log.textContent = `[${now}] [ERROR] ${message}`;
+      return toast(message);
+    }
 
     if (state.guest) {
       if (log) log.textContent = `[${now}] Starting import (Guest demo)\n${rows.map(r => `[OK] Parsed: ${r.symbol} - ${r.name}`).join('\n')}\n[DONE] Import complete — ${rows.length} assets processed (demo only).`;
