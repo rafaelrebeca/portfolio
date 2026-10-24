@@ -384,10 +384,11 @@ function closeLoadingModal(token) {
 function dataLoadSteps() {
   const steps = [
     { key: 'portfolio', label: 'Loading portfolio data' },
+    { key: 'expenses', label: 'Loading expenses' },
     { key: 'snapshots', label: 'Loading snapshot history' }
   ];
   if (state.user && state.user.role === 'admin') {
-    steps.splice(1, 0, { key: 'users', label: 'Loading user accounts' });
+    steps.splice(2, 0, { key: 'users', label: 'Loading user accounts' });
   }
   return steps;
 }
@@ -454,6 +455,7 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps())
     : null;
   if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'active');
+  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'active');
   hydrateSnapshotCache();
   try {
     const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses] = await Promise.all([
@@ -481,6 +483,7 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     return false;
   }
   if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'done');
+  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'done');
   let snapshotsFresh = true;
   if (state.user && state.user.role === 'admin') {
     if (loadingToken) setLoadingStep(loadingToken, 'users', 'active');
