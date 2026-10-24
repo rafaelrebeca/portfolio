@@ -343,6 +343,96 @@ export async function onRequest(context) {
       return json({ ok: true });
     }
 
+    // Expenses are stored independently from accounts and never affect balances.
+    if (method === 'GET' && path === 'expense-categories') {
+      const user = await requireMember(request, env);
+      const { results } = await env.myd1db.prepare('SELECT id, name FROM expense_categories WHERE user_id = ? ORDER BY name COLLATE NOCASE').bind(user.id).all();
+      return json({ items: results });
+    }
+    if (method === 'POST' && path === 'expense-categories') {
+      const user = await requireMember(request, env), body = await readBody(request), name = clean(body.name);
+      if (!name || name.length > 80) return fail('Category name must be 1–80 characters.');
+      if (await env.myd1db.prepare('SELECT id FROM expense_categories WHERE user_id = ? AND name = ?').bind(user.id, name).first()) return fail('A category with that name already exists.', 409);
+      const result = await env.myd1db.prepare('INSERT INTO expense_categories (user_id, name) VALUES (?, ?)').bind(user.id, name).run();
+      return json({ id: result.meta.last_row_id }, 201);
+    }
+    if ((method === 'PUT' || method === 'PATCH') && /^expense-categories\/\d+$/.test(path)) {
+      const user = await requireMember(request, env), id = Number(path.split('/')[1]), body = await readBody(request), name = clean(body.name);
+      if (!name || name.length > 80) return fail('Category name must be 1–80 characters.');
+      const owned = await env.myd1db.prepare('SELECT id FROM expense_categories WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+      if (!owned) return fail('Category not found.', 404);
+      if (await env.myd1db.prepare('SELECT id FROM expense_categories WHERE user_id = ? AND name = ? AND id <> ?').bind(user.id, name, id).first()) return fail('A category with that name already exists.', 409);
+      await env.myd1db.prepare('UPDATE expense_categories SET name = ? WHERE id = ? AND user_id = ?').bind(name, id, user.id).run();
+      return json({ ok: true });
+    }
+    if (method === 'DELETE' && /^expense-categories\/\d+$/.test(path)) {
+      const user = await requireMember(request, env), id = Number(path.split('/')[1]);
+      if (!changed(await env.myd1db.prepare('DELETE FROM expense_categories WHERE id = ? AND user_id = ?').bind(id, user.id).run())) return fail('Category not found.', 404);
+      return json({ ok: true });
+    }
+    if (method === 'POST' && path === 'expense-subcategories') {
+      const user = await requireMember(request, env), body = await readBody(request), name = clean(body.name), categoryId = Number(body.category_id);
+      if (!Number.isInteger(categoryId) || !name || name.length > 80) return fail('Provide a valid category and sub-category name.');
+      const owned = await env.myd1db.prepare('SELECT id FROM expense_categories WHERE id = ? AND user_id = ?').bind(categoryId, user.id).first();
+      if (!owned) return fail('Category not found.', 404);
+      if (await env.myd1db.prepare('SELECT id FROM expense_subcategories WHERE category_id = ? AND name = ?').bind(categoryId, name).first()) return fail('A sub-category with that name already exists in this category.', 409);
+      const result = await env.myd1db.prepare('INSERT INTO expense_subcategories (user_id, category_id, name) VALUES (?, ?, ?)').bind(user.id, categoryId, name).run();
+      return json({ id: result.meta.last_row_id }, 201);
+    }
+    if (method === 'GET' && path === 'expense-subcategories') {
+      const user = await requireMember(request, env);
+      const { results } = await env.myd1db.prepare(`SELECT id, category_id, name FROM expense_subcategories WHERE user_id = ? ORDER BY category_id, name COLLATE NOCASE`).bind(user.id).all();
+      return json({ items: results });
+    }
+    if ((method === 'PUT' || method === 'PATCH') && /^expense-subcategories\/\d+$/.test(path)) {
+      const user = await requireMember(request, env), id = Number(path.split('/')[1]), body = await readBody(request), name = clean(body.name);
+      if (!name || name.length > 80) return fail('Sub-category name must be 1–80 characters.');
+      const owned = await env.myd1db.prepare('SELECT id, category_id FROM expense_subcategories WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+      if (!owned) return fail('Sub-category not found.', 404);
+      if (await env.myd1db.prepare('SELECT id FROM expense_subcategories WHERE category_id = ? AND name = ? AND id <> ?').bind(owned.category_id, name, id).first()) return fail('A sub-category with that name already exists in this category.', 409);
+      await env.myd1db.prepare('UPDATE expense_subcategories SET name = ? WHERE id = ? AND user_id = ?').bind(name, id, user.id).run();
+      return json({ ok: true });
+    }
+    if (method === 'DELETE' && /^expense-subcategories\/\d+$/.test(path)) {
+      const user = await requireMember(request, env), id = Number(path.split('/')[1]);
+      if (!changed(await env.myd1db.prepare('DELETE FROM expense_subcategories WHERE id = ? AND user_id = ?').bind(id, user.id).run())) return fail('Sub-category not found.', 404);
+      return json({ ok: true });
+    }
+    if (method === 'GET' && path === 'expenses') {
+      const user = await requireMember(request, env);
+      const { results } = await env.myd1db.prepare(`SELECT e.id, e.category_id, e.subcategory_id, e.expense_month, e.amount, e.currency,
+        c.name AS category_name, s.name AS subcategory_name
+        FROM expenses e JOIN expense_categories c ON c.id = e.category_id
+        LEFT JOIN expense_subcategories s ON s.id = e.subcategory_id
+        WHERE e.user_id = ? ORDER BY e.expense_month, c.name COLLATE NOCASE, s.name COLLATE NOCASE`).bind(user.id).all();
+      return json({ items: results });
+    }
+    if (method === 'POST' && path === 'expenses') {
+      const user = await requireMember(request, env), body = await readBody(request);
+      const categoryId = Number(body.category_id), subcategoryId = body.subcategory_id === null || body.subcategory_id === '' || body.subcategory_id === undefined ? null : Number(body.subcategory_id);
+      const month = clean(body.expense_month), currency = clean(body.currency).toUpperCase();
+      const amount = body.amount === null || body.amount === '' || body.amount === undefined ? null : Number(body.amount);
+      if (!Number.isInteger(categoryId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || !/^[A-Z]{3}$/.test(currency)) return fail('Provide a valid month, amount, and currency.');
+      const category = await env.myd1db.prepare('SELECT id FROM expense_categories WHERE id = ? AND user_id = ?').bind(categoryId, user.id).first();
+      if (!category) return fail('Category not found.', 404);
+      if (subcategoryId !== null) {
+        if (!Number.isInteger(subcategoryId)) return fail('Invalid sub-category.');
+        const subcategory = await env.myd1db.prepare('SELECT id FROM expense_subcategories WHERE id = ? AND category_id = ? AND user_id = ?').bind(subcategoryId, categoryId, user.id).first();
+        if (!subcategory) return fail('Sub-category not found.', 404);
+      }
+      const existing = await env.myd1db.prepare(`SELECT id FROM expenses WHERE user_id = ? AND category_id = ? AND subcategory_id IS ? AND expense_month = ?`).bind(user.id, categoryId, subcategoryId, month).first();
+      if (amount === null) {
+        if (existing) await env.myd1db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').bind(existing.id, user.id).run();
+        return json({ ok: true });
+      }
+      if (existing) {
+        await env.myd1db.prepare('UPDATE expenses SET amount = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, currency, existing.id, user.id).run();
+        return json({ id: existing.id, ok: true });
+      }
+      const result = await env.myd1db.prepare('INSERT INTO expenses (user_id, category_id, subcategory_id, expense_month, amount, currency) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, categoryId, subcategoryId, month, amount, currency).run();
+      return json({ id: result.meta.last_row_id }, 201);
+    }
+
     if (method === 'GET' && path === 'accounts') {
       const user = await requireMember(request, env);
       const { results } = await env.myd1db.prepare(`SELECT a.*, p.name AS provider_name FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE p.user_id = ? ORDER BY p.name, a.name`).bind(user.id).all();

@@ -42,7 +42,7 @@ portfolio/
 
 Important runtime files:
 
-- `index.html` — Dashboard, Calendar, Simulation, Goals, My Portfolio, My Accounts, Assets, Dividends, Currency, Profile, Tools, Users, and all modal markup.
+- `index.html` — Dashboard, Calendar, Simulation, Goals, My Portfolio, My Accounts, My Expenses, Assets, Dividends, Currency, Profile, Tools, Users, and all modal markup.
 - `js/portfolio.js` — state, API wrapper, calculations, renderers, chart construction, filters, event handlers, snapshots, and simulations.
 - `functions/api/[[path]].js` — authentication, authorization, validation, D1 queries, external API calls, and snapshot endpoints.
 - `schema.sql` — tracked D1 schema reference: table definitions, indexes, triggers, and the `asset_type` seed rows. The deployed D1 database is managed separately; one-off migrations are applied manually with `wrangler d1 execute`.
@@ -79,6 +79,9 @@ The worker uses these D1 tables:
 - `currency` — exchange rates relative to USD.
 - `update_story` — `what` and `when` timestamps for external data refreshes, currently used to avoid repeating the daily currency refresh.
 - `dashboard_snapshots` — one JSON dashboard snapshot per user per UTC day, keyed by `(user_id, day)`.
+- `expense_categories` — user-owned expense categories. Deleting a category removes its sub-categories and expenses.
+- `expense_subcategories` — user-owned sub-categories attached to a category; names are unique within their category.
+- `expenses` — one monthly amount per user/category/sub-category bucket, with its currency code. `expense_month` is `YYYY-MM`; values are separate from accounts and never modify account balances. The optional sub-category represents a category-level amount when null. The schema's expression index treats null as one bucket.
 
 Platform assets and personal assets can have the same numeric ID. The frontend therefore always resolves an asset using both its ID and its `is_personal` flag. Holding select values encode both pieces as `<id>|<is_personal>`.
 
@@ -136,6 +139,18 @@ All routes are under `/api`. The route is implemented by `functions/api/[[path]]
 | DELETE | `/api/holdings/{id}` | Member | Deletes an owned holding. |
 
 Holdings accept platform or personal assets. Personal holdings are ownership-checked and returned with `is_personal: 1`. Asset accounts calculate their value from holding price × quantity; non-asset accounts calculate value from their balance.
+
+### Expenses
+
+| Method | Path | Access | Behavior |
+|---|---|---|---|
+| GET/POST | `/api/expense-categories` | Member | Lists the user's categories or creates one. |
+| PUT/PATCH/DELETE | `/api/expense-categories/{id}` | Member | Renames or deletes an owned category; deletion cascades to its sub-categories and expenses. |
+| GET/POST | `/api/expense-subcategories` | Member | Lists or creates a sub-category under an owned category. |
+| PUT/PATCH/DELETE | `/api/expense-subcategories/{id}` | Member | Renames or deletes an owned sub-category; deletion removes its monthly expense buckets. |
+| GET/POST | `/api/expenses` | Member | Lists monthly expense buckets or upserts one. Posting a null amount removes that month/category/sub-category bucket. |
+
+My Expenses sits below My Accounts in Personal navigation and uses the same tab styling as Assets. The Monthly Grid has a EUR monthly total row, one category-level row, and one row per sub-category, with editable month columns. Row actions rename or delete categories and sub-categories; deletion confirms first and removes the related expense amounts. Year arrows move through years containing expenses and the current year. Add Expense records a category/sub-category total for a month without a day. Current-year charts show stacked monthly totals by category and sub-category. All Time charts show monthly line series with LTTB decimation. All chart values and monthly totals are converted to EUR; newly added entries default to EUR and can use another currency.
 
 ### Goals
 

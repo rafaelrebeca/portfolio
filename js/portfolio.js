@@ -43,9 +43,12 @@ const guestData = {
   users: []
 };
 
-const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], accountGrowths: new Map(), accountGrowthsDirty: true, snapshotDailyGrowths: new Map(), snapshotDailyGrowthsDirty: true };
+const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], expenseCategories: [], expenseSubcategories: [], expenses: [], accountGrowths: new Map(), accountGrowthsDirty: true, snapshotDailyGrowths: new Map(), snapshotDailyGrowthsDirty: true };
 let blurMode = false;
 let currentPage = 'dashboard';
+let activeExpenseTab = 'grid';
+let expenseYear = new Date().getFullYear();
+const expenseCharts = { yearCategory: null, yearSubcategory: null, allCategory: null, allSubcategory: null };
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const numeric = value => value === null || value === undefined || value === '' ? null : Number(value);
@@ -437,6 +440,9 @@ function gainLossValue(h, currency = 'USD') {
 async function loadData({ refreshSnapshots = false, showLoading = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
+    state.expenseCategories = [];
+    state.expenseSubcategories = [];
+    state.expenses = [];
     assetTypesCache = [];
     timeTravelList = [];
     invalidateAccountGrowthCache();
@@ -449,9 +455,10 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
   if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'active');
   hydrateSnapshotCache();
   try {
-    const [assets, providers, accounts, holdings, currencies, goals, assetTypes] = await Promise.all([
+    const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses] = await Promise.all([
       request('/assets'), request('/providers'), request('/accounts'),
-      request('/holdings'), request('/currency'), request('/goals'), request('/asset-types')
+      request('/holdings'), request('/currency'), request('/goals'), request('/asset-types'),
+      request('/expense-categories'), request('/expense-subcategories'), request('/expenses')
     ]);
     Object.assign(state, {
       assets: assets?.items || [],
@@ -459,7 +466,10 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
       accounts: accounts?.items || [],
       holdings: holdings?.items || [],
       currencies: currencies?.items || [],
-      goals: goals?.items || []
+      goals: goals?.items || [],
+      expenseCategories: expenseCategories?.items || [],
+      expenseSubcategories: expenseSubcategories?.items || [],
+      expenses: expenses?.items || []
     });
     assetTypesCache = assetTypes?.items || [];
   } catch (err) {
@@ -2349,6 +2359,7 @@ function updateNavVisibility() {
   set('#navPortfolio', hasAssetAccounts);
   set('#navAssets', hasAssetAccounts);
   set('#navDividends', hasAssetAccounts);
+  set('#navExpenses', true);
   set('#navGoals', hasAnyAccounts);
   set('#navSimulation', hasAnyAccounts);
   if (!hasAnyAccounts && currentPage === 'simulation') showPage('dashboard');
@@ -2365,6 +2376,7 @@ function render() {
   if (timeTravelActive()) {
     // In "past" mode the dashboard is rendered from the snapshot; other pages render live.
     renderDashboardFromSnapshot(timeTravelSnapshot.data);
+    renderExpenses();
     renderAssets();
     fillDividendPeriodValue();
     renderDividends();
@@ -2401,6 +2413,7 @@ function render() {
   portfolioFilter = null;
   renderDashboardAccounts();
 
+  renderExpenses();
   renderAssets();
   fillDividendPeriodValue();
   renderDividends();
@@ -4594,13 +4607,190 @@ function renderAssets() {
 // Switch between the System Assets and Personal Assets tabs.
 function switchAssetTab(tab) {
   activeAssetTab = tab;
-  document.querySelectorAll('.asset-tab').forEach(btn => {
+  document.querySelectorAll('[data-asset-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.assetTab === tab);
   });
   document.querySelectorAll('.asset-panel').forEach(panel => {
     panel.style.display = panel.id === `asset-panel-${tab}` ? '' : 'none';
   });
   renderAssets();
+}
+
+/* ================= EXPENSES ================= */
+const EXPENSE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+let expenseModalKind = 'category';
+let expenseModalTargetId = null;
+
+function expenseAmountInEur(expense) {
+  const amount = Number(expense.amount || 0);
+  return expense.currency === 'EUR' ? amount : convertToEUR(amount, expense.currency || 'EUR');
+}
+function expenseCurrencyOptions(selected = 'EUR') {
+  const currencies = state.currencies.map(c => c.coin).filter(Boolean);
+  if (!currencies.includes(selected)) currencies.push(selected);
+  return [...new Set(currencies)].sort().map(code => `<option value="${esc(code)}"${code === selected ? ' selected' : ''}>${esc(code)}</option>`).join('');
+}
+function openExpenseModal(kind, targetId = null) {
+  if (!isWriteAllowed()) return;
+  expenseModalKind = kind;
+  const title = $('#expenseModalTitle');
+  const fields = $('#expenseModalFields');
+  const names = { category: 'Create Category', subcategory: 'Create Sub-category', expense: 'Add Monthly Expense', renameCategory: 'Rename Category', renameSubcategory: 'Rename Sub-category' };
+  if (!fields || !title) return;
+  title.textContent = names[kind];
+  if (kind === 'category') {
+    fields.innerHTML = '<div class="field"><label for="expenseCategoryName">Category name</label><input id="expenseCategoryName" maxlength="80" required></div>';
+  } else if (kind === 'subcategory') {
+    fields.innerHTML = `<div class="field"><label for="expenseCategorySelect">Category</label><select id="expenseCategorySelect" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseSubcategoryName">Sub-category name</label><input id="expenseSubcategoryName" maxlength="80" required></div>`;
+  } else if (kind === 'renameCategory' || kind === 'renameSubcategory') {
+    expenseModalTargetId = Number(targetId);
+    const item = kind === 'renameCategory'
+      ? state.expenseCategories.find(category => category.id === expenseModalTargetId)
+      : state.expenseSubcategories.find(subcategory => subcategory.id === expenseModalTargetId);
+    const inputId = kind === 'renameCategory' ? 'expenseCategoryName' : 'expenseSubcategoryName';
+    fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
+  } else {
+    const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="field"><label for="expenseEntryAmount">Amount</label><input id="expenseEntryAmount" type="number" min="0" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
+    const categorySelect = $('#expenseEntryCategory');
+    const subcategorySelect = $('#expenseEntrySubcategory');
+    if (categorySelect && subcategorySelect) [...subcategorySelect.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== categorySelect.value; });
+  }
+  const error = $('#expenseModalError');
+  if (error) error.textContent = '';
+  openModal('expenseModalOverlay');
+}
+
+function expenseRowsForYear(year) {
+  const records = new Map(state.expenses.filter(e => e.expense_month.startsWith(`${year}-`)).map(e => [`${e.category_id}:${e.subcategory_id || 0}:${e.expense_month}`, e]));
+  const rows = [];
+  for (const category of [...state.expenseCategories].sort((a, b) => a.name.localeCompare(b.name))) {
+    rows.push({ category, subcategory: null, label: category.name, records });
+    for (const subcategory of state.expenseSubcategories.filter(s => s.category_id === category.id).sort((a, b) => a.name.localeCompare(b.name))) {
+      rows.push({ category, subcategory, label: `↳ ${subcategory.name}`, records });
+    }
+  }
+  return rows;
+}
+
+function renderExpenseGrid() {
+  const head = $('#expenseGridHead'), body = $('#expenseGridBody'), label = $('#expenseYearLabel');
+  if (!head || !body || !label) return;
+  const years = [...new Set([new Date().getFullYear(), ...state.expenses.map(e => Number(e.expense_month.slice(0, 4)))])].sort((a, b) => a - b);
+  if (!years.includes(expenseYear)) expenseYear = years.reduce((best, year) => Math.abs(year - expenseYear) < Math.abs(best - expenseYear) ? year : best, years[0]);
+  label.textContent = String(expenseYear);
+  const yearIndex = years.indexOf(expenseYear);
+  $('#expenseYearPrev').disabled = yearIndex <= 0;
+  $('#expenseYearNext').disabled = yearIndex >= years.length - 1;
+  head.innerHTML = `<tr><th>Category / Sub-category</th>${EXPENSE_MONTHS.map((m, i) => `<th>${m.slice(0, 3)}</th>`).join('')}</tr>`;
+  const rows = expenseRowsForYear(expenseYear);
+  const monthTotals = new Map();
+  state.expenses.filter(expense => expense.expense_month.startsWith(`${expenseYear}-`)).forEach(expense => {
+    monthTotals.set(expense.expense_month, (monthTotals.get(expense.expense_month) || 0) + expenseAmountInEur(expense));
+  });
+  const totalRow = `<tr class="expense-total-row"><th scope="row">Monthly total (EUR)</th>${EXPENSE_MONTHS.map((_, i) => {
+    const month = `${expenseYear}-${String(i + 1).padStart(2, '0')}`;
+    return `<td>${moneyEUR.format(monthTotals.get(month) || 0)}</td>`;
+  }).join('')}</tr>`;
+  if (!rows.length) {
+    body.innerHTML = `${totalRow}<tr><td colspan="13" class="empty-state">Create a category to start tracking monthly expenses.</td></tr>`;
+    return;
+  }
+  const editable = isWriteAllowed();
+  body.innerHTML = totalRow + rows.map(({ category, subcategory, label: rowLabel, records }) => `<tr class="${subcategory ? 'expense-subcategory-row' : 'expense-category-row'}"><th scope="row"><span class="expense-row-label">${esc(rowLabel)}${editable ? `<span class="expense-row-actions"><button class="expense-row-action" type="button" data-expense-action="rename-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Rename ${subcategory ? 'sub-category' : 'category'}" aria-label="Rename ${esc(rowLabel)}">✎</button><button class="expense-row-action danger" type="button" data-expense-action="delete-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Delete ${subcategory ? 'sub-category' : 'category'}" aria-label="Delete ${esc(rowLabel)}">×</button></span>` : ''}</span></th>${EXPENSE_MONTHS.map((_, i) => {
+    const month = `${expenseYear}-${String(i + 1).padStart(2, '0')}`;
+    const record = records.get(`${category.id}:${subcategory?.id || 0}:${month}`);
+    return `<td><input class="expense-cell" type="number" min="0" step="0.01" aria-label="${esc(rowLabel)} ${month}" title="${esc(record?.currency || 'EUR')}" value="${record ? Number(record.amount) : ''}" placeholder="—" ${editable ? '' : 'disabled'} data-category="${category.id}" data-subcategory="${subcategory?.id || ''}" data-month="${month}" data-currency="${esc(record?.currency || 'EUR')}"></td>`;
+  }).join('')}</tr>`).join('');
+}
+
+function expenseGroups(kind) {
+  const groups = new Map();
+  for (const expense of state.expenses) {
+    const key = kind === 'category' ? String(expense.category_id) : String(expense.subcategory_id || `category-${expense.category_id}`);
+    const category = state.expenseCategories.find(c => c.id === expense.category_id);
+    const subcategory = state.expenseSubcategories.find(s => s.id === expense.subcategory_id);
+    const label = kind === 'category' ? (category?.name || expense.category_name) : (subcategory ? `${category?.name || expense.category_name} · ${subcategory.name}` : `${category?.name || expense.category_name} · Other`);
+    if (!groups.has(key)) groups.set(key, { label, months: new Map() });
+    const group = groups.get(key), month = expense.expense_month;
+    group.months.set(month, (group.months.get(month) || 0) + expenseAmountInEur(expense));
+  }
+  return [...groups.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label));
+}
+
+function drawExpenseChart(slot, canvasId, type, labels, groups, allTime = false) {
+  const canvas = $(`#${canvasId}`);
+  if (!canvas || typeof Chart === 'undefined') return;
+  expenseCharts[slot]?.destroy();
+  if (!labels.length) { expenseCharts[slot] = null; return; }
+  const datasets = groups.map(([key, group], i) => ({
+    label: group.label,
+    data: labels.map((month, index) => ({ x: index, y: group.months.get(month) || 0 })),
+    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+    borderColor: CHART_COLORS[i % CHART_COLORS.length],
+    borderWidth: 2,
+    fill: false,
+    tension: 0.25,
+    pointRadius: allTime ? 0 : 2
+  }));
+  expenseCharts[slot] = new Chart(canvas, {
+    type: allTime ? 'line' : 'bar',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
+        tooltip: { callbacks: { title: contexts => labels[Math.round(Number(contexts[0]?.parsed?.x || 0))] || '', label: privacyMoneyTooltipLabel } },
+        ...(allTime ? { decimation: { enabled: true, algorithm: 'lttb', samples: HISTORY_LINE_MAX_POINTS, threshold: HISTORY_LINE_MAX_POINTS } } : {})
+      },
+      scales: {
+        x: { type: 'linear', stacked: !allTime, ticks: { color: '#e6ebf5', maxTicksLimit: 12, callback: value => labels[Math.round(Number(value))] || '' }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { stacked: !allTime, beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.08)' } }
+      }
+    }
+  });
+}
+
+function renderExpenseCharts() {
+  const chartYear = new Date().getFullYear();
+  const yearLabels = EXPENSE_MONTHS.map((_, i) => `${chartYear}-${String(i + 1).padStart(2, '0')}`);
+  const yearly = state.expenses.filter(e => e.expense_month.startsWith(`${chartYear}-`));
+  const categories = expenseGroups('category').filter(([id]) => yearly.some(e => String(e.category_id) === id)).map(([key, group]) => [key, { label: group.label, months: new Map([...group.months].filter(([month]) => month.startsWith(`${chartYear}-`))) }]);
+  const subcategories = expenseGroups('subcategory').filter(([id]) => yearly.some(e => String(e.subcategory_id || `category-${e.category_id}`) === id)).map(([key, group]) => [key, { label: group.label, months: new Map([...group.months].filter(([month]) => month.startsWith(`${chartYear}-`))) }]);
+  drawExpenseChart('yearCategory', 'expenseYearCategoryChart', 'category', yearLabels, categories);
+  drawExpenseChart('yearSubcategory', 'expenseYearSubcategoryChart', 'subcategory', yearLabels, subcategories);
+  const allMonths = [...new Set(state.expenses.map(e => e.expense_month))].sort();
+  let allLabels = [];
+  if (allMonths.length) {
+    const [startYear, startMonth] = allMonths[0].split('-').map(Number), [endYear, endMonth] = allMonths.at(-1).split('-').map(Number);
+    for (let year = startYear; year <= endYear; year++) for (let month = 1; month <= 12; month++) {
+      if ((year > startYear || month >= startMonth) && (year < endYear || month <= endMonth)) allLabels.push(`${year}-${String(month).padStart(2, '0')}`);
+    }
+  }
+  drawExpenseChart('allCategory', 'expenseAllCategoryChart', 'category', allLabels, expenseGroups('category'), true);
+  drawExpenseChart('allSubcategory', 'expenseAllSubcategoryChart', 'subcategory', allLabels, expenseGroups('subcategory'), true);
+}
+
+function renderExpenses() {
+  renderExpenseGrid();
+  document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.expenseTab === activeExpenseTab));
+  document.querySelectorAll('.expense-panel').forEach(panel => { panel.style.display = panel.id === `expense-panel-${activeExpenseTab}` ? '' : 'none'; });
+  if (currentPage === 'expenses' && activeExpenseTab !== 'grid') requestAnimationFrame(renderExpenseCharts);
+}
+
+async function submitExpenseModal(event) {
+  event.preventDefault();
+  const error = $('#expenseModalError');
+  try {
+    if (expenseModalKind === 'category') await request('/expense-categories', { method: 'POST', body: JSON.stringify({ name: $('#expenseCategoryName').value }) });
+    else if (expenseModalKind === 'subcategory') await request('/expense-subcategories', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseCategorySelect').value), name: $('#expenseSubcategoryName').value }) });
+    else if (expenseModalKind === 'renameCategory') await request(`/expense-categories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseCategoryName').value }) });
+    else if (expenseModalKind === 'renameSubcategory') await request(`/expense-subcategories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseSubcategoryName').value }) });
+    else await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, amount: $('#expenseEntryAmount').value, currency: $('#expenseEntryCurrency').value }) });
+    closeModal('expenseModalOverlay');
+    await loadData();
+  } catch (err) { if (error) error.textContent = err.message; }
 }
 
 function fillDividendPeriodValue() {
@@ -5749,6 +5939,7 @@ function showPage(page) {
   if (page === 'currency') renderCurrency();
   if (page === 'simulation') renderSimulation();
   if (page === 'calendar') renderGrowthCalendarPage();
+  if (page === 'expenses') renderExpenses();
   applyBlur();
 }
 
@@ -5837,7 +6028,8 @@ function refreshChartPrivacy() {
     providerDetailsChartInstance,
     goalDetailsChartInstance,
     goalSimChartInstance,
-    interestSimChartInstance
+    interestSimChartInstance,
+    ...Object.values(expenseCharts)
   ];
   charts.filter(Boolean).forEach(chart => chart.update('none'));
 }
@@ -7859,7 +8051,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     switchToolsTab(btn.dataset.toolsTab);
   }));
   $('#navToggle')?.addEventListener('click', toggleNavDropdown);
-  document.querySelectorAll('.asset-tab').forEach(btn => btn.addEventListener('click', () => switchAssetTab(btn.dataset.assetTab)));
+  document.querySelectorAll('[data-asset-tab]').forEach(btn => btn.addEventListener('click', () => switchAssetTab(btn.dataset.assetTab)));
+  document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.addEventListener('click', () => { activeExpenseTab = btn.dataset.expenseTab; renderExpenses(); }));
+  $('#newExpenseCategoryBtn')?.addEventListener('click', () => openExpenseModal('category'));
+  $('#newExpenseSubcategoryBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('subcategory') : alert('Create a category first.'));
+  $('#newExpenseBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('expense') : alert('Create a category first.'));
+  $('#expenseModalForm')?.addEventListener('submit', submitExpenseModal);
+  $('#cancelExpenseModalBtn')?.addEventListener('click', () => closeModal('expenseModalOverlay'));
+  $('#closeExpenseModalX')?.addEventListener('click', () => closeModal('expenseModalOverlay'));
+  $('#expenseYearPrev')?.addEventListener('click', () => {
+    const years = [...new Set([new Date().getFullYear(), ...state.expenses.map(e => Number(e.expense_month.slice(0, 4)))])].sort((a, b) => a - b);
+    const index = years.indexOf(expenseYear); if (index > 0) { expenseYear = years[index - 1]; renderExpenses(); }
+  });
+  $('#expenseYearNext')?.addEventListener('click', () => {
+    const years = [...new Set([new Date().getFullYear(), ...state.expenses.map(e => Number(e.expense_month.slice(0, 4)))])].sort((a, b) => a - b);
+    const index = years.indexOf(expenseYear); if (index >= 0 && index < years.length - 1) { expenseYear = years[index + 1]; renderExpenses(); }
+  });
+  $('#expenseModalFields')?.addEventListener('change', event => {
+    if (event.target.id !== 'expenseEntryCategory') return;
+    const subcategory = $('#expenseEntrySubcategory');
+    if (subcategory) [...subcategory.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== event.target.value; });
+    if (subcategory?.selectedOptions[0]?.hidden) subcategory.value = '';
+  });
+  $('#expenseGridBody')?.addEventListener('change', async event => {
+    const input = event.target.closest('.expense-cell'); if (!input) return;
+    const previous = input.value; input.disabled = true;
+    try {
+      await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number(input.dataset.category), subcategory_id: input.dataset.subcategory || null, expense_month: input.dataset.month, amount: input.value === '' ? null : input.value, currency: input.dataset.currency || 'EUR' }) });
+      await loadData();
+    } catch (err) { input.value = previous; input.title = err.message; alert(err.message); }
+    finally { input.disabled = !isWriteAllowed(); }
+  });
+  $('#expenseGridBody')?.addEventListener('click', async event => {
+    const button = event.target.closest('[data-expense-action]');
+    if (!button) return;
+    const id = Number(button.dataset.id), action = button.dataset.expenseAction;
+    if (action === 'rename-category') openExpenseModal('renameCategory', id);
+    else if (action === 'rename-subcategory') openExpenseModal('renameSubcategory', id);
+    else {
+      const isSubcategory = action === 'delete-subcategory';
+      const item = isSubcategory
+        ? state.expenseSubcategories.find(subcategory => subcategory.id === id)
+        : state.expenseCategories.find(category => category.id === id);
+      if (!item || !await confirmDialog(isSubcategory
+        ? `Delete sub-category “${item.name}” and all its monthly expense amounts?`
+        : `Delete category “${item.name}”, its sub-categories, and all related expenses?`)) return;
+      try {
+        await request(`/${isSubcategory ? 'expense-subcategories' : 'expense-categories'}/${id}`, { method: 'DELETE' });
+        await loadData();
+      } catch (err) { alert(err.message); }
+    }
+  });
   $('#systemAssetSearch')?.addEventListener('input', renderSystemAssets);
   $('#systemAssetTypeFilter')?.addEventListener('change', renderSystemAssets);
   $('#personalAssetSearch')?.addEventListener('input', renderPersonalAssets);

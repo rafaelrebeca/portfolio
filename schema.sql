@@ -135,6 +135,38 @@ CREATE TABLE IF NOT EXISTS dashboard_snapshots (
   PRIMARY KEY (user_id, day)
 );
 
+CREATE TABLE IF NOT EXISTS expense_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS expense_subcategories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES expense_categories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (category_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES expense_categories(id) ON DELETE CASCADE,
+  subcategory_id INTEGER REFERENCES expense_subcategories(id) ON DELETE CASCADE,
+  expense_month TEXT NOT NULL CHECK (expense_month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]' AND substr(expense_month, 6, 2) BETWEEN '01' AND '12'),
+  amount REAL NOT NULL CHECK (amount >= 0),
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_monthly_bucket
+  ON expenses(user_id, category_id, COALESCE(subcategory_id, 0), expense_month);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_month ON expenses(user_id, expense_month);
+
 CREATE TRIGGER IF NOT EXISTS trg_assets_updated AFTER UPDATE OF name, symbol, type, price, coin ON assets
 FOR EACH ROW BEGIN
   UPDATE assets SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
