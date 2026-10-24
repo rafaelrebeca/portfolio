@@ -414,7 +414,7 @@ export async function onRequest(context) {
       const isAdditive = Object.prototype.hasOwnProperty.call(body, 'add_amount');
       const rawAmount = isAdditive ? body.add_amount : body.amount;
       const amount = rawAmount === null || rawAmount === '' || rawAmount === undefined ? null : Number(rawAmount);
-      if (!Number.isInteger(categoryId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || (isAdditive && amount === null) || !/^[A-Z]{3}$/.test(currency)) return fail('Provide a valid month, amount, and currency.');
+      if (!Number.isInteger(categoryId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (amount !== null && !Number.isFinite(amount)) || (isAdditive && amount === null) || !/^[A-Z]{3}$/.test(currency)) return fail('Provide a valid month, amount, and currency.');
       const category = await env.myd1db.prepare('SELECT id FROM expense_categories WHERE id = ? AND user_id = ?').bind(categoryId, user.id).first();
       if (!category) return fail('Category not found.', 404);
       if (subcategoryId !== null) {
@@ -431,13 +431,15 @@ export async function onRequest(context) {
         if (isAdditive) {
           if (existing.currency !== currency) return fail(`This month already has an amount in ${existing.currency}. Add an amount in that currency.`, 409);
           await env.myd1db.prepare('UPDATE expenses SET amount = amount + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, existing.id, user.id).run();
+          const updated = await env.myd1db.prepare('SELECT amount FROM expenses WHERE id = ? AND user_id = ?').bind(existing.id, user.id).first();
+          return json({ id: existing.id, category_id: categoryId, subcategory_id: subcategoryId, expense_month: month, amount: updated?.amount ?? amount, currency: existing.currency, ok: true });
         } else {
           await env.myd1db.prepare('UPDATE expenses SET amount = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, currency, existing.id, user.id).run();
+          return json({ id: existing.id, ok: true });
         }
-        return json({ id: existing.id, ok: true });
       }
       const result = await env.myd1db.prepare('INSERT INTO expenses (user_id, category_id, subcategory_id, expense_month, amount, currency) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, categoryId, subcategoryId, month, amount, currency).run();
-      return json({ id: result.meta.last_row_id }, 201);
+      return json({ id: result.meta.last_row_id, category_id: categoryId, subcategory_id: subcategoryId, expense_month: month, amount, currency }, 201);
     }
 
     if (method === 'GET' && path === 'accounts') {

@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   category_id INTEGER NOT NULL REFERENCES expense_categories(id) ON DELETE CASCADE,
   subcategory_id INTEGER REFERENCES expense_subcategories(id) ON DELETE CASCADE,
   expense_month TEXT NOT NULL CHECK (expense_month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]' AND substr(expense_month, 6, 2) BETWEEN '01' AND '12'),
-  amount REAL NOT NULL CHECK (amount >= 0),
+  amount REAL NOT NULL,
   currency TEXT NOT NULL DEFAULT 'EUR',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

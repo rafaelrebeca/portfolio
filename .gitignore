@@ -12,4 +12,5 @@ functions/.DS_Store
 js/.DS_Store
 .npmrc
 !schema.sql
+!expense_refund_migration.sql
 simulator.html

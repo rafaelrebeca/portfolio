@@ -3280,15 +3280,22 @@ select {
 .expense-tabs { margin-top: 10px; }
 .expense-year-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 0 0 14px; }
 .expense-year-controls strong { min-width: 56px; text-align: center; font-size: 17px; }
-.expense-grid-scroll { max-height: min(68vh, 720px); }
-.expense-grid { min-width: 980px; border-collapse: separate; border-spacing: 0; }
-.expense-grid th, .expense-grid td { padding: 8px 7px; text-align: center; white-space: nowrap; }
-.expense-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--panel2); }
-.expense-grid tbody th { position: sticky; left: 0; z-index: 1; min-width: 270px; max-width: 310px; text-align: left; background: var(--panel); }
-.expense-grid thead th:first-child { left: 0; z-index: 3; min-width: 270px; text-align: left; }
-.expense-total-row th, .expense-total-row td { background: var(--panel2); font-weight: 700; }
-.expense-total-row th { z-index: 2 !important; }
-.expense-total-row td { text-align: right !important; font-variant-numeric: tabular-nums; }
+.expense-grid-scroll { max-height: min(68vh, 720px); overflow: auto; border: 1px solid rgba(148, 163, 184, .25); border-radius: 12px; background: #0f172a; }
+.expense-grid { width: 100%; min-width: 1120px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; overflow: visible; background: transparent; font-variant-numeric: tabular-nums; }
+.expense-grid th, .expense-grid td { padding: 8px 10px; white-space: nowrap; border-bottom: 1px solid rgba(148, 163, 184, .14); }
+.expense-grid thead tr:first-child th { position: sticky; top: 0; z-index: 5; background: #111827; color: #e5e7eb; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border-bottom: 2px solid rgba(59, 130, 246, .5); }
+.expense-grid thead tr:nth-child(2) th { position: sticky; top: 37px; z-index: 4; background: #0b1220; color: #cbd5e1; font-size: 11px; border-bottom: 1px solid rgba(148, 163, 184, .25); }
+.expense-grid th:first-child, .expense-grid td:first-child { position: sticky; left: 0; min-width: 220px; max-width: 260px; background: #111827; color: #e5e7eb; font-weight: 600; box-shadow: 8px 0 12px -10px rgba(0, 0, 0, .8); }
+.expense-grid tbody th:first-child { font-size: 13px; letter-spacing: normal; text-transform: none; }
+.expense-grid thead tr:first-child th:first-child { z-index: 7; }
+.expense-grid thead tr:nth-child(2) th:first-child { z-index: 6; }
+.expense-grid td:not(:first-child) { text-align: right; }
+.expense-total-row th, .expense-total-row td { background: rgba(59, 130, 246, .12); color: #dbeafe; font-weight: 700; }
+.expense-total-row th { z-index: 3; }
+.expense-total-row td { text-align: right; font-variant-numeric: tabular-nums; }
+.expense-grid tbody tr:nth-child(even) td { background: rgba(148, 163, 184, .05); }
+.expense-grid tbody tr:hover td { background: rgba(59, 130, 246, .10); }
+.expense-grid tbody tr:first-child td { background: rgba(59, 130, 246, .12); color: #dbeafe; font-weight: 700; }
 .expense-row-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .expense-row-actions { display: inline-flex; gap: 3px; flex: 0 0 auto; }
 .expense-row-action { width: 25px; height: 25px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; line-height: 1; }
@@ -3296,7 +3303,9 @@ select {
 .expense-row-action.danger:hover { color: #ff5c72; border-color: #ff5c72; }
 .expense-category-row th { font-weight: 700; }
 .expense-subcategory-row th { padding-left: 24px; color: var(--muted); font-weight: 500; }
-.expense-cell { width: 82px; min-width: 66px; padding: 7px 5px; text-align: right; font-variant-numeric: tabular-nums; }
+.expense-grid input[type="number"] { width: 86px; min-width: 78px; padding: 5px 7px; border: 1px solid rgba(148, 163, 184, .28); border-radius: 7px; background: rgba(15, 23, 42, .85); color: #f8fafc; text-align: right; font-variant-numeric: tabular-nums; }
+.expense-grid input[type="number"]:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, .22); }
+.expense-grid input.expense-cell { width: 86px; min-width: 78px; }
 .expense-cell::placeholder { color: var(--muted); opacity: .6; }
 .blur-mode .expense-cell { filter: blur(5px); }
 .expense-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }

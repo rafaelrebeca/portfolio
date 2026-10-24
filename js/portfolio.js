@@ -4638,6 +4638,10 @@ function openExpenseModal(kind, targetId = null) {
   const names = { category: 'Create Category', subcategory: 'Create Sub-category', expense: 'Add Monthly Expense', renameCategory: 'Rename Category', renameSubcategory: 'Rename Sub-category' };
   if (!fields || !title) return;
   title.textContent = names[kind];
+  const closeButton = $('#cancelExpenseModalBtn');
+  const submitButton = $('#expenseModalSubmitBtn');
+  if (closeButton) closeButton.textContent = kind === 'expense' ? 'Close' : 'Cancel';
+  if (submitButton) submitButton.textContent = kind === 'expense' ? 'Add' : 'Save';
   if (kind === 'category') {
     fields.innerHTML = '<div class="field"><label for="expenseCategoryName">Category name</label><input id="expenseCategoryName" maxlength="80" required></div>';
   } else if (kind === 'subcategory') {
@@ -4651,7 +4655,7 @@ function openExpenseModal(kind, targetId = null) {
     fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
   } else {
     const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Additional amount</label><input id="expenseEntryAmount" type="number" min="0" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
+    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
     const categorySelect = $('#expenseEntryCategory');
     const subcategorySelect = $('#expenseEntrySubcategory');
     if (categorySelect && subcategorySelect) [...subcategorySelect.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== categorySelect.value; });
@@ -4701,7 +4705,7 @@ function renderExpenseGrid() {
   const yearIndex = years.indexOf(expenseYear);
   $('#expenseYearPrev').disabled = yearIndex <= 0;
   $('#expenseYearNext').disabled = yearIndex >= years.length - 1;
-  head.innerHTML = `<tr><th>Category / Sub-category</th>${EXPENSE_MONTHS.map((m, i) => `<th>${m.slice(0, 3)}</th>`).join('')}</tr>`;
+  head.innerHTML = `<tr><th scope="col">Category / Sub-category</th><th scope="colgroup" colspan="12">Monthly expense values</th></tr><tr><th scope="col">Month</th>${EXPENSE_MONTHS.map(m => `<th scope="col">${m.slice(0, 3)}</th>`).join('')}</tr>`;
   const rows = expenseRowsForYear(expenseYear);
   const monthTotals = new Map();
   state.expenses.filter(expense => expense.expense_month.startsWith(`${expenseYear}-`)).forEach(expense => {
@@ -4719,7 +4723,7 @@ function renderExpenseGrid() {
   body.innerHTML = totalRow + rows.map(({ category, subcategory, label: rowLabel, records }) => `<tr class="${subcategory ? 'expense-subcategory-row' : 'expense-category-row'}"><th scope="row"><span class="expense-row-label">${esc(rowLabel)}${editable ? `<span class="expense-row-actions"><button class="expense-row-action" type="button" data-expense-action="rename-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Rename ${subcategory ? 'sub-category' : 'category'}" aria-label="Rename ${esc(rowLabel)}">✎</button><button class="expense-row-action danger" type="button" data-expense-action="delete-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Delete ${subcategory ? 'sub-category' : 'category'}" aria-label="Delete ${esc(rowLabel)}">×</button></span>` : ''}</span></th>${EXPENSE_MONTHS.map((_, i) => {
     const month = `${expenseYear}-${String(i + 1).padStart(2, '0')}`;
     const record = records.get(`${category.id}:${subcategory?.id || 0}:${month}`);
-    return `<td><input class="expense-cell" type="number" min="0" step="0.01" aria-label="${esc(rowLabel)} ${month}" title="${esc(record?.currency || 'EUR')}" value="${record ? Number(record.amount) : ''}" placeholder="—" ${editable ? '' : 'disabled'} data-category="${category.id}" data-subcategory="${subcategory?.id || ''}" data-month="${month}" data-currency="${esc(record?.currency || 'EUR')}"></td>`;
+    return `<td><input class="expense-cell" type="number" step="0.01" aria-label="${esc(rowLabel)} ${month}" title="${esc(record?.currency || 'EUR')}" value="${record ? Number(record.amount) : ''}" placeholder="—" ${editable ? '' : 'disabled'} data-category="${category.id}" data-subcategory="${subcategory?.id || ''}" data-month="${month}" data-currency="${esc(record?.currency || 'EUR')}"></td>`;
   }).join('')}</tr>`).join('');
 }
 
@@ -4806,7 +4810,22 @@ async function submitExpenseModal(event) {
     else if (expenseModalKind === 'subcategory') await request('/expense-subcategories', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseCategorySelect').value), name: $('#expenseSubcategoryName').value }) });
     else if (expenseModalKind === 'renameCategory') await request(`/expense-categories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseCategoryName').value }) });
     else if (expenseModalKind === 'renameSubcategory') await request(`/expense-subcategories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseSubcategoryName').value }) });
-    else await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, add_amount: $('#expenseEntryAmount').value, currency: $('#expenseEntryCurrency').value }) });
+    else {
+      const amountInput = $('#expenseEntryAmount');
+      const savedExpense = await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, add_amount: amountInput.value, currency: $('#expenseEntryCurrency').value }) });
+      const savedIndex = state.expenses.findIndex(expense => Number(expense.category_id) === savedExpense.category_id
+        && (expense.subcategory_id == null ? null : Number(expense.subcategory_id)) === savedExpense.subcategory_id
+        && expense.expense_month === savedExpense.expense_month);
+      if (savedIndex >= 0) Object.assign(state.expenses[savedIndex], savedExpense);
+      else state.expenses.push(savedExpense);
+      if (error) error.textContent = '';
+      renderExpenses();
+      updateExpenseAddPreview();
+      amountInput.value = '0';
+      amountInput.focus();
+      amountInput.select();
+      return;
+    }
     closeModal('expenseModalOverlay');
     await loadData();
   } catch (err) { if (error) error.textContent = err.message; }
