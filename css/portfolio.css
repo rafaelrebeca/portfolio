@@ -3498,6 +3498,7 @@ select {
   font-size: 13px;
   letter-spacing: normal;
   text-transform: none;
+  z-index: 2;
 }
 
 .expense-grid thead tr:first-child th:first-child {
