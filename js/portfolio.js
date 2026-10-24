@@ -4782,6 +4782,35 @@ function drawExpensePieChart(slot, canvasId, groups) {
   const categories = groups.map(([, group]) => ({ label: group.label, total: [...group.months.values()].reduce((sum, amount) => sum + amount, 0) })).filter(group => group.total !== 0);
   if (!categories.length) { expenseCharts[slot] = null; return; }
   const signedTotals = categories.map(category => category.total);
+  const sliceValues = signedTotals.map(Math.abs);
+  const sliceTotal = sliceValues.reduce((sum, amount) => sum + amount, 0);
+  const percentages = sliceValues.map(amount => sliceTotal ? amount / sliceTotal * 100 : 0);
+  const percentLabels = {
+    id: 'expensePiePercentLabels',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      const arcs = chart.getDatasetMeta(0).data;
+      ctx.save();
+      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      arcs.forEach((arc, index) => {
+        if (percentages[index] < 4 || !chart.getDataVisibility(index)) return;
+        const { x, y, startAngle, endAngle, outerRadius } = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'outerRadius'], true);
+        const angle = (startAngle + endAngle) / 2;
+        const radius = outerRadius * 0.62;
+        const label = `${percentages[index].toFixed(1)}%`;
+        const labelX = x + Math.cos(angle) * radius;
+        const labelY = y + Math.sin(angle) * radius;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(15, 23, 42, .9)';
+        ctx.fillStyle = '#fff';
+        ctx.strokeText(label, labelX, labelY);
+        ctx.fillText(label, labelX, labelY);
+      });
+      ctx.restore();
+    }
+  };
   expenseCharts[slot] = new Chart(canvas, {
     type: 'pie',
     data: {
@@ -4799,10 +4828,25 @@ function drawExpensePieChart(slot, canvasId, groups) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
-        tooltip: { callbacks: { label: context => blurActive() ? `${context.label}: hidden` : `${context.label}: ${moneyEUR.format(signedTotals[context.dataIndex])}` } }
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            color: '#e6ebf5', boxWidth: 12, usePointStyle: true,
+            generateLabels: chart => categories.map((category, index) => ({
+              text: `${category.label} (${percentages[index].toFixed(1)}%)`,
+              fillStyle: chart.data.datasets[0].backgroundColor[index],
+              strokeStyle: chart.data.datasets[0].borderColor,
+              lineWidth: chart.data.datasets[0].borderWidth,
+              hidden: !chart.getDataVisibility(index),
+              index
+            }))
+          }
+        },
+        tooltip: { callbacks: { label: context => blurActive() ? `${context.label}: hidden (${percentages[context.dataIndex].toFixed(1)}%)` : `${context.label}: ${moneyEUR.format(signedTotals[context.dataIndex])} (${percentages[context.dataIndex].toFixed(1)}%)` } }
       }
-    }
+    },
+    plugins: [percentLabels]
   });
 }
 
