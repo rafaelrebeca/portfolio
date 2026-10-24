@@ -3416,6 +3416,12 @@ select {
 
 .expense-tabs {
   margin-top: 10px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.expense-tabs .asset-tab {
+  flex: 0 0 auto;
 }
 
 .expense-year-controls {
@@ -3649,6 +3655,215 @@ select {
   height: 350px;
 }
 
+.expense-stats-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 4px 0 18px;
+  padding: 20px 22px;
+  border: 1px solid rgba(99, 102, 241, .28);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(99, 102, 241, .15), rgba(63, 208, 163, .08) 58%, rgba(255, 180, 84, .08));
+}
+
+.expense-stats-kicker {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.expense-stats-heading h2 {
+  margin: 5px 0 4px;
+  font-size: 22px;
+}
+
+.expense-stats-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.expense-stats-heading label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.expense-stats-heading select {
+  min-width: 100px;
+  font-weight: 700;
+}
+
+.expense-wrap-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.expense-wrap-summary article {
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.expense-wrap-summary article > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.expense-wrap-summary article > strong {
+  font-size: clamp(19px, 2vw, 26px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.expense-wrap-summary article > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.expense-wrap-summary .expense-wrap-total {
+  border-color: rgba(99, 102, 241, .4);
+  background: linear-gradient(145deg, rgba(99, 102, 241, .2), var(--panel));
+}
+
+.expense-wrap-total strong { color: var(--accent); }
+.expense-wrap-summary article > strong small { color: var(--muted); font-size: 15px; }
+
+.expense-stats-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+
+.expense-stats-section-head h3 {
+  margin: 3px 0 0;
+  font-size: 18px;
+}
+
+.expense-top-pick {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 180, 84, .28);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 180, 84, .08);
+  font-size: 12px;
+}
+
+.expense-top-pick strong { margin-left: 4px; color: var(--text); }
+
+.expense-stats-categories { display: grid; gap: 10px; }
+
+.expense-stat-category {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.expense-stat-category-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(150px, 210px);
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px 12px;
+}
+
+.expense-stat-rank {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(99, 102, 241, .12);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.expense-stat-category-main { min-width: 0; }
+
+.expense-stat-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.expense-stat-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expense-stat-title span { font-weight: 750; font-variant-numeric: tabular-nums; }
+
+.expense-stat-bar, .expense-stat-sub-bar {
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .12);
+}
+
+.expense-stat-bar span, .expense-stat-sub-bar span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+}
+
+.expense-stat-average {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.expense-stat-average span, .expense-stat-sub-average { color: var(--muted); font-size: 11px; }
+.expense-stat-average strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.expense-stat-subcategories {
+  display: grid;
+  gap: 8px;
+  padding: 11px 16px 14px 68px;
+  border-top: 1px solid rgba(148, 163, 184, .1);
+}
+
+.expense-stat-subcategory {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(70px, 1fr) minmax(110px, .8fr) minmax(150px, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.expense-stat-sub-name { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.expense-stat-subcategory > strong { text-align: right; font-variant-numeric: tabular-nums; }
+.expense-stat-sub-average { text-align: right; }
+
+.expense-stats-footnote, .expense-stats-empty {
+  margin: 14px 0 0;
+  padding: 13px 15px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.expense-stats-empty { padding: 40px 20px; text-align: center; font-size: 14px; }
+
 .expense-modal {
   max-width: 480px;
 }
@@ -3689,6 +3904,20 @@ select {
   .expense-actions button {
     flex: 1 1 auto;
   }
+
+  .expense-stats-heading { align-items: stretch; flex-direction: column; padding: 17px; }
+  .expense-stats-heading label { justify-content: space-between; }
+  .expense-wrap-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .expense-wrap-summary article { min-height: 104px; padding: 13px; }
+  .expense-stats-section-head { align-items: flex-start; flex-direction: column; }
+  .expense-stat-category-head { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 13px; }
+  .expense-stat-average { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; padding: 0; border: 0; }
+  .expense-stat-subcategories { padding: 10px 13px 13px; }
+  .expense-stat-subcategory { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .expense-stat-sub-name { grid-column: 1; }
+  .expense-stat-subcategory > strong { grid-column: 2; grid-row: 1; }
+  .expense-stat-sub-bar { grid-column: 1 / -1; grid-row: 2; }
+  .expense-stat-sub-average { grid-column: 1 / -1; text-align: left; }
 }
 
 /* Currency Test page (admin) */

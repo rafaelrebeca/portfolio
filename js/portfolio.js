@@ -48,6 +48,7 @@ let blurMode = false;
 let currentPage = 'dashboard';
 let activeExpenseTab = 'grid';
 let expenseYear = new Date().getFullYear();
+let expenseStatsYear = null;
 const expenseCharts = { yearCategory: null, yearCategoryPie: null, allCategory: null, allCategoryPie: null };
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -4870,11 +4871,92 @@ function renderExpenseCharts() {
   drawExpensePieChart('allCategoryPie', 'expenseAllCategoryPieChart', expenseGroups('category'));
 }
 
+function renderExpenseStats() {
+  const select = $('#expenseStatsYear'), content = $('#expenseStatsContent');
+  if (!select || !content) return;
+  const years = [...new Set(state.expenses.map(expense => Number(expense.expense_month.slice(0, 4))))].sort((a, b) => b - a);
+  select.innerHTML = years.length
+    ? years.map(year => `<option value="${year}">${year}</option>`).join('')
+    : '<option value="">No years with data</option>';
+  select.disabled = years.length === 0;
+  if (!years.length) {
+    expenseStatsYear = null;
+    content.innerHTML = '<div class="expense-stats-empty">No expense months to wrap up yet. Add an expense and your year story will appear here. ✨</div>';
+    return;
+  }
+  if (!years.includes(expenseStatsYear)) {
+    const currentYear = new Date().getFullYear();
+    expenseStatsYear = years.includes(currentYear) ? currentYear : years[0];
+  }
+  select.value = String(expenseStatsYear);
+
+  const monthTotals = new Map();
+  const categoryTotals = new Map();
+  const entries = state.expenses.filter(expense => Number(expense.expense_month.slice(0, 4)) === expenseStatsYear);
+  for (const expense of entries) {
+    const amount = expenseAmountInEur(expense);
+    const month = expense.expense_month;
+    monthTotals.set(month, (monthTotals.get(month) || 0) + amount);
+    const categoryId = Number(expense.category_id);
+    const category = state.expenseCategories.find(item => item.id === categoryId);
+    if (!categoryTotals.has(categoryId)) categoryTotals.set(categoryId, {
+      id: categoryId,
+      name: category?.name || expense.category_name || 'Category',
+      total: 0,
+      subcategories: new Map()
+    });
+    const categoryStats = categoryTotals.get(categoryId);
+    categoryStats.total += amount;
+    const subcategoryId = expense.subcategory_id == null ? null : Number(expense.subcategory_id);
+    const subcategory = subcategoryId === null ? null : state.expenseSubcategories.find(item => item.id === subcategoryId);
+    const subKey = subcategoryId === null ? 'category-level' : String(subcategoryId);
+    if (!categoryStats.subcategories.has(subKey)) categoryStats.subcategories.set(subKey, {
+      name: subcategory ? subcategory.name : 'Category-level amount',
+      total: 0
+    });
+    const subcategoryStats = categoryStats.subcategories.get(subKey);
+    subcategoryStats.total += amount;
+  }
+  const categories = [...categoryTotals.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const yearTotal = [...monthTotals.values()].reduce((sum, value) => sum + value, 0);
+  const activeMonths = monthTotals.size;
+  const averagePerMonth = activeMonths ? yearTotal / activeMonths : 0;
+  const peakMonth = [...monthTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  const peakLabel = peakMonth ? new Date(`${peakMonth[0]}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long' }) : '—';
+  const topCategory = categories[0];
+  const largestCategory = Math.max(1, ...categories.map(category => Math.abs(category.total)));
+  const medals = ['🥇', '🥈', '🥉'];
+
+  content.innerHTML = `
+    <div class="expense-wrap-summary">
+      <article class="expense-wrap-total"><span>Net total</span><strong>${moneyEUR.format(yearTotal)}</strong><small>${expenseStatsYear} · refunds included</small></article>
+      <article><span>Average per active month</span><strong>${moneyEUR.format(averagePerMonth)}</strong><small>Shared active-month count for every average</small></article>
+      <article><span>Months in the story</span><strong>${activeMonths} <small>/ 12</small></strong><small>${activeMonths === 12 ? 'A full year of tracking!' : 'Every recorded month counts'}</small></article>
+      <article><span>Highest net month</span><strong>${peakMonth ? esc(peakLabel) : '—'}</strong><small>${peakMonth ? moneyEUR.format(peakMonth[1]) : 'No monthly data'}</small></article>
+    </div>
+    <div class="expense-stats-section-head"><div><span class="expense-stats-kicker">THE LINEUP</span><h3>Where it went</h3></div>${topCategory ? `<div class="expense-top-pick">✨ Top category <strong>${esc(topCategory.name)}</strong></div>` : ''}</div>
+    <div class="expense-stats-categories">${categories.map((category, index) => {
+      const color = CHART_COLORS[index % CHART_COLORS.length];
+      const categoryAverage = activeMonths ? category.total / activeMonths : 0;
+      const subcategories = [...category.subcategories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      const maxSubcategory = Math.max(1, ...subcategories.map(item => Math.abs(item.total)));
+      return `<article class="expense-stat-category">
+        <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><strong>${esc(category.name)}</strong><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
+        <div class="expense-stat-subcategories">${subcategories.map(subcategory => {
+          const average = activeMonths ? subcategory.total / activeMonths : 0;
+          return `<div class="expense-stat-subcategory"><span class="expense-stat-sub-name">↳ ${esc(subcategory.name)}</span><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
+        }).join('')}</div>
+      </article>`;
+    }).join('')}</div>
+    <p class="expense-stats-footnote">Year, category and sub-category averages all use the same active-month count: months with at least one recorded expense anywhere in the year. Months with no data are skipped. Category totals include their sub-categories. Refunds reduce totals and can make averages negative.</p>`;
+}
+
 function renderExpenses() {
   renderExpenseGrid();
+  renderExpenseStats();
   document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.expenseTab === activeExpenseTab));
   document.querySelectorAll('.expense-panel').forEach(panel => { panel.style.display = panel.id === `expense-panel-${activeExpenseTab}` ? '' : 'none'; });
-  if (currentPage === 'expenses' && activeExpenseTab !== 'grid') requestAnimationFrame(renderExpenseCharts);
+  if (currentPage === 'expenses' && ['year', 'all'].includes(activeExpenseTab)) requestAnimationFrame(renderExpenseCharts);
 }
 
 async function submitExpenseModal(event) {
@@ -8170,6 +8252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#navToggle')?.addEventListener('click', toggleNavDropdown);
   document.querySelectorAll('[data-asset-tab]').forEach(btn => btn.addEventListener('click', () => switchAssetTab(btn.dataset.assetTab)));
   document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.addEventListener('click', () => { activeExpenseTab = btn.dataset.expenseTab; renderExpenses(); }));
+  $('#expenseStatsYear')?.addEventListener('change', event => { expenseStatsYear = Number(event.target.value); renderExpenseStats(); });
   $('#newExpenseCategoryBtn')?.addEventListener('click', () => openExpenseModal('category'));
   $('#newExpenseSubcategoryBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('subcategory') : alert('Create a category first.'));
   $('#newExpenseBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('expense') : alert('Create a category first.'));

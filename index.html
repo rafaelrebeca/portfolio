@@ -182,7 +182,12 @@
 
         <!-- EXPENSES -->
         <div class="page" id="page-expenses">
-          <div class="page-head"><div><div class="page-title">My Expenses</div><div class="page-desc">Track monthly spending without changing account balances.</div></div></div>
+          <div class="page-head">
+            <div>
+              <div class="page-title">My Expenses</div>
+              <div class="page-desc">Track monthly spending without changing account balances.</div>
+            </div>
+          </div>
           <div class="toolbar expense-toolbar">
             <div class="expense-actions">
               <button class="btn-sm write-action" id="newExpenseCategoryBtn" type="button">+ Category</button>
@@ -191,19 +196,60 @@
             </div>
           </div>
           <div class="asset-tabs expense-tabs" role="tablist">
-            <button class="asset-tab active" type="button" data-expense-tab="grid" role="tab">📋 Monthly Grid</button>
+            <button class="asset-tab active" type="button" data-expense-tab="stats" role="tab">🎉 Year in
+              Review</button>
+            <button class="asset-tab" type="button" data-expense-tab="grid" role="tab">📋 Monthly Grid</button>
             <button class="asset-tab" type="button" data-expense-tab="year" role="tab">📊 Current Year</button>
             <button class="asset-tab" type="button" data-expense-tab="all" role="tab">📈 All Time</button>
           </div>
           <section class="expense-panel" id="expense-panel-grid">
-            <div class="expense-year-controls"><button class="btn-sm" id="expenseYearPrev" type="button" aria-label="Previous year">←</button><strong id="expenseYearLabel"></strong><button class="btn-sm" id="expenseYearNext" type="button" aria-label="Next year">→</button></div>
-            <div class="table-scroll expense-grid-scroll"><table class="expense-grid"><thead id="expenseGridHead"></thead><tbody id="expenseGridBody"></tbody></table></div>
+            <div class="expense-year-controls"><button class="btn-sm" id="expenseYearPrev" type="button"
+                aria-label="Previous year">←</button><strong id="expenseYearLabel"></strong><button class="btn-sm"
+                id="expenseYearNext" type="button" aria-label="Next year">→</button></div>
+            <div class="table-scroll expense-grid-scroll">
+              <table class="expense-grid">
+                <thead id="expenseGridHead"></thead>
+                <tbody id="expenseGridBody"></tbody>
+              </table>
+            </div>
           </section>
           <section class="expense-panel" id="expense-panel-year" style="display:none;">
-            <div class="expense-chart-grid"><article class="card expense-chart-card"><h3>Monthly expenses by category</h3><div class="expense-chart-wrap"><canvas id="expenseYearCategoryChart"></canvas></div></article><article class="card expense-chart-card"><h3>Current-year category breakdown</h3><p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips show refunds as negative.</p><div class="expense-chart-wrap"><canvas id="expenseYearCategoryPieChart"></canvas></div></article></div>
+            <div class="expense-chart-grid">
+              <article class="card expense-chart-card">
+                <h3>Monthly expenses by category</h3>
+                <div class="expense-chart-wrap"><canvas id="expenseYearCategoryChart"></canvas></div>
+              </article>
+              <article class="card expense-chart-card">
+                <h3>Current-year category breakdown</h3>
+                <p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips
+                  show refunds as negative.</p>
+                <div class="expense-chart-wrap"><canvas id="expenseYearCategoryPieChart"></canvas></div>
+              </article>
+            </div>
           </section>
           <section class="expense-panel" id="expense-panel-all" style="display:none;">
-            <div class="expense-chart-grid"><article class="card expense-chart-card"><h3>All-time expenses by category</h3><div class="expense-chart-wrap"><canvas id="expenseAllCategoryChart"></canvas></div></article><article class="card expense-chart-card"><h3>All-time category breakdown</h3><p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips show refunds as negative.</p><div class="expense-chart-wrap"><canvas id="expenseAllCategoryPieChart"></canvas></div></article></div>
+            <div class="expense-chart-grid">
+              <article class="card expense-chart-card">
+                <h3>All-time expenses by category</h3>
+                <div class="expense-chart-wrap"><canvas id="expenseAllCategoryChart"></canvas></div>
+              </article>
+              <article class="card expense-chart-card">
+                <h3>All-time category breakdown</h3>
+                <p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips
+                  show refunds as negative.</p>
+                <div class="expense-chart-wrap"><canvas id="expenseAllCategoryPieChart"></canvas></div>
+              </article>
+            </div>
+          </section>
+          <section class="expense-panel" id="expense-panel-stats" style="display:none;">
+            <div class="expense-stats-heading">
+              <div>
+                <div class="expense-stats-kicker">YOUR EXPENSES, WRAPPED</div>
+                <h2>A year in your money story</h2>
+                <p>All averages use the same months with recorded expense data.</p>
+              </div><label for="expenseStatsYear">Year <select id="expenseStatsYear"></select></label>
+            </div>
+            <div id="expenseStatsContent"></div>
           </section>
         </div>
 
@@ -421,8 +467,10 @@
               title="Click to switch between By Asset Type, Type by Account, and Gain/Loss by Type">
               <div id="portfolioTypeChartCol" style="flex-shrink:0;">
                 <h3 id="portfolioTypeChartTitle">By Asset Type</h3>
-                <p class="page-desc" id="portfolioTypeChartSubtitle" style="margin-bottom:12px;">Market holdings allocation</p>
-                <div id="portfolioTypeChartWrap" style="position:relative;height:200px;width:200px;"><canvas id="portfolioTypeChart"></canvas></div>
+                <p class="page-desc" id="portfolioTypeChartSubtitle" style="margin-bottom:12px;">Market holdings
+                  allocation</p>
+                <div id="portfolioTypeChartWrap" style="position:relative;height:200px;width:200px;"><canvas
+                    id="portfolioTypeChart"></canvas></div>
               </div>
               <div class="chart-legend" id="portfolioTypeLegend"></div>
             </div>
@@ -476,8 +524,11 @@
               <form id="importForm" class="import-controls">
                 <div class="field">
                   <label for="assetCsvText">CSV data</label>
-                  <small class="csv-format-hint">Columns: symbol, name, type, coin, price, yield, payment_months. Use | between payment months (for example, 3|6|9|12).</small>
-                  <textarea id="assetCsvText" class="asset-csv-text" spellcheck="false" aria-label="Editable asset CSV data" placeholder="symbol,name,type,coin,price,yield,payment_months"></textarea>
+                  <small class="csv-format-hint">Columns: symbol, name, type, coin, price, yield, payment_months. Use |
+                    between payment months (for example, 3|6|9|12).</small>
+                  <textarea id="assetCsvText" class="asset-csv-text" spellcheck="false"
+                    aria-label="Editable asset CSV data"
+                    placeholder="symbol,name,type,coin,price,yield,payment_months"></textarea>
                 </div>
                 <div class="asset-csv-actions">
                   <button class="btn-sm" id="loadAssetsCsvBtn" type="button">Load current assets</button>
@@ -487,7 +538,8 @@
             </section>
             <div style="margin-top:18px;">
               <div class="page-desc" style="margin-bottom:8px;">Import log</div>
-              <div class="import-log" id="importLog" aria-live="polite">Load current assets or paste CSV data to get started.</div>
+              <div class="import-log" id="importLog" aria-live="polite">Load current assets or paste CSV data to get
+                started.</div>
             </div>
           </div>
 
@@ -586,8 +638,8 @@
             <div class="field"><label>User type</label>
               <div id="profileRole" style="padding:8px 0;"></div>
             </div>
-            <div class="field"><label>Monthly expenses for FIRE (€)</label><input type="number" id="profileFireExpenses" min="0" step="any"
-                placeholder="e.g. 2500"></div>
+            <div class="field"><label>Monthly expenses for FIRE (€)</label><input type="number" id="profileFireExpenses"
+                min="0" step="any" placeholder="e.g. 2500"></div>
             <button class="btn-sm primary" type="button" id="profileSaveFireExpensesBtn" style="margin-top:8px;">Save
               expenses</button>
             <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
@@ -639,7 +691,8 @@
       <div class="modal-head">
         <h3 id="assetModalTitle">New Asset</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeAssetModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -663,7 +716,8 @@
             name="price" placeholder="179.62"></div>
         <div class="field"><label>Dividend Yield (%)</label><input type="number" step="0.01" min="0" id="assetYield"
             name="dividend_yield" placeholder="0.52"></div>
-        <div class="field" id="assetMonthsField"><label>Payment Months <span style="font-weight:normal;color:var(--muted);">(e.g.
+        <div class="field" id="assetMonthsField"><label>Payment Months <span
+              style="font-weight:normal;color:var(--muted);">(e.g.
               3,6,9,12)</span></label><input type="text" id="assetMonths" name="payment_months" placeholder="3,6,9,12">
         </div>
         <p class="form-error"></p>
@@ -681,12 +735,14 @@
       <div class="modal-head">
         <h3>Update Asset Value</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close"
-          aria-label="Close">✕</button>
+            aria-label="Close">✕</button>
         </div>
       </div>
-      <p class="modal-copy">Update the price for <strong id="updateAssetName"></strong> using <span id="updateAssetProviderName">finnhub.io</span></p>
+      <p class="modal-copy">Update the price for <strong id="updateAssetName"></strong> using <span
+          id="updateAssetProviderName">finnhub.io</span></p>
       <div class="field" id="updateAssetProviderField">
         <label for="updateAssetProviderSelect">Choose Stock Data Provider</label>
         <select id="updateAssetProviderSelect" style="width:100%; margin-top:4px;">
@@ -724,11 +780,14 @@
       <div class="modal-head">
         <h3>Update All Prices</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
-          <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close" aria-label="Close">✕</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close"
+            aria-label="Close">✕</button>
         </div>
       </div>
-      <p class="modal-copy">Update prices for all <strong>USD stocks</strong>. Bonds, ETFs, CFDs, commodities, and non-USD assets are skipped.</p>
+      <p class="modal-copy">Update prices for all <strong>USD stocks</strong>. Bonds, ETFs, CFDs, commodities, and
+        non-USD assets are skipped.</p>
       <div class="field" id="bulkUpdateProviderField">
         <label for="bulkUpdateProviderSelect">Choose Stock Data Provider</label>
         <select id="bulkUpdateProviderSelect" style="width:100%; margin-top:4px;">
@@ -737,10 +796,12 @@
           <option value="finnhub">Finnhub.io (1 call every 2s — 30 calls/min)</option>
         </select>
       </div>
-      <div class="bulk-update-info" id="bulkUpdateInfo" style="margin-bottom:16px; padding:10px 12px; border-radius:8px; background:var(--panel2); border:1px solid var(--border); font-size:12px; color:var(--muted); line-height:1.5;">
+      <div class="bulk-update-info" id="bulkUpdateInfo"
+        style="margin-bottom:16px; padding:10px 12px; border-radius:8px; background:var(--panel2); border:1px solid var(--border); font-size:12px; color:var(--muted); line-height:1.5;">
         <div><strong id="bulkUpdateAssetCount">0</strong> USD stock(s) found.</div>
         <div id="bulkUpdateEstimatedTime" style="margin-top:4px;">Estimated duration: ~0s</div>
-        <div style="margin-top:4px; font-size:11px;">Retry logic: 30s after 1st failure, 60s after 2nd, 120s after 3rd.</div>
+        <div style="margin-top:4px; font-size:11px;">Retry logic: 30s after 1st failure, 60s after 2nd, 120s after 3rd.
+        </div>
       </div>
       <div class="field" id="bulkUpdateProgressField" style="display:none;">
         <label id="updateAllPricesLabel">Preparing...</label>
@@ -781,7 +842,8 @@
       <div class="modal-head">
         <h3 id="providerModalTitle">New Provider</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeProviderModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -811,7 +873,8 @@
       <div class="modal-head">
         <h3 id="accountModalTitle">New Account</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeAccountModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -857,7 +920,8 @@
       <div class="modal-head">
         <h3 id="holdingModalTitle">Add Holding</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeHoldingModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -894,7 +958,8 @@
       <div class="modal-head">
         <h3 id="goalModalTitle">New Goal</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeGoalModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -915,8 +980,8 @@
             <option value="">Select currency...</option>
           </select>
         </div>
-        <div class="field"><label>Target Date (optional)</label><input type="date" id="goalEndDate"
-            name="end_date"></div>
+        <div class="field"><label>Target Date (optional)</label><input type="date" id="goalEndDate" name="end_date">
+        </div>
         <div class="field">
           <label>Linked Accounts</label>
           <div id="goalAccountsList" class="goal-accounts-list"></div>
@@ -941,7 +1006,8 @@
       <div class="modal-head">
         <h3 id="goalSimTitle">Goal Simulator</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeGoalSimX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -964,19 +1030,24 @@
       <div class="modal-head">
         <h3 id="goalDetailsTitle">Goal Details</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize" data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeGoalDetailsX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
       <div class="goal-details-summary" id="goalDetailsSummary"></div>
       <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
       <div class="goal-details-callout" id="goalDetailsCallout"></div>
-      <div class="details-chart-row modal-doughnut-layout" id="goalDetailsChartRow" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div id="goalDetailsChartWrap" class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart" role="button" tabindex="0" aria-label="Toggle goal chart to snapshot history"></canvas>
+      <div class="details-chart-row modal-doughnut-layout" id="goalDetailsChartRow"
+        style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div id="goalDetailsChartWrap" class="modal-doughnut-chart"
+          style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart" role="button"
+            tabindex="0" aria-label="Toggle goal chart to snapshot history"></canvas>
         </div>
         <div class="chart-legend" id="goalDetailsLegend" style="flex:1;"></div>
       </div>
-      <div id="goalDetailsChartHint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">Click the chart to view snapshot history</div>
+      <div id="goalDetailsChartHint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">Click
+        the chart to view snapshot history</div>
       <div class="modal-actions" style="margin-top:20px;">
         <button class="btn-sm primary" type="button" id="goalDetailsSimulateBtn">Simulate</button>
       </div>
@@ -989,12 +1060,15 @@
       <div class="modal-head">
         <h3 id="accountDetailsTitle">Account Details</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
-          <button class="modal-close" type="button" id="closeAccountDetailsX" title="Close" aria-label="Close">✕</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAccountDetailsX" title="Close"
+            aria-label="Close">✕</button>
         </div>
       </div>
       <div class="goal-details-summary" id="accountDetailsSummary"></div>
-      <div class="details-chart-row modal-doughnut-layout" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+      <div class="details-chart-row modal-doughnut-layout"
+        style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
             id="accountDetailsChart"></canvas>
         </div>
@@ -1022,7 +1096,8 @@
       <div class="modal-head">
         <h3 id="loanSimTitle">Loan Simulator</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeLoanSimX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1070,27 +1145,59 @@
       <div class="modal-head">
         <h3 id="interestSimTitle">Interest Simulator</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeInterestSimX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
-      <p class="interest-sim-intro">Compound interest projection with optional tax and monthly contributions. Values update automatically.</p>
+      <p class="interest-sim-intro">Compound interest projection with optional tax and monthly contributions. Values
+        update automatically.</p>
       <div class="interest-sim-inputs">
-        <div class="field"><label for="interestSimBalance">Initial balance</label><input type="number" min="0" step="0.01" id="interestSimBalance"></div>
-        <div class="field"><label for="interestSimRate">Interest rate (% per year)</label><input type="number" min="0" step="0.01" id="interestSimRate"></div>
-        <div class="field"><label for="interestSimTax">Tax rate on interest (%)</label><input type="number" min="0" max="100" step="0.01" id="interestSimTax" value="28"></div>
-        <div class="field"><label for="interestSimFrequency">Compounding frequency</label><select id="interestSimFrequency"><option value="yearly">Yearly</option><option value="monthly" selected>Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
-        <div class="field"><label for="interestSimYears">Years to simulate</label><input type="number" min="1" max="100" step="1" id="interestSimYears" value="1"></div>
-        <div class="field"><label for="interestSimContribution">Additional monthly contribution</label><input type="number" min="0" step="0.01" id="interestSimContribution" value="0"></div>
+        <div class="field"><label for="interestSimBalance">Initial balance</label><input type="number" min="0"
+            step="0.01" id="interestSimBalance"></div>
+        <div class="field"><label for="interestSimRate">Interest rate (% per year)</label><input type="number" min="0"
+            step="0.01" id="interestSimRate"></div>
+        <div class="field"><label for="interestSimTax">Tax rate on interest (%)</label><input type="number" min="0"
+            max="100" step="0.01" id="interestSimTax" value="28"></div>
+        <div class="field"><label for="interestSimFrequency">Compounding frequency</label><select
+            id="interestSimFrequency">
+            <option value="yearly">Yearly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="daily">Daily</option>
+          </select></div>
+        <div class="field"><label for="interestSimYears">Years to simulate</label><input type="number" min="1" max="100"
+            step="1" id="interestSimYears" value="1"></div>
+        <div class="field"><label for="interestSimContribution">Additional monthly contribution</label><input
+            type="number" min="0" step="0.01" id="interestSimContribution" value="0"></div>
       </div>
       <div id="interestSimError" class="form-error" role="alert"></div>
       <div class="interest-sim-summary" id="interestSimSummary"></div>
       <div class="interest-sim-chart modal-chart-fill"><canvas id="interestSimChart"></canvas></div>
       <section class="interest-sim-table-section modal-chart-fill">
-        <div class="interest-sim-table-controls"><h4>Interest payment details</h4><input id="interestSimSearch" class="search-input" type="search" placeholder="Search payments…" aria-label="Search interest payments"></div>
-        <div class="interest-sim-table-scroll modal-chart-fill"><table class="interest-sim-table"><thead><tr><th>Date</th><th>Opening balance</th><th>Interest earned</th><th>Tax paid</th><th>Net interest</th><th>Contribution</th><th>Closing balance</th></tr></thead><tbody id="interestSimPayments"></tbody></table></div>
+        <div class="interest-sim-table-controls">
+          <h4>Interest payment details</h4><input id="interestSimSearch" class="search-input" type="search"
+            placeholder="Search payments…" aria-label="Search interest payments">
+        </div>
+        <div class="interest-sim-table-scroll modal-chart-fill">
+          <table class="interest-sim-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opening balance</th>
+                <th>Interest earned</th>
+                <th>Tax paid</th>
+                <th>Net interest</th>
+                <th>Contribution</th>
+                <th>Closing balance</th>
+              </tr>
+            </thead>
+            <tbody id="interestSimPayments"></tbody>
+          </table>
+        </div>
         <div id="interestSimTableInfo" class="interest-sim-table-info"></div>
-        <p class="interest-sim-note">This is an estimate. Actual returns may differ due to changing rates, fees, taxes, and deposit timing.</p>
+        <p class="interest-sim-note">This is an estimate. Actual returns may differ due to changing rates, fees, taxes,
+          and deposit timing.</p>
       </section>
     </div>
   </div>
@@ -1101,12 +1208,15 @@
       <div class="modal-head">
         <h3 id="providerDetailsTitle">Provider Details</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
-          <button class="modal-close" type="button" id="closeProviderDetailsX" title="Close" aria-label="Close">✕</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeProviderDetailsX" title="Close"
+            aria-label="Close">✕</button>
         </div>
       </div>
       <div class="goal-details-summary" id="providerDetailsSummary"></div>
-      <div class="details-chart-row modal-doughnut-layout" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+      <div class="details-chart-row modal-doughnut-layout"
+        style="display:flex;align-items:center;gap:24px;margin-top:16px;">
         <div class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
             id="providerDetailsChart"></canvas>
         </div>
@@ -1134,7 +1244,8 @@
       <div class="modal-head">
         <h3>Create New User</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeUserModalX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1166,7 +1277,8 @@
       <div class="modal-head">
         <h3>Reset Password</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeResetPasswordX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1192,7 +1304,8 @@
       <div class="modal-head">
         <h3 id="welcomeModalTitle">👋 Portfolio Manager guide</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeWelcomeBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1573,7 +1686,8 @@
       <div class="modal-head">
         <h3>🕰 Time Travel</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeTimeTravelBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1596,7 +1710,8 @@
       <div class="modal-head">
         <h3>📅 Snapshot Calendar</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="closeCalendarBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1610,11 +1725,14 @@
       <div class="modal-head">
         <h3>⚙️ Advanced Calendar Filters</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
-          <button class="modal-close" type="button" id="closeGrowthCalendarFiltersBtn" title="Close and apply" aria-label="Close and apply">✕</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeGrowthCalendarFiltersBtn" title="Close and apply"
+            aria-label="Close and apply">✕</button>
         </div>
       </div>
-      <p class="modal-copy">Choose one or more accounts and account types. When both are selected, an account must match both filters.</p>
+      <p class="modal-copy">Choose one or more accounts and account types. When both are selected, an account must match
+        both filters.</p>
       <div class="growth-cal-filters growth-cal-filters-modal">
         <div class="growth-cal-filter-field">
           <label for="growthCalAccountFilter">Accounts</label>
@@ -1627,9 +1745,11 @@
             title="Hold Ctrl or Command to select multiple account types"></select>
         </div>
       </div>
-      <div class="growth-cal-filter-modal-help">Use Ctrl/Command to select multiple values. Empty selections include all accounts or types.</div>
+      <div class="growth-cal-filter-modal-help">Use Ctrl/Command to select multiple values. Empty selections include all
+        accounts or types.</div>
       <div class="modal-actions">
-        <button class="btn-sm growth-cal-clear-filter-btn" type="button" id="growthCalClearFiltersBtn">Clear filters</button>
+        <button class="btn-sm growth-cal-clear-filter-btn" type="button" id="growthCalClearFiltersBtn">Clear
+          filters</button>
         <button class="btn-sm primary" type="button" id="growthCalApplyFiltersBtn">Apply filters</button>
       </div>
     </div>
@@ -1641,8 +1761,8 @@
       <div class="modal-head">
         <h3>📈 Snapshot History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize"
-            aria-label="Maximize" data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1688,8 +1808,10 @@
       <div class="modal-head">
         <h3>📊 Portfolio Value Ranges</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize" data-modal-maximize>⛶</button>
-          <button class="modal-close" type="button" id="closePortfolioRangeBtn" title="Close" aria-label="Close">✕</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" id="closePortfolioRangeBtn" title="Close"
+            aria-label="Close">✕</button>
         </div>
       </div>
       <div id="portfolioRangeView" class="history-account-range-view modal-chart-fill"></div>
@@ -1702,8 +1824,8 @@
       <div class="modal-head">
         <h3 id="accountHistoryTitle">📈 Account History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize"
-            aria-label="Maximize" data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeAccountHistoryBtn" title="Close"
             aria-label="Close">✕</button>
         </div>
@@ -1728,7 +1850,8 @@
           </select>
         </div>
       </div>
-      <div id="accountHistoryChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
+      <div id="accountHistoryChartWrap" class="modal-chart-fill"
+        style="position:relative;height:320px;margin-top:16px;">
         <canvas id="accountHistoryChart"></canvas>
       </div>
       <div id="accountHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
@@ -1741,8 +1864,8 @@
       <div class="modal-head">
         <h3 id="providerHistoryTitle">📈 Provider History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize"
-            aria-label="Maximize" data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeProviderHistoryBtn" title="Close"
             aria-label="Close">✕</button>
         </div>
@@ -1767,7 +1890,8 @@
           </select>
         </div>
       </div>
-      <div id="providerHistoryChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
+      <div id="providerHistoryChartWrap" class="modal-chart-fill"
+        style="position:relative;height:320px;margin-top:16px;">
         <canvas id="providerHistoryChart"></canvas>
       </div>
       <div id="providerHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
@@ -1780,8 +1904,8 @@
       <div class="modal-head">
         <h3 id="goalHistoryTitle">📈 Goal History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" title="Maximize"
-            aria-label="Maximize" data-modal-maximize>⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize"
+            data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeGoalHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1811,8 +1935,18 @@
   <!-- MODAL: Expenses -->
   <div class="modal-overlay" id="expenseModalOverlay">
     <div class="modal expense-modal">
-      <div class="modal-head"><h3 id="expenseModalTitle">Expense</h3><div class="modal-head-actions"><button class="modal-close" type="button" id="closeExpenseModalX" aria-label="Close">✕</button></div></div>
-      <form id="expenseModalForm"><div id="expenseModalFields"></div><p class="form-error" id="expenseModalError"></p><div class="modal-actions"><button class="btn-sm" type="button" id="cancelExpenseModalBtn">Cancel</button><button class="btn-sm primary" id="expenseModalSubmitBtn" type="submit">Save</button></div></form>
+      <div class="modal-head">
+        <h3 id="expenseModalTitle">Expense</h3>
+        <div class="modal-head-actions"><button class="modal-close" type="button" id="closeExpenseModalX"
+            aria-label="Close">✕</button></div>
+      </div>
+      <form id="expenseModalForm">
+        <div id="expenseModalFields"></div>
+        <p class="form-error" id="expenseModalError"></p>
+        <div class="modal-actions"><button class="btn-sm" type="button"
+            id="cancelExpenseModalBtn">Cancel</button><button class="btn-sm primary" id="expenseModalSubmitBtn"
+            type="submit">Save</button></div>
+      </form>
     </div>
   </div>
 
@@ -1822,7 +1956,8 @@
       <div class="modal-head">
         <h3 id="confirmModalTitle">Are you sure?</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize"
+            aria-label="Maximize">⛶</button>
           <button class="modal-close" type="button" id="confirmModalClose" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
