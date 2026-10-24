@@ -411,8 +411,10 @@ export async function onRequest(context) {
       const user = await requireMember(request, env), body = await readBody(request);
       const categoryId = Number(body.category_id), subcategoryId = body.subcategory_id === null || body.subcategory_id === '' || body.subcategory_id === undefined ? null : Number(body.subcategory_id);
       const month = clean(body.expense_month), currency = clean(body.currency).toUpperCase();
-      const amount = body.amount === null || body.amount === '' || body.amount === undefined ? null : Number(body.amount);
-      if (!Number.isInteger(categoryId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || !/^[A-Z]{3}$/.test(currency)) return fail('Provide a valid month, amount, and currency.');
+      const isAdditive = Object.prototype.hasOwnProperty.call(body, 'add_amount');
+      const rawAmount = isAdditive ? body.add_amount : body.amount;
+      const amount = rawAmount === null || rawAmount === '' || rawAmount === undefined ? null : Number(rawAmount);
+      if (!Number.isInteger(categoryId) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || (amount !== null && (!Number.isFinite(amount) || amount < 0)) || (isAdditive && amount === null) || !/^[A-Z]{3}$/.test(currency)) return fail('Provide a valid month, amount, and currency.');
       const category = await env.myd1db.prepare('SELECT id FROM expense_categories WHERE id = ? AND user_id = ?').bind(categoryId, user.id).first();
       if (!category) return fail('Category not found.', 404);
       if (subcategoryId !== null) {
@@ -420,13 +422,18 @@ export async function onRequest(context) {
         const subcategory = await env.myd1db.prepare('SELECT id FROM expense_subcategories WHERE id = ? AND category_id = ? AND user_id = ?').bind(subcategoryId, categoryId, user.id).first();
         if (!subcategory) return fail('Sub-category not found.', 404);
       }
-      const existing = await env.myd1db.prepare(`SELECT id FROM expenses WHERE user_id = ? AND category_id = ? AND subcategory_id IS ? AND expense_month = ?`).bind(user.id, categoryId, subcategoryId, month).first();
+      const existing = await env.myd1db.prepare(`SELECT id, currency FROM expenses WHERE user_id = ? AND category_id = ? AND subcategory_id IS ? AND expense_month = ?`).bind(user.id, categoryId, subcategoryId, month).first();
       if (amount === null) {
         if (existing) await env.myd1db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').bind(existing.id, user.id).run();
         return json({ ok: true });
       }
       if (existing) {
-        await env.myd1db.prepare('UPDATE expenses SET amount = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, currency, existing.id, user.id).run();
+        if (isAdditive) {
+          if (existing.currency !== currency) return fail(`This month already has an amount in ${existing.currency}. Add an amount in that currency.`, 409);
+          await env.myd1db.prepare('UPDATE expenses SET amount = amount + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, existing.id, user.id).run();
+        } else {
+          await env.myd1db.prepare('UPDATE expenses SET amount = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(amount, currency, existing.id, user.id).run();
+        }
         return json({ id: existing.id, ok: true });
       }
       const result = await env.myd1db.prepare('INSERT INTO expenses (user_id, category_id, subcategory_id, expense_month, amount, currency) VALUES (?, ?, ?, ?, ?, ?)').bind(user.id, categoryId, subcategoryId, month, amount, currency).run();

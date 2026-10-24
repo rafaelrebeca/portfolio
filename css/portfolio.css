@@ -3305,6 +3305,7 @@ select {
 .expense-chart-wrap { position: relative; height: 350px; }
 .expense-modal { max-width: 480px; }
 .expense-modal .field select, .expense-modal .field input { width: 100%; }
+.expense-current-amount { margin: 2px 0 14px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 13px; line-height: 1.5; background: rgba(255,255,255,.025); }
 @media (max-width: 760px) {
   .expense-chart-grid { grid-template-columns: 1fr; }
   .expense-chart-wrap { height: 300px; }

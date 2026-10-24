@@ -4651,14 +4651,33 @@ function openExpenseModal(kind, targetId = null) {
     fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
   } else {
     const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="field"><label for="expenseEntryAmount">Amount</label><input id="expenseEntryAmount" type="number" min="0" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
+    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Additional amount</label><input id="expenseEntryAmount" type="number" min="0" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
     const categorySelect = $('#expenseEntryCategory');
     const subcategorySelect = $('#expenseEntrySubcategory');
     if (categorySelect && subcategorySelect) [...subcategorySelect.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== categorySelect.value; });
+    updateExpenseAddPreview();
   }
   const error = $('#expenseModalError');
   if (error) error.textContent = '';
   openModal('expenseModalOverlay');
+}
+
+function updateExpenseAddPreview() {
+  const categoryId = Number($('#expenseEntryCategory')?.value);
+  const subcategoryId = $('#expenseEntrySubcategory')?.value || null;
+  const month = $('#expenseEntryMonth')?.value;
+  const existing = state.expenses.find(expense => Number(expense.category_id) === categoryId
+    && (expense.subcategory_id == null ? null : String(expense.subcategory_id)) === subcategoryId
+    && expense.expense_month === month);
+  const preview = $('#expenseCurrentAmount');
+  const currency = $('#expenseEntryCurrency');
+  if (preview) preview.textContent = existing
+    ? `Currently saved: ${formatCurrency(Number(existing.amount), existing.currency || 'EUR')}. The amount below will be added to it.`
+    : 'Currently saved: 0. The amount below will start this month’s total.';
+  if (currency) {
+    if (existing) currency.value = existing.currency || 'EUR';
+    currency.disabled = Boolean(existing);
+  }
 }
 
 function expenseRowsForYear(year) {
@@ -4787,7 +4806,7 @@ async function submitExpenseModal(event) {
     else if (expenseModalKind === 'subcategory') await request('/expense-subcategories', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseCategorySelect').value), name: $('#expenseSubcategoryName').value }) });
     else if (expenseModalKind === 'renameCategory') await request(`/expense-categories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseCategoryName').value }) });
     else if (expenseModalKind === 'renameSubcategory') await request(`/expense-subcategories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseSubcategoryName').value }) });
-    else await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, amount: $('#expenseEntryAmount').value, currency: $('#expenseEntryCurrency').value }) });
+    else await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, add_amount: $('#expenseEntryAmount').value, currency: $('#expenseEntryCurrency').value }) });
     closeModal('expenseModalOverlay');
     await loadData();
   } catch (err) { if (error) error.textContent = err.message; }
@@ -8068,10 +8087,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const index = years.indexOf(expenseYear); if (index >= 0 && index < years.length - 1) { expenseYear = years[index + 1]; renderExpenses(); }
   });
   $('#expenseModalFields')?.addEventListener('change', event => {
-    if (event.target.id !== 'expenseEntryCategory') return;
-    const subcategory = $('#expenseEntrySubcategory');
-    if (subcategory) [...subcategory.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== event.target.value; });
-    if (subcategory?.selectedOptions[0]?.hidden) subcategory.value = '';
+    if (event.target.id === 'expenseEntryCategory') {
+      const subcategory = $('#expenseEntrySubcategory');
+      if (subcategory) [...subcategory.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== event.target.value; });
+      if (subcategory?.selectedOptions[0]?.hidden) subcategory.value = '';
+    }
+    if (['expenseEntryCategory', 'expenseEntrySubcategory', 'expenseEntryMonth'].includes(event.target.id)) updateExpenseAddPreview();
   });
   $('#expenseGridBody')?.addEventListener('change', async event => {
     const input = event.target.closest('.expense-cell'); if (!input) return;
