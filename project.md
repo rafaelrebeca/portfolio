@@ -93,7 +93,7 @@ The worker exposes three authorization helpers:
 - `requireMember` — authenticated stored user or administrator; required for real portfolio data.
 - `requireAdmin` — authenticated administrator.
 
-Login creates a random session token and stores it in D1. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, and has a seven-day maximum age. Logout deletes the token and expires the cookie. The strict same-site policy means cross-site requests do not carry an authenticated session.
+Login creates a random session token and stores it in D1. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, and has a seven-day maximum age. Logout deletes the token and expires the cookie. Changing your own password requires the current password, replaces the password hash, deletes every session for that user, and issues a new session cookie. An administrator password reset deletes every session for the target user so existing cookies stop working. The strict same-site policy means cross-site requests do not carry an authenticated session.
 
 Input is trimmed and validated at the API boundary. Usernames accept 3–50 characters from `[a-zA-Z0-9_.-]`; passwords accept 8–50 characters. Names, enum values, numeric fields, dates, roles, and ownership are validated before writes. Unexpected server errors are logged server-side and returned to the client as a generic internal error.
 
@@ -138,7 +138,7 @@ All routes are under `/api`. The route is implemented by `functions/api/[[path]]
 | GET/POST | `/api/holdings` | Member | Lists or upserts an owned holding. A `holding_id` updates a specific row. |
 | DELETE | `/api/holdings/{id}` | Member | Deletes an owned holding. |
 
-Holdings accept platform or personal assets. Personal holdings are ownership-checked and returned with `is_personal: 1`. Asset accounts calculate their value from holding price × quantity; non-asset accounts calculate value from their balance.
+Holdings accept platform or personal assets. Create and update both verify that a personal asset belongs to the current user (or that a platform asset exists). `GET /api/holdings` joins personal assets only when `personal_assets.user_id` matches the holding owner, so another user's personal-asset catalog cannot leak through a holding row. Personal holdings are returned with `is_personal: 1`. Asset accounts calculate their value from holding price × quantity; non-asset accounts calculate value from their balance.
 
 ### Expenses
 
@@ -170,9 +170,9 @@ Sub-goals are stored in the `subgoals` table and submitted as an ordered `subgoa
 |---|---|---|---|
 | GET | `/api/admin/users` | Admin | Lists users without password hashes. |
 | POST | `/api/admin/users` | Admin | Creates a user with a bcrypt password hash. |
-| POST | `/api/admin/users/{id}/password` | Admin | Resets another user's password. |
+| POST | `/api/admin/users/{id}/password` | Admin | Resets another user's password and deletes that user's sessions. |
 | PATCH | `/api/admin/users/{id}/role` | Admin | Changes another user's role; an admin cannot change their own role. |
-| POST | `/api/me/password` | Member | Changes the current user's password. |
+| POST | `/api/me/password` | Member | Changes the current user's password after verifying `current_password`; revokes other sessions and sets a new session cookie. |
 | PATCH | `/api/me/profile` | Member | Updates the current user's profile settings (`fire_expenses`, the monthly expenses used for the FIRE target). |
 | POST | `/api/admin/import` | Admin | Imports or updates platform assets from rows. |
 | GET | `/api/currency` | Member | Lists stored exchange rates. |
@@ -333,7 +333,7 @@ Above the goal list, a **Goal Statistics** card (`renderGoalStats`) summarizes t
 
 - **Tools** is admin-only and has Data and Currency Test tabs. Data loads import-ready asset CSV into an editable text area and imports the edited rows; Currency Test converts up to five rows and shows individual and total results.
 - **Users** is admin-only and supports user creation, password reset, and role changes between `user` and `admin`, except changing the current administrator's role. Guest mode is available only from the login menu and is not a stored user.
-- **Profile** shows the current username/role, allows setting monthly expenses for FIRE, and provides self-service password reset.
+- **Profile** shows the current username/role, allows setting monthly expenses for FIRE, and provides self-service password change (current password plus new password).
 - **Currency** displays stored exchange rates with search and pagination.
 
 ## 8. Snapshot and Time Travel behavior
@@ -346,7 +346,7 @@ Snapshots are collected by `collectDashboardSnapshot()` and contain:
 - an `accounts` array with account ID, name, type, provider, and EUR value;
 - provider and account counts for metadata.
 
-The snapshot list is cached per user in local storage with a versioned key. Startup and explicit refresh may refresh it from `/api/snapshots`; ordinary display/navigation uses the retained local list. Failed reads do not discard known cached data.
+The snapshot list is cached per user in local storage with a versioned key. Startup and explicit refresh may refresh it from `/api/snapshots`; ordinary display/navigation uses the retained local list. Failed reads do not discard known cached data. Logout removes every versioned snapshot cache key for this origin so a later visitor on the same browser cannot read another account's cached history.
 
 The Dashboard header provides previous/next navigation, save, history, calendar, and playback controls. Time Travel shows a date banner and renders the selected snapshot without replacing live data on the other pages. One snapshot per UTC day is supported; saving again on that day replaces it.
 

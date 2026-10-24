@@ -6,8 +6,20 @@ const readBody = async request => { try { return await request.json(); } catch {
 const clean = value => typeof value === 'string' ? value.trim() : '';
 const validRole = value => ['user', 'admin'].includes(value);
 
+const SESSION_COOKIE_ATTRS = 'HttpOnly; Secure; SameSite=Strict; Path=/';
+function sessionCookie(token, maxAge = 604800) {
+  return `portfolio_session=${token}; ${SESSION_COOKIE_ATTRS}; Max-Age=${maxAge}`;
+}
 function sessionToken(request) {
   return request.headers.get('Cookie')?.split(';').map(item => item.trim()).find(item => item.startsWith('portfolio_session='))?.slice('portfolio_session='.length);
+}
+async function revokeUserSessions(env, userId) {
+  await env.myd1db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+}
+async function issueSession(env, userId) {
+  const token = crypto.randomUUID();
+  await env.myd1db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))").bind(token, userId).run();
+  return token;
 }
 async function currentUser(request, env) {
   const token = sessionToken(request);
@@ -127,11 +139,11 @@ export async function onRequest(context) {
         env.myd1db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))").bind(token, user.id),
         env.myd1db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').bind(user.id)
       ]);
-      return json({ user: { id: user.id, username: user.username, role: user.role, fire_expenses: user.fire_expenses } }, 200, { 'set-cookie': `portfolio_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800` });
+      return json({ user: { id: user.id, username: user.username, role: user.role, fire_expenses: user.fire_expenses } }, 200, { 'set-cookie': sessionCookie(token) });
     }
     if (method === 'POST' && path === 'auth/logout') {
       const token = sessionToken(request); if (token) await env.myd1db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
-      return json({ ok: true }, 200, { 'set-cookie': 'portfolio_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0' });
+      return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
     }
     if (method === 'GET' && path === 'auth/me') { const user = await requireUser(request, env); return json({ user }); }
 
@@ -497,19 +509,27 @@ export async function onRequest(context) {
     if (method === 'GET' && path === 'holdings') {
       const user = await requireMember(request, env);
       const { results } = await env.myd1db.prepare(`SELECT h.id, h.account_id, h.asset_id, h.personal_asset_id, h.quantity, h.purchase_price, a.name AS account_name,
-        COALESCE(s.name, ps.name) AS asset_name, COALESCE(s.symbol, ps.symbol) AS symbol, COALESCE(s.price, ps.price) AS price, COALESCE(s.coin, ps.coin) AS coin
+        COALESCE(s.name, ps.name) AS asset_name, COALESCE(s.symbol, ps.symbol) AS symbol, COALESCE(s.price, ps.price) AS price, COALESCE(s.coin, ps.coin) AS coin,
+        ps.id AS owned_personal_id
         FROM account_holdings h JOIN accounts a ON a.id = h.account_id JOIN providers p ON p.id = a.provider_id
         LEFT JOIN assets s ON s.id = h.asset_id
-        LEFT JOIN personal_assets ps ON ps.id = h.personal_asset_id
+        LEFT JOIN personal_assets ps ON ps.id = h.personal_asset_id AND ps.user_id = p.user_id
         WHERE p.user_id = ? ORDER BY a.name, asset_name`).bind(user.id).all();
       // asset_id is set to the id the frontend should look up in state.assets
       // (the personal_asset_id for personal holdings, the asset_id otherwise),
       // and is_personal flags which kind it is so the frontend can render it.
-      const items = results.map(h => ({
-        ...h,
-        asset_id: h.personal_asset_id != null ? h.personal_asset_id : h.asset_id,
-        is_personal: h.personal_asset_id != null ? 1 : 0
-      }));
+      // owned_personal_id is only set when the personal asset belongs to this user,
+      // so a stale or hostile personal_asset_id cannot leak another tenant's catalog.
+      const items = results.map(h => {
+        const { owned_personal_id, personal_asset_id, ...rest } = h;
+        const ownedPersonal = owned_personal_id != null;
+        return {
+          ...rest,
+          personal_asset_id: ownedPersonal ? owned_personal_id : null,
+          asset_id: ownedPersonal ? owned_personal_id : h.asset_id,
+          is_personal: ownedPersonal ? 1 : 0
+        };
+      });
       return json({ items });
     }
     if (method === 'POST' && path === 'holdings') {
@@ -527,6 +547,13 @@ export async function onRequest(context) {
       // Editing an existing holding: update the specific row (ownership-checked)
       // instead of upserting, so changing quantity/price never duplicates it.
       const holdingId = body.holding_id ? Number(body.holding_id) : null;
+      if (isPersonal) {
+        const personal = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND user_id = ?').bind(personalAssetId, user.id).first();
+        if (!personal) return fail('Personal asset not found.', 404);
+      } else {
+        const asset = await env.myd1db.prepare('SELECT id FROM assets WHERE id = ?').bind(assetId).first();
+        if (!asset) return fail('Asset not found.', 404);
+      }
       if (holdingId) {
         const existing = await env.myd1db.prepare(`SELECT h.id FROM account_holdings h JOIN accounts a ON a.id = h.account_id JOIN providers p ON p.id = a.provider_id WHERE h.id = ? AND p.user_id = ?`).bind(holdingId, user.id).first();
         if (!existing) return fail('Holding not found.', 404);
@@ -534,13 +561,9 @@ export async function onRequest(context) {
         return json({ ok: true }, 200);
       }
       if (isPersonal) {
-        const personal = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND user_id = ?').bind(personalAssetId, user.id).first();
-        if (!personal) return fail('Personal asset not found.', 404);
         await env.myd1db.prepare(`INSERT INTO account_holdings (account_id, personal_asset_id, quantity, purchase_price) VALUES (?, ?, ?, ?)
           ON CONFLICT(account_id, asset_id, personal_asset_id) DO UPDATE SET quantity = excluded.quantity, purchase_price = excluded.purchase_price`).bind(accountId, personalAssetId, quantity, purchasePrice).run();
       } else {
-        const asset = await env.myd1db.prepare('SELECT id FROM assets WHERE id = ?').bind(assetId).first();
-        if (!asset) return fail('Asset not found.', 404);
         await env.myd1db.prepare(`INSERT INTO account_holdings (account_id, asset_id, quantity, purchase_price) VALUES (?, ?, ?, ?)
           ON CONFLICT(account_id, asset_id, personal_asset_id) DO UPDATE SET quantity = excluded.quantity, purchase_price = excluded.purchase_price`).bind(accountId, assetId, quantity, purchasePrice).run();
       }
@@ -650,17 +673,23 @@ export async function onRequest(context) {
       if (password.length < 8 || password.length > 50) return fail('Password must be 8–50 characters.');
       const hash = await bcrypt.hash(password, 12);
       if (!changed(await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, id).run())) return fail('User not found.', 404);
+      await revokeUserSessions(env, id);
       return json({ ok: true });
     }
-    // Self-service password reset for the logged-in user (Profile page).
+    // Self-service password change for the logged-in user (Profile page).
     if (method === 'POST' && path === 'me/password') {
       const user = await requireMember(request, env);
-      const { password } = await readBody(request);
-      const passStr = String(password || '');
+      const body = await readBody(request);
+      const currentPassword = String(body.current_password || '');
+      const passStr = String(body.password || '');
       if (passStr.length < 8 || passStr.length > 50) return fail('Password must be 8–50 characters.');
-      const hash = await bcrypt.hash(String(password), 12);
+      const row = await env.myd1db.prepare('SELECT password_hash FROM users WHERE id = ?').bind(user.id).first();
+      if (!row || !(await bcrypt.compare(currentPassword, row.password_hash))) return fail('Current password is incorrect.', 401);
+      const hash = await bcrypt.hash(passStr, 12);
       await env.myd1db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hash, user.id).run();
-      return json({ ok: true });
+      await revokeUserSessions(env, user.id);
+      const token = await issueSession(env, user.id);
+      return json({ ok: true }, 200, { 'set-cookie': sessionCookie(token) });
     }
     // Update profile settings (fire_expenses).
     if (method === 'PATCH' && path === 'me/profile') {

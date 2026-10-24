@@ -143,8 +143,8 @@ This runs `wrangler pages deploy . --project-name portfolio-manager`.
 
 ## 🔒 Security & Privacy
 
-- **Session Security**: Session tokens are stored in `HttpOnly`, `Secure`, `SameSite=Strict` cookies with automated 7-day expiration.
-- **Password Security**: Passwords are standardly hashed using `bcrypt` before storage.
+- **Session Security**: Session tokens are stored in `HttpOnly`, `Secure`, `SameSite=Strict` cookies with automated 7-day expiration. Password changes revoke existing sessions.
+- **Password Security**: Passwords are hashed with `bcrypt`. Self-service changes require the current password.
 - **Privacy Shield**: Built-in visual blur mode allows safe viewing in open or shared environments.
 
 ---

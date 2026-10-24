@@ -239,6 +239,20 @@ function writeSnapshotCache(snapshots = timeTravelList) {
   }
 }
 
+function clearSnapshotCaches() {
+  try {
+    const prefix = `portfolio_snapshots_v${SNAPSHOT_CACHE_VERSION}_`;
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach(key => localStorage.removeItem(key));
+  } catch (error) {
+    console.warn('Could not clear snapshot cache:', error);
+  }
+}
+
 function setSnapshotList(snapshots) {
   const list = (Array.isArray(snapshots) ? snapshots : [])
     .filter(snapshot => snapshot && snapshot.day)
@@ -6397,8 +6411,10 @@ async function saveProfileFireExpenses() {
 
 // Reset the logged-in user's password from the Profile page.
 async function resetProfilePassword() {
+  const currentPass = $('#profileCurrentPassword')?.value || '';
   const newPass = $('#profileNewPassword')?.value || '';
   const confirmPass = $('#profileConfirmPassword')?.value || '';
+  if (!state.guest && !currentPass) { toast('Enter your current password.'); return; }
   if (newPass.length < 8 || newPass.length > 50) { toast('Password must be 8–50 characters.'); return; }
   if (newPass !== confirmPass) { toast('Passwords do not match.'); return; }
   const btn = $('#profileResetPasswordBtn');
@@ -6407,9 +6423,10 @@ async function resetProfilePassword() {
     if (state.guest) {
       toast('Password reset simulated.');
     } else {
-      await request('/me/password', { method: 'POST', body: JSON.stringify({ password: newPass }) });
-      toast('Password reset successfully.');
+      await request('/me/password', { method: 'POST', body: JSON.stringify({ current_password: currentPass, password: newPass }) });
+      toast('Password changed successfully.');
     }
+    if ($('#profileCurrentPassword')) $('#profileCurrentPassword').value = '';
     if ($('#profileNewPassword')) $('#profileNewPassword').value = '';
     if ($('#profileConfirmPassword')) $('#profileConfirmPassword').value = '';
   } catch (error) {
@@ -6647,6 +6664,7 @@ async function signIn(event) {
 }
 
 async function logout() {
+  clearSnapshotCaches();
   if (state.user) await request('/auth/logout', { method: 'POST' }).catch(() => { });
   location.reload();
 }
