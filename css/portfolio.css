@@ -3637,6 +3637,13 @@ select {
   font-size: 15px;
 }
 
+.expense-chart-note {
+  margin: -5px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .expense-chart-wrap {
   position: relative;
   height: 350px;

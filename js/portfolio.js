@@ -48,7 +48,7 @@ let blurMode = false;
 let currentPage = 'dashboard';
 let activeExpenseTab = 'grid';
 let expenseYear = new Date().getFullYear();
-const expenseCharts = { yearCategory: null, yearSubcategory: null, allCategory: null, allSubcategory: null };
+const expenseCharts = { yearCategory: null, yearCategoryPie: null, allCategory: null, allCategoryPie: null };
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const numeric = value => value === null || value === undefined || value === '' ? null : Number(value);
@@ -4775,14 +4775,44 @@ function drawExpenseChart(slot, canvasId, type, labels, groups, allTime = false)
   });
 }
 
+function drawExpensePieChart(slot, canvasId, groups) {
+  const canvas = $(`#${canvasId}`);
+  if (!canvas || typeof Chart === 'undefined') return;
+  expenseCharts[slot]?.destroy();
+  const categories = groups.map(([, group]) => ({ label: group.label, total: [...group.months.values()].reduce((sum, amount) => sum + amount, 0) })).filter(group => group.total !== 0);
+  if (!categories.length) { expenseCharts[slot] = null; return; }
+  const signedTotals = categories.map(category => category.total);
+  expenseCharts[slot] = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels: categories.map(category => category.label),
+      datasets: [{
+        label: 'Net expenses',
+        data: signedTotals.map(Math.abs),
+        backgroundColor: categories.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+        borderColor: '#0f172a',
+        borderWidth: 2,
+        hoverOffset: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: context => blurActive() ? `${context.label}: hidden` : `${context.label}: ${moneyEUR.format(signedTotals[context.dataIndex])}` } }
+      }
+    }
+  });
+}
+
 function renderExpenseCharts() {
   const chartYear = new Date().getFullYear();
   const yearLabels = EXPENSE_MONTHS.map((_, i) => `${chartYear}-${String(i + 1).padStart(2, '0')}`);
   const yearly = state.expenses.filter(e => e.expense_month.startsWith(`${chartYear}-`));
   const categories = expenseGroups('category').filter(([id]) => yearly.some(e => String(e.category_id) === id)).map(([key, group]) => [key, { label: group.label, months: new Map([...group.months].filter(([month]) => month.startsWith(`${chartYear}-`))) }]);
-  const subcategories = expenseGroups('subcategory').filter(([id]) => yearly.some(e => String(e.subcategory_id || `category-${e.category_id}`) === id)).map(([key, group]) => [key, { label: group.label, months: new Map([...group.months].filter(([month]) => month.startsWith(`${chartYear}-`))) }]);
   drawExpenseChart('yearCategory', 'expenseYearCategoryChart', 'category', yearLabels, categories);
-  drawExpenseChart('yearSubcategory', 'expenseYearSubcategoryChart', 'subcategory', yearLabels, subcategories);
+  drawExpensePieChart('yearCategoryPie', 'expenseYearCategoryPieChart', categories);
   const allMonths = [...new Set(state.expenses.map(e => e.expense_month))].sort();
   let allLabels = [];
   if (allMonths.length) {
@@ -4792,7 +4822,7 @@ function renderExpenseCharts() {
     }
   }
   drawExpenseChart('allCategory', 'expenseAllCategoryChart', 'category', allLabels, expenseGroups('category'), true);
-  drawExpenseChart('allSubcategory', 'expenseAllSubcategoryChart', 'subcategory', allLabels, expenseGroups('subcategory'), true);
+  drawExpensePieChart('allCategoryPie', 'expenseAllCategoryPieChart', expenseGroups('category'));
 }
 
 function renderExpenses() {
