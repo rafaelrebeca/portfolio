@@ -202,7 +202,7 @@
             <button class="asset-tab" type="button" data-expense-tab="year" role="tab">📊 Current Year</button>
             <button class="asset-tab" type="button" data-expense-tab="all" role="tab">📈 All Time</button>
           </div>
-          <section class="expense-panel" id="expense-panel-grid">
+          <section class="expense-panel" id="expense-panel-grid" style="display:none;">
             <div class="expense-year-controls"><button class="btn-sm" id="expenseYearPrev" type="button"
                 aria-label="Previous year">←</button><strong id="expenseYearLabel"></strong><button class="btn-sm"
                 id="expenseYearNext" type="button" aria-label="Next year">→</button></div>
@@ -221,7 +221,7 @@
               </article>
               <article class="card expense-chart-card">
                 <h3>Current-year category breakdown</h3>
-                <p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips
+                <p class="expense-chart-note">Percentages use each category’s share of absolute expense totals; tooltips
                   show refunds as negative.</p>
                 <div class="expense-chart-wrap"><canvas id="expenseYearCategoryPieChart"></canvas></div>
               </article>
@@ -235,13 +235,13 @@
               </article>
               <article class="card expense-chart-card">
                 <h3>All-time category breakdown</h3>
-                <p class="expense-chart-note">Percentages use each category’s share of absolute net totals; tooltips
+                <p class="expense-chart-note">Percentages use each category’s share of absolute expense totals; tooltips
                   show refunds as negative.</p>
                 <div class="expense-chart-wrap"><canvas id="expenseAllCategoryPieChart"></canvas></div>
               </article>
             </div>
           </section>
-          <section class="expense-panel" id="expense-panel-stats" style="display:none;">
+          <section class="expense-panel" id="expense-panel-stats">
             <div class="expense-stats-heading">
               <div>
                 <div class="expense-stats-kicker">YOUR EXPENSES, WRAPPED</div>

@@ -46,7 +46,7 @@ const guestData = {
 const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], expenseCategories: [], expenseSubcategories: [], expenses: [], accountGrowths: new Map(), accountGrowthsDirty: true, snapshotDailyGrowths: new Map(), snapshotDailyGrowthsDirty: true };
 let blurMode = false;
 let currentPage = 'dashboard';
-let activeExpenseTab = 'grid';
+let activeExpenseTab = 'stats';
 let expenseYear = new Date().getFullYear();
 let expenseStatsYear = null;
 const expenseCharts = { yearCategory: null, yearCategoryPie: null, allCategory: null, allCategoryPie: null };
@@ -4929,25 +4929,25 @@ function renderExpenseStats() {
 
   content.innerHTML = `
     <div class="expense-wrap-summary">
-      <article class="expense-wrap-total"><span>Net total</span><strong>${moneyEUR.format(yearTotal)}</strong><small>${expenseStatsYear} · refunds included</small></article>
+      <article class="expense-wrap-total"><span>Expense total</span><strong>${moneyEUR.format(yearTotal)}</strong><small>${expenseStatsYear} · refunds included</small></article>
       <article><span>Average per active month</span><strong>${moneyEUR.format(averagePerMonth)}</strong><small>Shared active-month count for every average</small></article>
       <article><span>Months in the story</span><strong>${activeMonths} <small>/ 12</small></strong><small>${activeMonths === 12 ? 'A full year of tracking!' : 'Every recorded month counts'}</small></article>
-      <article><span>Highest net month</span><strong>${peakMonth ? esc(peakLabel) : '—'}</strong><small>${peakMonth ? moneyEUR.format(peakMonth[1]) : 'No monthly data'}</small></article>
+      <article><span>Highest expense month</span><strong>${peakMonth ? esc(peakLabel) : '—'}</strong><small>${peakMonth ? moneyEUR.format(peakMonth[1]) : 'No monthly data'}</small></article>
     </div>
     <div class="expense-stats-section-head"><div><span class="expense-stats-kicker">THE LINEUP</span><h3>Where it went</h3></div>${topCategory ? `<div class="expense-top-pick">✨ Top category <strong>${esc(topCategory.name)}</strong></div>` : ''}</div>
     <div class="expense-stats-categories">${categories.map((category, index) => {
-      const color = CHART_COLORS[index % CHART_COLORS.length];
-      const categoryAverage = activeMonths ? category.total / activeMonths : 0;
-      const subcategories = [...category.subcategories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-      const maxSubcategory = Math.max(1, ...subcategories.map(item => Math.abs(item.total)));
-      return `<article class="expense-stat-category">
+    const color = CHART_COLORS[index % CHART_COLORS.length];
+    const categoryAverage = activeMonths ? category.total / activeMonths : 0;
+    const subcategories = [...category.subcategories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    const maxSubcategory = Math.max(1, ...subcategories.map(item => Math.abs(item.total)));
+    return `<article class="expense-stat-category">
         <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><strong>${esc(category.name)}</strong><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
         <div class="expense-stat-subcategories">${subcategories.map(subcategory => {
-          const average = activeMonths ? subcategory.total / activeMonths : 0;
-          return `<div class="expense-stat-subcategory"><span class="expense-stat-sub-name">↳ ${esc(subcategory.name)}</span><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
-        }).join('')}</div>
-      </article>`;
+      const average = activeMonths ? subcategory.total / activeMonths : 0;
+      return `<div class="expense-stat-subcategory"><span class="expense-stat-sub-name">↳ ${esc(subcategory.name)}</span><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
     }).join('')}</div>
+      </article>`;
+  }).join('')}</div>
     <p class="expense-stats-footnote">Year, category and sub-category averages all use the same active-month count: months with at least one recorded expense anywhere in the year. Months with no data are skipped. Category totals include their sub-categories. Refunds reduce totals and can make averages negative.</p>`;
 }
 
