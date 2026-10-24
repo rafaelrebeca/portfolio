@@ -4838,6 +4838,7 @@ function drawExpensePieChart(slot, canvasId, groups) {
               fillStyle: chart.data.datasets[0].backgroundColor[index],
               strokeStyle: chart.data.datasets[0].borderColor,
               lineWidth: chart.data.datasets[0].borderWidth,
+              fontColor: '#e6ebf5',
               hidden: !chart.getDataVisibility(index),
               index
             }))
