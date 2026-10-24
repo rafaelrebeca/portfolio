@@ -3473,7 +3473,7 @@ select {
 
 .expense-grid thead tr:nth-child(2) th {
   position: sticky;
-  top: 37px;
+  top: 30px;
   z-index: 4;
   text-align: center;
   background: #0b1220;
