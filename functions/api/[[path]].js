@@ -237,10 +237,10 @@ export async function onRequest(context) {
       const coin = clean(body.coin) || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
       if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
-      const owner = await env.myd1db.prepare('SELECT id FROM personal_assets WHERE id = ? AND (user_id = ? OR ? = ?)').bind(id, user.id, user.role, 'admin').first();
-      if (!owner) return fail('Personal asset not found.', 404);
-      const updateRes = await env.myd1db.prepare('UPDATE personal_assets SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ? WHERE id = ?').bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id).run();
-      if (!changed(updateRes)) return fail('Failed to update personal asset.', 500);
+      const updateRes = await env.myd1db.prepare(`UPDATE personal_assets
+        SET name = ?, symbol = ?, type = ?, price = ?, coin = ?, dividend_yield = ?
+        WHERE id = ? AND (user_id = ? OR ? = 'admin')`).bind(name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null, id, user.id, user.role).run();
+      if (!changed(updateRes)) return fail('Personal asset not found.', 404);
       return json({ ok: true });
     }
     if (method === 'DELETE' && /^personal-assets\/\d+$/.test(path)) {
@@ -461,7 +461,9 @@ export async function onRequest(context) {
         // Update existing account
         const existing = await env.myd1db.prepare('SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND p.user_id = ?').bind(accountId, user.id).first();
         if (!existing) return fail('Account not found.', 404);
-        const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, accountId).run();
+        const updateRes = await env.myd1db.prepare(`UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ?
+          WHERE id = ? AND EXISTS (SELECT 1 FROM providers current_provider WHERE current_provider.id = accounts.provider_id AND current_provider.user_id = ?)`)
+          .bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, accountId, user.id).run();
         if (!changed(updateRes)) return fail('Failed to update account.', 500);
         return json({ id: accountId, ok: true });
       } else {
@@ -480,7 +482,9 @@ export async function onRequest(context) {
       const owner = await env.myd1db.prepare('SELECT id FROM providers WHERE id = ? AND user_id = ?').bind(providerId, user.id).first(); if (!owner) return fail('Provider not found.', 404);
       const existing = await env.myd1db.prepare('SELECT a.id FROM accounts a JOIN providers p ON p.id = a.provider_id WHERE a.id = ? AND p.user_id = ?').bind(id, user.id).first();
       if (!existing) return fail('Account not found.', 404);
-      const updateRes = await env.myd1db.prepare('UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ? WHERE id = ?').bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, id).run();
+      const updateRes = await env.myd1db.prepare(`UPDATE accounts SET provider_id = ?, name = ?, type = ?, balance = ?, interest_rate = ?, coin = ?, finish_date = ?
+        WHERE id = ? AND EXISTS (SELECT 1 FROM providers current_provider WHERE current_provider.id = accounts.provider_id AND current_provider.user_id = ?)`)
+        .bind(providerId, name, type, type === 'asset_account' ? null : balance, rate, coin, finishDate, id, user.id).run();
       if (!changed(updateRes)) return fail('Failed to update account.', 500);
       return json({ ok: true });
     }
