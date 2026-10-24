@@ -1119,6 +1119,85 @@ body.modal-open {
   background: var(--border);
 }
 
+.modal-overlay.maximized {
+  padding: 12px;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.modal-overlay.maximized > .modal {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none !important;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.modal-overlay.maximized .modal-chart-fill {
+  flex: 1 1 0%;
+  min-height: 260px;
+  height: auto !important;
+}
+
+.modal-overlay.maximized .history-account-range-view.modal-chart-fill {
+  overflow: auto;
+}
+
+.modal-overlay.maximized .modal-doughnut-layout:not(.modal-line-layout) {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+.modal-overlay.maximized .modal-doughnut-chart:not(.modal-line-chart) {
+  flex: 0 0 clamp(200px, 32vh, 320px) !important;
+  width: clamp(200px, 32vh, 320px) !important;
+  height: clamp(200px, 32vh, 320px) !important;
+}
+
+.modal-overlay.maximized .modal-doughnut-layout.modal-line-layout {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.modal-overlay.maximized .modal-line-chart {
+  flex: 1 1 0%;
+  min-height: 320px;
+  width: 100% !important;
+  height: auto !important;
+}
+
+.modal-overlay.maximized .interest-sim-table-section.modal-chart-fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.modal-overlay.maximized .interest-sim-table-scroll {
+  flex: 1 1 0%;
+  min-height: 120px;
+  max-height: none;
+}
+
+@media (max-width: 620px) {
+  .modal-overlay.maximized { padding: 8px; }
+  .modal-overlay.maximized .modal-doughnut-layout:not(.modal-line-layout) {
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .modal-overlay.maximized .modal-doughnut-chart:not(.modal-line-chart) {
+    flex-basis: clamp(180px, 28vh, 240px) !important;
+    width: clamp(180px, 28vh, 240px) !important;
+    height: clamp(180px, 28vh, 240px) !important;
+  }
+  .modal-overlay.maximized .modal-chart-fill { min-height: 220px; }
+}
+
 .modal-actions {
   display: flex;
   gap: 10px;
@@ -2966,21 +3045,6 @@ select {
   font-weight: 600;
 }
 
-#historyModalOverlay.maximized {
-  padding: 12px;
-}
-
-#historyModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-}
-
 #historyModalOverlay.account-range-chart:not(.maximized) .modal {
   max-width: 860px !important;
 }
@@ -3099,73 +3163,8 @@ select {
   font-weight: 600;
 }
 
-#historyModalOverlay.maximized #historyChartWrap {
-  flex: 1;
-  height: auto !important;
-}
-
-#portfolioRangeModalOverlay.maximized {
-  padding: 12px;
-}
-
-#portfolioRangeModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-}
-
-#portfolioRangeModalOverlay.maximized #portfolioRangeView {
-  flex: 1;
-  overflow: auto;
-}
-
-#accountHistoryModalOverlay.maximized {
-  padding: 12px;
-}
-
-#accountHistoryModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-}
-
-#accountHistoryModalOverlay.maximized #accountHistoryChartWrap {
-  flex: 1;
-  height: auto !important;
-}
-
 #accountHistoryModalOverlay:not(.maximized) .modal {
   max-width: 860px !important;
-}
-
-#providerHistoryModalOverlay.maximized {
-  padding: 12px;
-}
-
-#providerHistoryModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-}
-
-#providerHistoryModalOverlay.maximized #providerHistoryChartWrap {
-  flex: 1;
-  height: auto !important;
 }
 
 #providerHistoryModalOverlay:not(.maximized) .modal {
@@ -3180,40 +3179,6 @@ select {
 
 .account-history-line-controls {
   margin-top: 12px;
-}
-
-#goalHistoryModalOverlay.maximized {
-  padding: 12px;
-}
-
-#goalHistoryModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-}
-
-#goalHistoryModalOverlay.maximized #goalHistoryChartWrap {
-  flex: 1;
-  height: auto !important;
-}
-
-#goalDetailsModalOverlay.maximized {
-  padding: 12px;
-}
-
-#goalDetailsModalOverlay.maximized .modal {
-  position: absolute;
-  inset: 12px;
-  width: auto;
-  height: auto;
-  max-width: none !important;
-  max-height: none;
-  overflow-y: auto;
 }
 
 .history-controls {
@@ -4022,7 +3987,6 @@ select {
   .cal-growth-pct {
     font-size: 9px;
   }
-
 
   .growth-stat-chip {
     min-width: 0;

@@ -610,7 +610,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3 id="assetModalTitle">New Asset</h3>
-        <button class="modal-close" type="button" id="closeAssetModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAssetModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="assetForm">
         <input type="hidden" id="assetEditId" name="asset_id">
@@ -649,8 +652,11 @@
     <div class="modal">
       <div class="modal-head">
         <h3>Update Asset Value</h3>
-        <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close"
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeUpdateAssetModalX" title="Close"
           aria-label="Close">✕</button>
+        </div>
       </div>
       <p class="modal-copy">Update the price for <strong id="updateAssetName"></strong> using <span id="updateAssetProviderName">finnhub.io</span></p>
       <div class="field" id="updateAssetProviderField">
@@ -689,7 +695,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3>Update All Prices</h3>
-        <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeUpdateAllPricesX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <p class="modal-copy">Update prices for all <strong>USD stocks</strong>. Bonds, ETFs, CFDs, commodities, and non-USD assets are skipped.</p>
       <div class="field" id="bulkUpdateProviderField">
@@ -743,7 +752,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3 id="providerModalTitle">New Provider</h3>
-        <button class="modal-close" type="button" id="closeProviderModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeProviderModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="providerForm">
         <input type="hidden" id="providerEditId" name="provider_id">
@@ -770,7 +782,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3 id="accountModalTitle">New Account</h3>
-        <button class="modal-close" type="button" id="closeAccountModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAccountModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="accountForm">
         <input type="hidden" id="accountEditId" name="account_id">
@@ -813,7 +828,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3 id="holdingModalTitle">Add Holding</h3>
-        <button class="modal-close" type="button" id="closeHoldingModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeHoldingModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="holdingForm">
         <input type="hidden" id="holdingEditId" name="holding_id">
@@ -847,7 +865,10 @@
     <div class="modal" style="max-width:480px;">
       <div class="modal-head">
         <h3 id="goalModalTitle">New Goal</h3>
-        <button class="modal-close" type="button" id="closeGoalModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeGoalModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="goalForm">
         <input type="hidden" id="goalEditId" name="goal_id">
@@ -891,7 +912,10 @@
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">
         <h3 id="goalSimTitle">Goal Simulator</h3>
-        <button class="modal-close" type="button" id="closeGoalSimX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeGoalSimX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="goalSimForm">
         <input type="hidden" id="goalSimId" name="goal_id">
@@ -912,15 +936,15 @@
       <div class="modal-head">
         <h3 id="goalDetailsTitle">Goal Details</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeGoalDetailsBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeGoalDetailsX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
       <div class="goal-details-summary" id="goalDetailsSummary"></div>
       <div class="goal-progress" id="goalDetailsProgress" style="margin-top:16px;"></div>
       <div class="goal-details-callout" id="goalDetailsCallout"></div>
-      <div class="details-chart-row" id="goalDetailsChartRow" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div id="goalDetailsChartWrap" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart" role="button" tabindex="0" aria-label="Toggle goal chart to snapshot history"></canvas>
+      <div class="details-chart-row modal-doughnut-layout" id="goalDetailsChartRow" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div id="goalDetailsChartWrap" class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas id="goalDetailsChart" role="button" tabindex="0" aria-label="Toggle goal chart to snapshot history"></canvas>
         </div>
         <div class="chart-legend" id="goalDetailsLegend" style="flex:1;"></div>
       </div>
@@ -936,11 +960,14 @@
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">
         <h3 id="accountDetailsTitle">Account Details</h3>
-        <button class="modal-close" type="button" id="closeAccountDetailsX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeAccountDetailsX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <div class="goal-details-summary" id="accountDetailsSummary"></div>
-      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
+      <div class="details-chart-row modal-doughnut-layout" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
             id="accountDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="accountDetailsLegend" style="flex:1;"></div>
@@ -966,7 +993,10 @@
     <div class="modal" style="max-width:960px;">
       <div class="modal-head">
         <h3 id="loanSimTitle">Loan Simulator</h3>
-        <button class="modal-close" type="button" id="closeLoanSimX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeLoanSimX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <p style="color:var(--muted); font-size:13px; margin:-4px 0 16px 0;">
         Enter the loan parameters below. Rates are annual and monthly payments are constant.
@@ -1011,7 +1041,10 @@
     <div class="modal interest-sim-modal">
       <div class="modal-head">
         <h3 id="interestSimTitle">Interest Simulator</h3>
-        <button class="modal-close" type="button" id="closeInterestSimX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeInterestSimX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <p class="interest-sim-intro">Compound interest projection with optional tax and monthly contributions. Values update automatically.</p>
       <div class="interest-sim-inputs">
@@ -1024,10 +1057,10 @@
       </div>
       <div id="interestSimError" class="form-error" role="alert"></div>
       <div class="interest-sim-summary" id="interestSimSummary"></div>
-      <div class="interest-sim-chart"><canvas id="interestSimChart"></canvas></div>
-      <section class="interest-sim-table-section">
+      <div class="interest-sim-chart modal-chart-fill"><canvas id="interestSimChart"></canvas></div>
+      <section class="interest-sim-table-section modal-chart-fill">
         <div class="interest-sim-table-controls"><h4>Interest payment details</h4><input id="interestSimSearch" class="search-input" type="search" placeholder="Search payments…" aria-label="Search interest payments"></div>
-        <div class="interest-sim-table-scroll"><table class="interest-sim-table"><thead><tr><th>Date</th><th>Opening balance</th><th>Interest earned</th><th>Tax paid</th><th>Net interest</th><th>Contribution</th><th>Closing balance</th></tr></thead><tbody id="interestSimPayments"></tbody></table></div>
+        <div class="interest-sim-table-scroll modal-chart-fill"><table class="interest-sim-table"><thead><tr><th>Date</th><th>Opening balance</th><th>Interest earned</th><th>Tax paid</th><th>Net interest</th><th>Contribution</th><th>Closing balance</th></tr></thead><tbody id="interestSimPayments"></tbody></table></div>
         <div id="interestSimTableInfo" class="interest-sim-table-info"></div>
         <p class="interest-sim-note">This is an estimate. Actual returns may differ due to changing rates, fees, taxes, and deposit timing.</p>
       </section>
@@ -1039,11 +1072,14 @@
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">
         <h3 id="providerDetailsTitle">Provider Details</h3>
-        <button class="modal-close" type="button" id="closeProviderDetailsX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeProviderDetailsX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <div class="goal-details-summary" id="providerDetailsSummary"></div>
-      <div class="details-chart-row" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
-        <div style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
+      <div class="details-chart-row modal-doughnut-layout" style="display:flex;align-items:center;gap:24px;margin-top:16px;">
+        <div class="modal-doughnut-chart" style="flex-shrink:0;position:relative;height:200px;width:200px;"><canvas
             id="providerDetailsChart"></canvas>
         </div>
         <div class="chart-legend" id="providerDetailsLegend" style="flex:1;"></div>
@@ -1069,7 +1105,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3>Create New User</h3>
-        <button class="modal-close" type="button" id="closeUserModalX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeUserModalX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <form id="userForm">
         <div class="field"><label>Username</label><input type="text" name="username" required placeholder="jane_doe">
@@ -1098,7 +1137,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3>Reset Password</h3>
-        <button class="modal-close" type="button" id="closeResetPasswordX" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeResetPasswordX" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <p class="modal-copy">Set a new password for <strong id="resetPasswordUsername"></strong>.</p>
       <form id="resetPasswordForm">
@@ -1121,7 +1163,10 @@
     <div class="modal welcome-modal">
       <div class="modal-head">
         <h3 id="welcomeModalTitle">👋 Portfolio Manager guide</h3>
-        <button class="modal-close" type="button" id="closeWelcomeBtn" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeWelcomeBtn" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
 
       <div class="welcome-tabs" role="tablist" aria-label="Portfolio Manager features">
@@ -1499,7 +1544,10 @@
     <div class="modal">
       <div class="modal-head">
         <h3>🕰 Time Travel</h3>
-        <button class="modal-close" type="button" id="closeTimeTravelBtn" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeTimeTravelBtn" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <p class="modal-copy">View how your dashboard looked on a past day.</p>
       <div class="page-title" style="font-size:15px;margin-bottom:10px;">Your snapshots</div>
@@ -1519,7 +1567,10 @@
     <div class="modal" style="max-width:360px;">
       <div class="modal-head">
         <h3>📅 Snapshot Calendar</h3>
-        <button class="modal-close" type="button" id="closeCalendarBtn" title="Close" aria-label="Close">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeCalendarBtn" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
       <div id="calendarModalBody" class="snapshot-calendar"></div>
     </div>
@@ -1530,7 +1581,10 @@
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">
         <h3>⚙️ Advanced Calendar Filters</h3>
-        <button class="modal-close" type="button" id="closeGrowthCalendarFiltersBtn" title="Close and apply" aria-label="Close and apply">✕</button>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeGrowthCalendarFiltersBtn" title="Close and apply" aria-label="Close and apply">✕</button>
+        </div>
       </div>
       <p class="modal-copy">Choose one or more accounts and account types. When both are selected, an account must match both filters.</p>
       <div class="growth-cal-filters growth-cal-filters-modal">
@@ -1559,8 +1613,8 @@
       <div class="modal-head">
         <h3>📈 Snapshot History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeHistoryBtn" title="Maximize"
-            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize"
+            aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1592,7 +1646,7 @@
         <div class="spinner"></div>
         <span>Loading snapshots...</span>
       </div>
-      <div id="historyChartWrap" style="position:relative;height:320px;margin-top:16px;">
+      <div id="historyChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
         <div id="historyAccountRangeView" class="history-account-range-view" hidden></div>
         <canvas id="historyChart"></canvas>
       </div>
@@ -1606,11 +1660,11 @@
       <div class="modal-head">
         <h3>📊 Portfolio Value Ranges</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizePortfolioRangeBtn" title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize" aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closePortfolioRangeBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
-      <div id="portfolioRangeView" class="history-account-range-view"></div>
+      <div id="portfolioRangeView" class="history-account-range-view modal-chart-fill"></div>
     </div>
   </div>
 
@@ -1620,8 +1674,8 @@
       <div class="modal-head">
         <h3 id="accountHistoryTitle">📈 Account History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeAccountHistoryBtn" title="Maximize"
-            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize"
+            aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeAccountHistoryBtn" title="Close"
             aria-label="Close">✕</button>
         </div>
@@ -1646,7 +1700,7 @@
           </select>
         </div>
       </div>
-      <div id="accountHistoryChartWrap" style="position:relative;height:320px;margin-top:16px;">
+      <div id="accountHistoryChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
         <canvas id="accountHistoryChart"></canvas>
       </div>
       <div id="accountHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
@@ -1659,8 +1713,8 @@
       <div class="modal-head">
         <h3 id="providerHistoryTitle">📈 Provider History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeProviderHistoryBtn" title="Maximize"
-            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize"
+            aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeProviderHistoryBtn" title="Close"
             aria-label="Close">✕</button>
         </div>
@@ -1685,7 +1739,7 @@
           </select>
         </div>
       </div>
-      <div id="providerHistoryChartWrap" style="position:relative;height:320px;margin-top:16px;">
+      <div id="providerHistoryChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
         <canvas id="providerHistoryChart"></canvas>
       </div>
       <div id="providerHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
@@ -1698,8 +1752,8 @@
       <div class="modal-head">
         <h3 id="goalHistoryTitle">📈 Goal History</h3>
         <div class="modal-head-actions">
-          <button class="modal-close" type="button" id="maximizeGoalHistoryBtn" title="Maximize"
-            aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" title="Maximize"
+            aria-label="Maximize" data-modal-maximize>⛶</button>
           <button class="modal-close" type="button" id="closeGoalHistoryBtn" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
@@ -1719,7 +1773,7 @@
         <div class="spinner"></div>
         <span>Loading snapshots...</span>
       </div>
-      <div id="goalHistoryChartWrap" style="position:relative;height:320px;margin-top:16px;">
+      <div id="goalHistoryChartWrap" class="modal-chart-fill" style="position:relative;height:320px;margin-top:16px;">
         <canvas id="goalHistoryChart"></canvas>
       </div>
       <div id="goalHistoryEmpty" class="page-desc" style="display:none;">No snapshots to display.</div>
@@ -1729,7 +1783,13 @@
   <!-- MODAL: Confirm (Delete / destructive actions) -->
   <div class="modal-overlay" id="confirmModalOverlay">
     <div class="modal">
-      <h3 id="confirmModalTitle">Are you sure?</h3>
+      <div class="modal-head">
+        <h3 id="confirmModalTitle">Are you sure?</h3>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="confirmModalClose" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
       <p class="modal-copy" id="confirmModalMessage"></p>
       <div class="modal-actions">
         <button class="btn-sm" type="button" id="confirmModalCancel">Cancel</button>

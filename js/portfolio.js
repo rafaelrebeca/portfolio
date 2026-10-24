@@ -132,9 +132,41 @@ function syncBodyScrollLock() {
   const anyOpen = document.querySelectorAll('.modal-overlay.show').length > 0;
   document.body.classList.toggle('modal-open', anyOpen);
 }
-function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('show'); syncBodyScrollLock(); }
-function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('show'); syncBodyScrollLock(); }
-function closeAllModals() { document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show')); syncBodyScrollLock(); }
+function setModalMaximized(overlay, maximized) {
+  if (!overlay) return;
+  overlay.classList.toggle('maximized', maximized);
+  const button = overlay.querySelector('[data-modal-maximize]');
+  if (button) {
+    button.textContent = maximized ? '🗗' : '⛶';
+    button.title = maximized ? 'Restore' : 'Maximize';
+    button.setAttribute('aria-label', maximized ? 'Restore' : 'Maximize');
+  }
+  if (typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+    requestAnimationFrame(() => {
+      overlay.querySelectorAll('canvas').forEach(canvas => Chart.getChart(canvas)?.resize());
+    });
+  }
+}
+function toggleModalMaximize(overlay) {
+  if (overlay) setModalMaximized(overlay, !overlay.classList.contains('maximized'));
+}
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) { setModalMaximized(el, false); el.classList.add('show'); }
+  syncBodyScrollLock();
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) { setModalMaximized(el, false); el.classList.remove('show'); }
+  syncBodyScrollLock();
+}
+function closeAllModals() {
+  document.querySelectorAll('.modal-overlay.show').forEach(el => {
+    setModalMaximized(el, false);
+    el.classList.remove('show');
+  });
+  syncBodyScrollLock();
+}
 
 function confirmDialog(message, okLabel = 'Delete') {
   return new Promise(resolve => {
@@ -144,9 +176,11 @@ function confirmDialog(message, okLabel = 'Delete') {
     $('#confirmModalOk').textContent = okLabel;
     const okBtn = $('#confirmModalOk');
     const cancelBtn = $('#confirmModalCancel');
+    const closeBtn = $('#confirmModalClose');
     const cleanup = () => {
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
+      closeBtn.removeEventListener('click', onCancel);
       overlay.removeEventListener('click', onOverlay);
       document.removeEventListener('keydown', onKey);
       closeModal('confirmModalOverlay');
@@ -157,6 +191,7 @@ function confirmDialog(message, okLabel = 'Delete') {
     const onKey = e => { if (e.key === 'Escape') onCancel(); };
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
+    closeBtn.addEventListener('click', onCancel);
     overlay.addEventListener('click', onOverlay);
     document.addEventListener('keydown', onKey);
     openModal('confirmModalOverlay');
@@ -533,7 +568,6 @@ let goalDetailsGoalId = null;
 let goalDetailsChartMode = 'donut';
 let goalDetailsDonutData = null;
 let goalDetailsHistoryData = null;
-let goalDetailsMaximized = false;
 let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
@@ -1226,19 +1260,14 @@ let growthCalendarViewMode = ['year', 'allTime'].includes(localStorage.getItem('
   : 'month';
 let historyChartInstance = null; // Chart.js instance for the snapshot history line chart
 let historyData = null; // full snapshot data loaded for the history chart
-let historyMaximized = false; // whether the history modal is maximized (fullscreen)
-let portfolioRangeMaximized = false;
 let accountHistoryChartInstance = null; // Chart.js instance for the account history line chart
 let accountHistoryData = null; // full snapshot data loaded for the account history chart
-let accountHistoryMaximized = false; // whether the account history modal is maximized (fullscreen)
 let accountHistoryAccountId = null; // the account id whose history is being shown
 let providerHistoryChartInstance = null; // Chart.js instance for the provider history line chart
 let providerHistoryData = null; // full snapshot data loaded for the provider history chart
-let providerHistoryMaximized = false; // whether the provider history modal is maximized (fullscreen)
 let providerHistoryProviderId = null; // the provider whose history is being shown
 let goalHistoryChartInstance = null; // Chart.js instance for the goal history line chart
 let goalHistoryData = null; // full snapshot data loaded for the goal history chart
-let goalHistoryMaximized = false; // whether the goal history modal is maximized (fullscreen)
 let goalHistoryGoalId = null; // the goal id whose history is being shown
 
 const HISTORY_LINE_MAX_POINTS = 30;
@@ -3662,26 +3691,7 @@ async function loadHistoryData() {
 // Close the history modal and clear the chart, retaining loaded snapshot data.
 function closeHistoryModal() {
   if (historyChartInstance) { historyChartInstance.destroy(); historyChartInstance = null; }
-  historyMaximized = false;
-  const overlay = $('#historyModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
   closeModal('historyModalOverlay');
-}
-
-// Toggle the history modal between normal and maximized (fullscreen) size.
-function toggleHistoryMaximize() {
-  const overlay = $('#historyModalOverlay');
-  if (!overlay) return;
-  historyMaximized = !historyMaximized;
-  overlay.classList.toggle('maximized', historyMaximized);
-  const btn = $('#maximizeHistoryBtn');
-  if (btn) {
-    btn.textContent = historyMaximized ? '🗗' : '⛶';
-    btn.title = historyMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', historyMaximized ? 'Restore' : 'Maximize');
-  }
-  // Re-render the chart so it resizes to the new container size.
-  if (historyChartInstance) historyChartInstance.resize();
 }
 
 // Bucketing key for a zoom level: the part of the 'YYYYMMDD' day that defines
@@ -4023,29 +4033,7 @@ function openPortfolioRangeModal() {
 }
 
 function closePortfolioRangeModal() {
-  portfolioRangeMaximized = false;
-  const overlay = $('#portfolioRangeModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
-  const btn = $('#maximizePortfolioRangeBtn');
-  if (btn) {
-    btn.textContent = '⛶';
-    btn.title = 'Maximize';
-    btn.setAttribute('aria-label', 'Maximize');
-  }
   closeModal('portfolioRangeModalOverlay');
-}
-
-function togglePortfolioRangeMaximize() {
-  const overlay = $('#portfolioRangeModalOverlay');
-  if (!overlay) return;
-  portfolioRangeMaximized = !portfolioRangeMaximized;
-  overlay.classList.toggle('maximized', portfolioRangeMaximized);
-  const btn = $('#maximizePortfolioRangeBtn');
-  if (btn) {
-    btn.textContent = portfolioRangeMaximized ? '🗗' : '⛶';
-    btn.title = portfolioRangeMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', portfolioRangeMaximized ? 'Restore' : 'Maximize');
-  }
 }
 
 // Build the datasets for the selected chart type.
@@ -4145,26 +4133,8 @@ async function openAccountHistoryModal(accountId) {
 // Close the account history modal and clear the chart, retaining loaded snapshot data.
 function closeAccountHistoryModal() {
   if (accountHistoryChartInstance) { accountHistoryChartInstance.destroy(); accountHistoryChartInstance = null; }
-  accountHistoryMaximized = false;
   accountHistoryAccountId = null;
-  const overlay = $('#accountHistoryModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
   closeModal('accountHistoryModalOverlay');
-}
-
-// Toggle the account history modal between normal and maximized (fullscreen) size.
-function toggleAccountHistoryMaximize() {
-  const overlay = $('#accountHistoryModalOverlay');
-  if (!overlay) return;
-  accountHistoryMaximized = !accountHistoryMaximized;
-  overlay.classList.toggle('maximized', accountHistoryMaximized);
-  const btn = $('#maximizeAccountHistoryBtn');
-  if (btn) {
-    btn.textContent = accountHistoryMaximized ? '🗗' : '⛶';
-    btn.title = accountHistoryMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', accountHistoryMaximized ? 'Restore' : 'Maximize');
-  }
-  if (accountHistoryChartInstance) accountHistoryChartInstance.resize();
 }
 
 // Draw the account's full-history range and its zoomable value-evolution line chart.
@@ -4273,25 +4243,8 @@ async function openProviderHistoryModal(providerId) {
 
 function closeProviderHistoryModal() {
   if (providerHistoryChartInstance) { providerHistoryChartInstance.destroy(); providerHistoryChartInstance = null; }
-  providerHistoryMaximized = false;
   providerHistoryProviderId = null;
-  const overlay = $('#providerHistoryModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
   closeModal('providerHistoryModalOverlay');
-}
-
-function toggleProviderHistoryMaximize() {
-  const overlay = $('#providerHistoryModalOverlay');
-  if (!overlay) return;
-  providerHistoryMaximized = !providerHistoryMaximized;
-  overlay.classList.toggle('maximized', providerHistoryMaximized);
-  const btn = $('#maximizeProviderHistoryBtn');
-  if (btn) {
-    btn.textContent = providerHistoryMaximized ? '🗗' : '⛶';
-    btn.title = providerHistoryMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', providerHistoryMaximized ? 'Restore' : 'Maximize');
-  }
-  if (providerHistoryChartInstance) providerHistoryChartInstance.resize();
 }
 
 function renderProviderRangeView(provider, snapshots) {
@@ -4431,26 +4384,8 @@ async function openGoalHistoryModal(goalId) {
 // Close the goal history modal and clear the chart, retaining loaded snapshot data.
 function closeGoalHistoryModal() {
   if (goalHistoryChartInstance) { goalHistoryChartInstance.destroy(); goalHistoryChartInstance = null; }
-  goalHistoryMaximized = false;
   goalHistoryGoalId = null;
-  const overlay = $('#goalHistoryModalOverlay');
-  if (overlay) overlay.classList.remove('maximized');
   closeModal('goalHistoryModalOverlay');
-}
-
-// Toggle the goal history modal between normal and maximized (fullscreen) size.
-function toggleGoalHistoryMaximize() {
-  const overlay = $('#goalHistoryModalOverlay');
-  if (!overlay) return;
-  goalHistoryMaximized = !goalHistoryMaximized;
-  overlay.classList.toggle('maximized', goalHistoryMaximized);
-  const btn = $('#maximizeGoalHistoryBtn');
-  if (btn) {
-    btn.textContent = goalHistoryMaximized ? '🗗' : '⛶';
-    btn.title = goalHistoryMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', goalHistoryMaximized ? 'Restore' : 'Maximize');
-  }
-  if (goalHistoryChartInstance) goalHistoryChartInstance.resize();
 }
 
 // Compute a goal's progress percentage (0-100) from a snapshot's account data.
@@ -7000,10 +6935,12 @@ function renderGoalDetailsChart() {
 
   const showingHistory = goalDetailsChartMode === 'history' && goalDetailsHistoryData?.labels?.length;
   if (row) {
+    row.classList.toggle('modal-line-layout', Boolean(showingHistory));
     row.style.flexDirection = showingHistory ? 'column' : 'row';
     row.style.alignItems = showingHistory ? 'stretch' : 'center';
   }
   if (chartWrap) {
+    chartWrap.classList.toggle('modal-line-chart', Boolean(showingHistory));
     chartWrap.style.width = showingHistory ? '100%' : '200px';
     chartWrap.style.height = showingHistory ? '240px' : '200px';
   }
@@ -7079,43 +7016,11 @@ function toggleGoalDetailsChart() {
   renderGoalDetailsChart();
 }
 
-function closeGoalDetailsModal() {
-  goalDetailsMaximized = false;
-  $('#goalDetailsModalOverlay')?.classList.remove('maximized');
-  const btn = $('#maximizeGoalDetailsBtn');
-  if (btn) {
-    btn.textContent = '⛶';
-    btn.title = 'Maximize';
-    btn.setAttribute('aria-label', 'Maximize');
-  }
-  closeModal('goalDetailsModalOverlay');
-}
-
-function toggleGoalDetailsMaximize() {
-  const overlay = $('#goalDetailsModalOverlay');
-  if (!overlay) return;
-  goalDetailsMaximized = !goalDetailsMaximized;
-  overlay.classList.toggle('maximized', goalDetailsMaximized);
-  const btn = $('#maximizeGoalDetailsBtn');
-  if (btn) {
-    btn.textContent = goalDetailsMaximized ? '🗗' : '⛶';
-    btn.title = goalDetailsMaximized ? 'Restore' : 'Maximize';
-    btn.setAttribute('aria-label', goalDetailsMaximized ? 'Restore' : 'Maximize');
-  }
-  if (goalDetailsChartInstance) goalDetailsChartInstance.resize();
-}
+function closeGoalDetailsModal() { closeModal('goalDetailsModalOverlay'); }
 
 function openGoalDetailsModal(goalId) {
   const g = state.goals.find(item => item.id === goalId);
   if (!g) return;
-  goalDetailsMaximized = false;
-  $('#goalDetailsModalOverlay')?.classList.remove('maximized');
-  const maximizeBtn = $('#maximizeGoalDetailsBtn');
-  if (maximizeBtn) {
-    maximizeBtn.textContent = '⛶';
-    maximizeBtn.title = 'Maximize';
-    maximizeBtn.setAttribute('aria-label', 'Maximize');
-  }
   goalDetailsGoalId = goalId;
   const currency = g.coin || 'USD';
   $('#goalDetailsTitle').textContent = `Details: ${g.goal_name}`;
@@ -7319,7 +7224,7 @@ function runGoalSimulation() {
       <div><div class="dlabel">Months</div><div class="dvalue">${months}</div></div>
       <div><div class="dlabel">Total Contributed</div><div class="dvalue">${formatCurrency(totalContrib, currency)}</div></div>
     </div>
-    <div style="position:relative;height:220px;margin-top:16px;"><canvas id="goalSimChart"></canvas></div>
+    <div class="modal-chart-fill" style="position:relative;height:220px;margin-top:16px;"><canvas id="goalSimChart"></canvas></div>
   `;
 
   // Render chart
@@ -8072,22 +7977,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   $('#growthCalApplyFiltersBtn')?.addEventListener('click', applyGrowthCalendarFilters);
   $('#growthCalClearFiltersBtn')?.addEventListener('click', clearGrowthCalendarFilters);
-  $('#maximizeHistoryBtn')?.addEventListener('click', toggleHistoryMaximize);
   $('#closeHistoryBtn')?.addEventListener('click', closeHistoryModal);
   $('#historyChartType')?.addEventListener('change', renderHistoryChart);
   $('#historyZoom')?.addEventListener('change', renderHistoryChart);
-  $('#maximizePortfolioRangeBtn')?.addEventListener('click', togglePortfolioRangeMaximize);
   $('#closePortfolioRangeBtn')?.addEventListener('click', closePortfolioRangeModal);
-  $('#maximizeAccountHistoryBtn')?.addEventListener('click', toggleAccountHistoryMaximize);
   $('#closeAccountHistoryBtn')?.addEventListener('click', closeAccountHistoryModal);
   $('#accountHistoryZoom')?.addEventListener('change', renderAccountHistoryChart);
-  $('#maximizeProviderHistoryBtn')?.addEventListener('click', toggleProviderHistoryMaximize);
   $('#closeProviderHistoryBtn')?.addEventListener('click', closeProviderHistoryModal);
   $('#providerHistoryZoom')?.addEventListener('change', renderProviderHistoryChart);
-  $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
   $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
   $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
-  $('#maximizeGoalDetailsBtn')?.addEventListener('click', toggleGoalDetailsMaximize);
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-modal-maximize]');
+    if (button) toggleModalMaximize(button.closest('.modal-overlay'));
+  });
   $('#snapshotList')?.addEventListener('click', async event => {
     const viewBtn = event.target.closest('[data-view-snapshot]');
     if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }
