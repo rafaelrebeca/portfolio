@@ -3202,6 +3202,20 @@ select {
   height: auto !important;
 }
 
+#goalDetailsModalOverlay.maximized {
+  padding: 12px;
+}
+
+#goalDetailsModalOverlay.maximized .modal {
+  position: absolute;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  max-width: none !important;
+  max-height: none;
+  overflow-y: auto;
+}
+
 .history-controls {
   display: flex;
   gap: 12px;

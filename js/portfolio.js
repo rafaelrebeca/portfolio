@@ -533,6 +533,7 @@ let goalDetailsGoalId = null;
 let goalDetailsChartMode = 'donut';
 let goalDetailsDonutData = null;
 let goalDetailsHistoryData = null;
+let goalDetailsMaximized = false;
 let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
@@ -7078,9 +7079,43 @@ function toggleGoalDetailsChart() {
   renderGoalDetailsChart();
 }
 
+function closeGoalDetailsModal() {
+  goalDetailsMaximized = false;
+  $('#goalDetailsModalOverlay')?.classList.remove('maximized');
+  const btn = $('#maximizeGoalDetailsBtn');
+  if (btn) {
+    btn.textContent = '⛶';
+    btn.title = 'Maximize';
+    btn.setAttribute('aria-label', 'Maximize');
+  }
+  closeModal('goalDetailsModalOverlay');
+}
+
+function toggleGoalDetailsMaximize() {
+  const overlay = $('#goalDetailsModalOverlay');
+  if (!overlay) return;
+  goalDetailsMaximized = !goalDetailsMaximized;
+  overlay.classList.toggle('maximized', goalDetailsMaximized);
+  const btn = $('#maximizeGoalDetailsBtn');
+  if (btn) {
+    btn.textContent = goalDetailsMaximized ? '🗗' : '⛶';
+    btn.title = goalDetailsMaximized ? 'Restore' : 'Maximize';
+    btn.setAttribute('aria-label', goalDetailsMaximized ? 'Restore' : 'Maximize');
+  }
+  if (goalDetailsChartInstance) goalDetailsChartInstance.resize();
+}
+
 function openGoalDetailsModal(goalId) {
   const g = state.goals.find(item => item.id === goalId);
   if (!g) return;
+  goalDetailsMaximized = false;
+  $('#goalDetailsModalOverlay')?.classList.remove('maximized');
+  const maximizeBtn = $('#maximizeGoalDetailsBtn');
+  if (maximizeBtn) {
+    maximizeBtn.textContent = '⛶';
+    maximizeBtn.title = 'Maximize';
+    maximizeBtn.setAttribute('aria-label', 'Maximize');
+  }
   goalDetailsGoalId = goalId;
   const currency = g.coin || 'USD';
   $('#goalDetailsTitle').textContent = `Details: ${g.goal_name}`;
@@ -8052,6 +8087,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#maximizeGoalHistoryBtn')?.addEventListener('click', toggleGoalHistoryMaximize);
   $('#closeGoalHistoryBtn')?.addEventListener('click', closeGoalHistoryModal);
   $('#goalHistoryZoom')?.addEventListener('change', renderGoalHistoryChart);
+  $('#maximizeGoalDetailsBtn')?.addEventListener('click', toggleGoalDetailsMaximize);
   $('#snapshotList')?.addEventListener('click', async event => {
     const viewBtn = event.target.closest('[data-view-snapshot]');
     if (viewBtn) { await viewSnapshot(viewBtn.dataset.viewSnapshot); return; }
@@ -8086,7 +8122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#interestSimSearch')?.addEventListener('input', renderInterestSimTable);
   $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
     if (goalDetailsGoalId == null) return;
-    closeModal('goalDetailsModalOverlay');
+    closeGoalDetailsModal();
     openGoalSimModal(goalDetailsGoalId);
   });
   $('#goalDetailsChart')?.addEventListener('click', toggleGoalDetailsChart);
@@ -8134,7 +8170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeGoalSimX')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
   $('#closeLoanSimX')?.addEventListener('click', () => closeModal('loanSimModalOverlay'));
   $('#closeInterestSimX')?.addEventListener('click', () => closeModal('interestSimModalOverlay'));
-  $('#closeGoalDetailsX')?.addEventListener('click', () => closeModal('goalDetailsModalOverlay'));
+  $('#closeGoalDetailsX')?.addEventListener('click', closeGoalDetailsModal);
   $('#closeAccountDetailsX')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
   $('#closeProviderDetailsX')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
   $('#closeUserModalX')?.addEventListener('click', () => closeModal('userModalOverlay'));
