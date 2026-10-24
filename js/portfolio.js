@@ -4655,7 +4655,7 @@ function openExpenseModal(kind, targetId = null) {
     fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
   } else {
     const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category total</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
+    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
     const categorySelect = $('#expenseEntryCategory');
     const subcategorySelect = $('#expenseEntrySubcategory');
     if (categorySelect && subcategorySelect) [...subcategorySelect.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== categorySelect.value; });
@@ -7569,8 +7569,8 @@ function runInterestSimulation() {
   const monthlyContribution = Number($('#interestSimContribution').value || 0);
   const frequency = INTEREST_SIM_FREQUENCIES[$('#interestSimFrequency').value];
   if (!Number.isFinite(initialBalance) || initialBalance < 0 || !Number.isFinite(annualRate) || annualRate < 0 ||
-      !Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100 || !Number.isInteger(years) || years < 1 || years > 100 ||
-      !Number.isFinite(monthlyContribution) || monthlyContribution < 0 || !frequency) {
+    !Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100 || !Number.isInteger(years) || years < 1 || years > 100 ||
+    !Number.isFinite(monthlyContribution) || monthlyContribution < 0 || !frequency) {
     error.textContent = 'Enter a non-negative balance, rate and contribution, a tax rate from 0 to 100, and a duration from 1 to 100 years.';
     $('#interestSimSummary').innerHTML = '';
     $('#interestSimPayments').innerHTML = '';
@@ -7659,14 +7659,18 @@ function runInterestSimulation() {
   const chartTooltip = context => blurActive() ? `${context.dataset.label}: hidden` : `${context.dataset.label}: ${formatCurrency(context.parsed.y, interestSimCurrency)}`;
   interestSimChartInstance = new Chart(canvas.getContext('2d'), {
     type: 'line',
-    data: { labels, datasets: [
-      { label: 'Balance', data: balances, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.14)', borderWidth: 2.5, fill: true, tension: .2, pointRadius: 0 },
-      { label: 'Cumulative contributions', data: contributionsTotalSeries, borderColor: '#fbbf24', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, tension: .2 },
-      { label: 'Cumulative net interest', data: netInterestSeries, borderColor: '#34d399', borderWidth: 2, pointRadius: 0, tension: .2 }
-    ] },
-    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 150 }, interaction: { mode: 'index', intersect: false },
+    data: {
+      labels, datasets: [
+        { label: 'Balance', data: balances, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.14)', borderWidth: 2.5, fill: true, tension: .2, pointRadius: 0 },
+        { label: 'Cumulative contributions', data: contributionsTotalSeries, borderColor: '#fbbf24', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, tension: .2 },
+        { label: 'Cumulative net interest', data: netInterestSeries, borderColor: '#34d399', borderWidth: 2, pointRadius: 0, tension: .2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 150 }, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { color: '#cbd5e1', usePointStyle: true } }, tooltip: { callbacks: { label: chartTooltip } } },
-      scales: { x: { ticks: { color: '#94a3b8', maxTicksLimit: 10 }, grid: { color: 'rgba(51,65,85,.3)' } }, y: { ticks: { color: '#94a3b8', callback: chartFmt }, grid: { color: 'rgba(51,65,85,.3)' } } } }
+      scales: { x: { ticks: { color: '#94a3b8', maxTicksLimit: 10 }, grid: { color: 'rgba(51,65,85,.3)' } }, y: { ticks: { color: '#94a3b8', callback: chartFmt }, grid: { color: 'rgba(51,65,85,.3)' } } }
+    }
   });
 }
 
@@ -7849,11 +7853,11 @@ function runLoanSimulation() {
   const months = loanMonthsUntilDate(endDate);
 
   if (!Number.isFinite(capital) || capital <= 0 ||
-      !Number.isFinite(rate) || rate < 0 ||
-      !endDate || !Number.isFinite(months) || months <= 0 ||
-      !Number.isFinite(amortization) || amortization < 0 || amortization > capital ||
-      !Number.isFinite(monthlyAmortization) || monthlyAmortization < 0 ||
-      !Number.isFinite(finalPaymentThreshold) || finalPaymentThreshold < 0) {
+    !Number.isFinite(rate) || rate < 0 ||
+    !endDate || !Number.isFinite(months) || months <= 0 ||
+    !Number.isFinite(amortization) || amortization < 0 || amortization > capital ||
+    !Number.isFinite(monthlyAmortization) || monthlyAmortization < 0 ||
+    !Number.isFinite(finalPaymentThreshold) || finalPaymentThreshold < 0) {
     if (err) err.textContent = 'Check the values and choose a future date for the last payment.';
     result.innerHTML = '';
     return;
