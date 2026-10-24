@@ -4659,15 +4659,24 @@ function openExpenseModal(kind, targetId = null) {
     fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
   } else {
     const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"><option value="">Category</option>${state.expenseSubcategories.map(s => { const c = state.expenseCategories.find(item => item.id === s.category_id); return `<option value="${s.id}" data-category="${s.category_id}">${esc(c?.name || '')} · ${esc(s.name)}</option>`; }).join('')}</select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
-    const categorySelect = $('#expenseEntryCategory');
-    const subcategorySelect = $('#expenseEntrySubcategory');
-    if (categorySelect && subcategorySelect) [...subcategorySelect.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== categorySelect.value; });
+    fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"></select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
+    updateExpenseSubcategoryOptions();
     updateExpenseAddPreview();
   }
   const error = $('#expenseModalError');
   if (error) error.textContent = '';
   openModal('expenseModalOverlay');
+}
+
+function updateExpenseSubcategoryOptions() {
+  const categoryId = Number($('#expenseEntryCategory')?.value);
+  const subcategorySelect = $('#expenseEntrySubcategory');
+  if (!subcategorySelect) return;
+  const currentVal = subcategorySelect.value;
+  const matching = state.expenseSubcategories.filter(s => s.category_id === categoryId);
+  subcategorySelect.innerHTML = '<option value="">Category</option>' +
+    matching.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  subcategorySelect.value = matching.some(s => String(s.id) === currentVal) ? currentVal : '';
 }
 
 function updateExpenseAddPreview() {
@@ -4955,6 +4964,17 @@ function renderExpenseStats() {
 }
 
 function renderExpenses() {
+  const hasCategories = state.expenseCategories.length > 0;
+  const newExpenseBtn = $('#newExpenseBtn');
+  if (newExpenseBtn) {
+    newExpenseBtn.disabled = !hasCategories;
+    newExpenseBtn.title = hasCategories ? '' : 'Create a category first.';
+  }
+  const newExpenseSubcategoryBtn = $('#newExpenseSubcategoryBtn');
+  if (newExpenseSubcategoryBtn) {
+    newExpenseSubcategoryBtn.disabled = !hasCategories;
+    newExpenseSubcategoryBtn.title = hasCategories ? '' : 'Create a category first.';
+  }
   renderExpenseGrid();
   renderExpenseStats();
   document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.expenseTab === activeExpenseTab));
@@ -8272,9 +8292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   $('#expenseModalFields')?.addEventListener('change', event => {
     if (event.target.id === 'expenseEntryCategory') {
-      const subcategory = $('#expenseEntrySubcategory');
-      if (subcategory) [...subcategory.options].forEach(option => { if (option.value) option.hidden = option.dataset.category !== event.target.value; });
-      if (subcategory?.selectedOptions[0]?.hidden) subcategory.value = '';
+      updateExpenseSubcategoryOptions();
     }
     if (['expenseEntryCategory', 'expenseEntrySubcategory', 'expenseEntryMonth'].includes(event.target.id)) updateExpenseAddPreview();
   });
