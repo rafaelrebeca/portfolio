@@ -46,10 +46,18 @@ const guestData = {
 const state = { user: null, guest: false, assets: [], providers: [], accounts: [], holdings: [], users: [], currencies: [], goals: [], expenseCategories: [], expenseSubcategories: [], expenses: [], accountGrowths: new Map(), accountGrowthsDirty: true, snapshotDailyGrowths: new Map(), snapshotDailyGrowthsDirty: true };
 let blurMode = false;
 let currentPage = 'dashboard';
-let activeExpenseTab = 'stats';
+let activeExpenseTab = 'month';
 let expenseYear = new Date().getFullYear();
 let expenseStatsYear = null;
-const expenseCharts = { yearCategory: null, yearCategoryPie: null, allCategory: null, allCategoryPie: null };
+let expenseFocusMonth = '';
+let expenseMonthPickerOpen = false;
+let expenseMonthPickerYear = new Date().getFullYear();
+let expenseMonthPickerShouldFocus = false;
+let expenseMonthSignatureCache = '';
+let expenseMonthShownTotal = null;
+let expenseMonthFlashKey = '';
+let expenseMonthWriteLock = false;
+const expenseCharts = { yearCategory: null, yearCategoryPie: null, allCategory: null, allCategoryPie: null, monthMix: null, monthTrend: null };
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const numeric = value => value === null || value === undefined || value === '' ? null : Number(value);
@@ -456,9 +464,10 @@ function gainLossValue(h, currency = 'USD') {
 async function loadData({ refreshSnapshots = false, showLoading = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
-    state.expenseCategories = [];
-    state.expenseSubcategories = [];
-    state.expenses = [];
+    const guestExpenses = buildGuestExpenseDemo();
+    state.expenseCategories = guestExpenses.categories;
+    state.expenseSubcategories = guestExpenses.subcategories;
+    state.expenses = guestExpenses.expenses;
     assetTypesCache = [];
     timeTravelList = [];
     invalidateAccountGrowthCache();
@@ -4672,7 +4681,9 @@ function openExpenseModal(kind, targetId = null) {
     const inputId = kind === 'renameCategory' ? 'expenseCategoryName' : 'expenseSubcategoryName';
     fields.innerHTML = `<div class="field"><label for="${inputId}">New name</label><input id="${inputId}" maxlength="80" value="${esc(item?.name || '')}" required></div>`;
   } else {
-    const month = `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const month = activeExpenseTab === 'month' && /^\d{4}-(0[1-9]|1[0-2])$/.test(expenseFocusMonth)
+      ? expenseFocusMonth
+      : `${expenseYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     fields.innerHTML = `<div class="field"><label for="expenseEntryCategory">Category</label><select id="expenseEntryCategory" required>${state.expenseCategories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label for="expenseEntrySubcategory">Sub-category (optional)</label><select id="expenseEntrySubcategory"></select></div><div class="field"><label for="expenseEntryMonth">Month</label><input id="expenseEntryMonth" type="month" value="${month}" required></div><div class="expense-current-amount" id="expenseCurrentAmount" aria-live="polite"></div><div class="field"><label for="expenseEntryAmount">Amount to add</label><input id="expenseEntryAmount" type="number" step="0.01" required></div><div class="field"><label for="expenseEntryCurrency">Currency</label><select id="expenseEntryCurrency">${expenseCurrencyOptions('EUR')}</select></div>`;
     updateExpenseSubcategoryOptions();
     updateExpenseAddPreview();
@@ -4977,6 +4988,686 @@ function renderExpenseStats() {
     <p class="expense-stats-footnote">Year, category and sub-category averages all use the same active-month count: months with at least one recorded expense anywhere in the year. Months with no data are skipped. Category totals include their sub-categories. Refunds reduce totals and can make averages negative.</p>`;
 }
 
+function currentExpenseMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function ensureExpenseFocusMonth() {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(expenseFocusMonth)) {
+    expenseFocusMonth = currentExpenseMonth();
+    expenseMonthPickerYear = Number(expenseFocusMonth.slice(0, 4));
+  }
+}
+
+function shiftExpenseMonth(month, delta) {
+  const [year, monthIndex] = month.split('-').map(Number);
+  const date = new Date(year, monthIndex - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function expenseMonthTitle(month) {
+  const [year, monthIndex] = month.split('-').map(Number);
+  return new Date(year, monthIndex - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+function formatSignedEUR(value) {
+  const abs = moneyEUR.format(Math.abs(Number(value) || 0));
+  if (value > 0.004) return `+${abs}`;
+  if (value < -0.004) return `−${abs}`;
+  return abs;
+}
+
+function setMonthStatus(message) {
+  const el = $('#expenseMonthStatus');
+  if (el) el.textContent = message || '';
+}
+
+function findExpenseRecord(categoryId, subcategoryId, month) {
+  const sub = subcategoryId == null || subcategoryId === '' ? null : Number(subcategoryId);
+  return state.expenses.find(expense => Number(expense.category_id) === Number(categoryId)
+    && (expense.subcategory_id == null ? null : Number(expense.subcategory_id)) === sub
+    && expense.expense_month === month) || null;
+}
+
+function applyExpenseMutation(payload, response) {
+  const categoryId = Number(payload.category_id);
+  const subcategoryId = payload.subcategory_id == null || payload.subcategory_id === '' ? null : Number(payload.subcategory_id);
+  const month = payload.expense_month;
+  const index = state.expenses.findIndex(expense => Number(expense.category_id) === categoryId
+    && (expense.subcategory_id == null ? null : Number(expense.subcategory_id)) === subcategoryId
+    && expense.expense_month === month);
+  const isAdd = Object.prototype.hasOwnProperty.call(payload, 'add_amount');
+  const isDelete = !isAdd && (payload.amount === null || payload.amount === '');
+  if (isDelete) {
+    if (index >= 0) state.expenses.splice(index, 1);
+    return;
+  }
+  const category = state.expenseCategories.find(item => item.id === categoryId);
+  const subcategory = subcategoryId == null ? null : state.expenseSubcategories.find(item => item.id === subcategoryId);
+  let amount;
+  if (response && response.amount != null && response.amount !== '') amount = Number(response.amount);
+  else if (isAdd) amount = Number(state.expenses[index]?.amount || 0) + Number(payload.add_amount);
+  else amount = Number(payload.amount);
+  const currency = response?.currency || (isAdd ? state.expenses[index]?.currency : null) || payload.currency || 'EUR';
+  const record = {
+    id: response?.id ?? state.expenses[index]?.id,
+    category_id: categoryId,
+    subcategory_id: subcategoryId,
+    expense_month: month,
+    amount,
+    currency,
+    category_name: category?.name || state.expenses[index]?.category_name || '',
+    subcategory_name: subcategory?.name || null
+  };
+  if (index >= 0) Object.assign(state.expenses[index], record);
+  else state.expenses.push(record);
+}
+
+function expenseMonthBreakdown(month) {
+  const rows = state.expenses.filter(expense => expense.expense_month === month);
+  const byCategory = new Map();
+  let total = 0;
+  let topBucket = null;
+  for (const expense of rows) {
+    const amount = expenseAmountInEur(expense);
+    total += amount;
+    const categoryId = Number(expense.category_id);
+    const category = state.expenseCategories.find(item => item.id === categoryId);
+    if (!byCategory.has(categoryId)) byCategory.set(categoryId, {
+      id: categoryId,
+      name: category?.name || expense.category_name || 'Category',
+      total: 0,
+      lines: []
+    });
+    const group = byCategory.get(categoryId);
+    group.total += amount;
+    const subId = expense.subcategory_id == null ? null : Number(expense.subcategory_id);
+    const subcategory = subId == null ? null : state.expenseSubcategories.find(item => item.id === subId);
+    const lineName = subcategory ? subcategory.name : 'Category total';
+    group.lines.push({ name: lineName, total: amount });
+    const bucketName = subcategory ? `${group.name} · ${subcategory.name}` : group.name;
+    if (!topBucket || Math.abs(amount) > Math.abs(topBucket.total)) topBucket = { name: bucketName, total: amount };
+  }
+  const categories = [...byCategory.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const previousKey = shiftExpenseMonth(month, -1);
+  const previousRows = state.expenses.filter(expense => expense.expense_month === previousKey);
+  const history = [];
+  for (let i = 1; i <= 12; i++) {
+    const key = shiftExpenseMonth(month, -i);
+    const monthRows = state.expenses.filter(expense => expense.expense_month === key);
+    if (!monthRows.length) continue;
+    history.push(monthRows.reduce((sum, expense) => sum + expenseAmountInEur(expense), 0));
+  }
+  return {
+    total,
+    categories,
+    bucketCount: rows.length,
+    previousTotal: previousRows.reduce((sum, expense) => sum + expenseAmountInEur(expense), 0),
+    previousHasData: previousRows.length > 0,
+    average: history.length ? history.reduce((sum, value) => sum + value, 0) / history.length : null,
+    averageCount: history.length,
+    topCategory: categories[0] || null,
+    topBucket
+  };
+}
+
+function expenseMonthWindow(month, count = 6) {
+  const keys = [];
+  for (let i = count - 1; i >= 0; i--) keys.push(shiftExpenseMonth(month, -i));
+  return keys.map(key => ({
+    key,
+    label: EXPENSE_MONTHS[Number(key.slice(5, 7)) - 1].slice(0, 3),
+    total: state.expenses.filter(expense => expense.expense_month === key).reduce((sum, expense) => sum + expenseAmountInEur(expense), 0),
+    selected: key === month
+  }));
+}
+
+function monthSubcategoryOptions(categoryId, selected = '') {
+  const matching = state.expenseSubcategories.filter(item => item.category_id === Number(categoryId));
+  return '<option value="">Category total</option>' + matching
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(item => `<option value="${item.id}"${String(item.id) === String(selected) ? ' selected' : ''}>${esc(item.name)}</option>`)
+    .join('');
+}
+
+function monthPickerCells(year) {
+  const nowKey = currentExpenseMonth();
+  return EXPENSE_MONTHS.map((name, index) => {
+    const key = `${year}-${String(index + 1).padStart(2, '0')}`;
+    const rows = state.expenses.filter(expense => expense.expense_month === key);
+    const total = rows.reduce((sum, expense) => sum + expenseAmountInEur(expense), 0);
+    const classes = ['month-picker-cell'];
+    if (rows.length) classes.push('has-data');
+    if (key === nowKey) classes.push('is-now');
+    if (key === expenseFocusMonth) classes.push('is-selected');
+    return `<button class="${classes.join(' ')}" type="button" data-expense-pick-month="${key}" aria-pressed="${key === expenseFocusMonth ? 'true' : 'false'}" aria-label="${esc(name)} ${year}${rows.length ? ', has expenses' : ', no expenses'}"><strong>${esc(name.slice(0, 3))}</strong><small>${rows.length ? moneyEUR.format(total) : 'Empty'}</small></button>`;
+  }).join('');
+}
+
+function monthDeltaCard(label, detail, current, baseline, hasBaseline) {
+  if (!hasBaseline) {
+    return `<article class="month-card month-kpi is-flat"><span>${esc(label)}</span><strong>—</strong><small>${esc(detail)}</small></article>`;
+  }
+  const delta = current - baseline;
+  const tone = Math.abs(delta) < 0.005 ? 'flat' : delta > 0 ? 'higher' : 'lower';
+  const pct = Math.abs(baseline) < 0.005 ? null : (delta / Math.abs(baseline)) * 100;
+  const pctText = pct == null ? '' : ` (${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(0)}%)`;
+  const text = Math.abs(delta) < 0.005 ? 'In line' : `${formatSignedEUR(delta)}${pctText}`;
+  return `<article class="month-card month-kpi is-${tone}"><span>${esc(label)}</span><strong>${text}</strong><small>${esc(detail)}</small></article>`;
+}
+
+function monthBucketRow(category, subcategory, editable) {
+  const subId = subcategory?.id || '';
+  const record = findExpenseRecord(category.id, subcategory?.id ?? null, expenseFocusMonth);
+  const label = subcategory ? subcategory.name : 'Category total';
+  const monthTitle = expenseMonthTitle(expenseFocusMonth);
+  const currency = record?.currency || 'EUR';
+  const saved = record
+    ? `Saved ${formatCurrency(Number(record.amount), currency)}`
+    : 'Nothing saved';
+  const eurNote = record && currency !== 'EUR'
+    ? ` · ${moneyEUR.format(expenseAmountInEur(record))} in the dashboard`
+    : '';
+  const disabled = editable ? '' : ' disabled';
+  const flash = expenseMonthFlashKey === `${category.id}:${subId || 0}` ? ' is-saved' : '';
+  return `<div class="month-bucket${subcategory ? ' is-sub' : ''}${flash}" data-category="${category.id}" data-subcategory="${subId}">
+      <div class="month-bucket-name"><span>${subcategory ? '↳ ' : ''}${esc(label)}</span><small>${saved}${eurNote}</small></div>
+      <select class="month-currency" aria-label="Currency for ${esc(category.name)} ${esc(label)}"${record || !editable ? ' disabled' : ''}>${expenseCurrencyOptions(currency)}</select>
+      <input class="month-set" type="number" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Set" aria-label="${esc(category.name)} ${esc(label)} for ${esc(monthTitle)}" value="${record ? esc(String(Number(record.amount))) : ''}"${disabled}>
+      ${editable ? `<div class="month-add-wrap"><input class="month-add" type="number" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Add" aria-label="Amount to add to ${esc(category.name)} ${esc(label)}"><button class="month-add-btn" type="button">Add</button></div>` : '<div></div>'}
+    </div>`;
+}
+
+function expenseMonthMarkup() {
+  ensureExpenseFocusMonth();
+  const breakdown = expenseMonthBreakdown(expenseFocusMonth);
+  const editable = isWriteAllowed();
+  const title = expenseMonthTitle(expenseFocusMonth);
+  const onCurrent = expenseFocusMonth === currentExpenseMonth();
+  const absSum = breakdown.categories.reduce((sum, category) => sum + Math.abs(category.total), 0);
+  const slices = breakdown.categories.filter(category => category.total !== 0);
+  let meter = '';
+  if (breakdown.average != null && breakdown.average > 0 && breakdown.total >= 0) {
+    const scale = Math.max(breakdown.total, breakdown.average, 1);
+    const ratio = breakdown.total / breakdown.average * 100;
+    meter = `<div class="month-meter" aria-hidden="true"><span class="month-meter-fill" style="width:${(breakdown.total / scale * 100).toFixed(1)}%"></span><span class="month-meter-mark" style="left:calc(${(breakdown.average / scale * 100).toFixed(1)}% - 1px)"></span></div><span class="month-meter-caption">${ratio.toFixed(0)}% of the recent average</span>`;
+  }
+  const previousDetail = breakdown.previousHasData
+    ? `Versus ${expenseMonthTitle(shiftExpenseMonth(expenseFocusMonth, -1))}`
+    : 'Nothing recorded last month';
+  const averageDetail = breakdown.average == null
+    ? 'No earlier months with expenses'
+    : `Average of ${breakdown.averageCount} active month${breakdown.averageCount === 1 ? '' : 's'} before this one`;
+  const top = breakdown.topCategory;
+  const topShare = top && absSum ? Math.abs(top.total) / absSum * 100 : 0;
+  const topCard = top
+    ? `<article class="month-card month-kpi is-accent"><span>Top category</span><strong>${esc(top.name)}</strong><small>${moneyEUR.format(top.total)} · ${topShare.toFixed(0)}% of absolute spend</small></article>`
+    : '<article class="month-card month-kpi"><span>Top category</span><strong>—</strong><small>Add a bucket to see where it went</small></article>';
+  const lineCard = breakdown.topBucket
+    ? `<article class="month-card month-kpi"><span>Largest line</span><strong>${esc(breakdown.topBucket.name)}</strong><small>${moneyEUR.format(breakdown.topBucket.total)}</small></article>`
+    : '<article class="month-card month-kpi"><span>Largest line</span><strong>—</strong><small>Category and sub-category buckets appear here</small></article>';
+  const mixBody = slices.length
+    ? `<div class="month-mix"><div class="month-chart-wrap"><canvas id="expenseMonthMixChart" aria-label="Spending by category"></canvas></div><ol class="month-rank">${slices.map((category, index) => {
+      const color = CHART_COLORS[index % CHART_COLORS.length];
+      const share = absSum ? Math.abs(category.total) / absSum * 100 : 0;
+      const biggest = [...category.lines].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))[0];
+      const sub = biggest && category.lines.length > 1 ? `<span class="month-rank-sub">Largest: ${esc(biggest.name)} · ${moneyEUR.format(biggest.total)}</span>` : '';
+      return `<li><span class="month-swatch" style="background:${color};color:${color}"></span><span class="month-rank-name">${esc(category.name)}</span><span class="month-rank-amount">${moneyEUR.format(category.total)} · ${share.toFixed(0)}%</span><span class="month-rank-bar"><span style="width:${Math.max(2, share).toFixed(1)}%;background:${color}"></span></span>${sub}</li>`;
+    }).join('')}</ol></div>`
+    : '<div class="month-chart-wrap"><div class="month-chart-empty">No category totals for this month yet.</div></div>';
+  const windowRows = expenseMonthWindow(expenseFocusMonth, 6);
+  const trendHas = windowRows.some(row => state.expenses.some(expense => expense.expense_month === row.key));
+  const trendBody = trendHas
+    ? '<div class="month-chart-wrap month-chart-wrap-bar"><canvas id="expenseMonthTrendChart" aria-label="Spending over the last six months"></canvas></div>'
+    : '<div class="month-chart-wrap month-chart-wrap-bar"><div class="month-chart-empty">No spending in this six-month window.</div></div>';
+  const sortedCategories = [...state.expenseCategories].sort((a, b) => a.name.localeCompare(b.name));
+  const ledgerBody = sortedCategories.length
+    ? `<div class="month-categories">${sortedCategories.map((category, index) => {
+      const color = CHART_COLORS[index % CHART_COLORS.length];
+      const subs = state.expenseSubcategories.filter(item => item.category_id === category.id).sort((a, b) => a.name.localeCompare(b.name));
+      const categoryTotal = breakdown.categories.find(item => item.id === category.id)?.total || 0;
+      return `<article class="month-category" style="--month-accent:${color}"><div class="month-category-head"><h4>${esc(category.name)}</h4><strong>${moneyEUR.format(categoryTotal)}</strong></div>${monthBucketRow(category, null, editable)}${subs.map(sub => monthBucketRow(category, sub, editable)).join('')}</article>`;
+    }).join('')}</div>`
+    : '<div class="month-empty"><strong>No categories yet</strong><p>Create a category, then set this month’s totals here. The monthly grid reads the same buckets.</p></div>';
+  const quick = editable && sortedCategories.length
+    ? `<form class="month-quick" id="expenseMonthQuickAdd"><label class="month-visually-hidden" for="expenseMonthQuickCategory">Category</label><select id="expenseMonthQuickCategory" aria-label="Category" required>${sortedCategories.map(category => `<option value="${category.id}">${esc(category.name)}</option>`).join('')}</select><label class="month-visually-hidden" for="expenseMonthQuickSub">Sub-category</label><select id="expenseMonthQuickSub" aria-label="Sub-category">${monthSubcategoryOptions(sortedCategories[0].id)}</select><label class="month-visually-hidden" for="expenseMonthQuickAmount">Amount to add</label><input id="expenseMonthQuickAmount" type="number" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Amount" aria-label="Amount to add" required><label class="month-visually-hidden" for="expenseMonthQuickCurrency">Currency</label><select id="expenseMonthQuickCurrency" aria-label="Currency">${expenseCurrencyOptions('EUR')}</select><button type="submit">Add to month</button></form>`
+    : '';
+  const meta = breakdown.bucketCount
+    ? `${breakdown.bucketCount} bucket${breakdown.bucketCount === 1 ? '' : 's'} · refunds reduce the total`
+    : 'No buckets yet · refunds can be entered as negative amounts';
+  return `<div class="month-studio">
+      <header class="month-hero">
+        <div class="month-hero-copy">
+          <span class="month-kicker">Single month</span>
+          <div class="month-nav" role="group" aria-label="Choose month">
+            <button class="month-nav-arrow" id="expenseMonthPrev" type="button" aria-label="Previous month">←</button>
+            <button class="month-nav-label" id="expenseMonthLabel" type="button" aria-haspopup="dialog" aria-expanded="${expenseMonthPickerOpen ? 'true' : 'false'}"><span class="month-nav-name">${esc(title)}</span><span class="month-nav-caret" aria-hidden="true">▾</span></button>
+            <button class="month-nav-arrow" id="expenseMonthNext" type="button" aria-label="Next month">→</button>
+            <button class="month-nav-today" id="expenseMonthToday" type="button"${onCurrent ? ' disabled' : ''}>This month</button>
+          </div>
+          <p class="month-hero-note">Amounts are one total per category or sub-category. The monthly grid uses the same buckets.</p>
+        </div>
+        <div class="month-hero-figure">
+          <span class="month-kicker">Spent this month</span>
+          <strong class="month-hero-total" id="expenseMonthTotal">${moneyEUR.format(0)}</strong>
+          <span class="month-hero-meta">${esc(meta)}</span>
+          ${meter}
+        </div>
+        <div class="month-picker" id="expenseMonthPicker" role="dialog" aria-label="Choose a month"${expenseMonthPickerOpen ? '' : ' hidden'}>
+          <div class="month-picker-head">
+            <button class="month-picker-yearbtn" id="expenseMonthPickerYearPrev" type="button" aria-label="Previous year">←</button>
+            <strong id="expenseMonthPickerYear">${expenseMonthPickerYear}</strong>
+            <button class="month-picker-yearbtn" id="expenseMonthPickerYearNext" type="button" aria-label="Next year">→</button>
+          </div>
+          <div class="month-picker-grid" id="expenseMonthPickerGrid" data-year="${expenseMonthPickerYear}" data-month="${expenseFocusMonth}">${monthPickerCells(expenseMonthPickerYear)}</div>
+        </div>
+      </header>
+      <div class="month-kpis">
+        ${monthDeltaCard('Vs last month', previousDetail, breakdown.total, breakdown.previousTotal, breakdown.previousHasData)}
+        ${monthDeltaCard('Vs recent average', averageDetail, breakdown.total, breakdown.average || 0, breakdown.average != null)}
+        ${topCard}
+        ${lineCard}
+      </div>
+      <div class="month-charts">
+        <article class="month-card"><span class="month-kicker">Mix</span><h3>Where it went</h3><p class="month-chart-note">Shares use absolute amounts, so a refund still shows its size. Amounts keep their sign.</p>${mixBody}</article>
+        <article class="month-card"><span class="month-kicker">Context</span><h3>Six-month window</h3><p class="month-chart-note">The highlighted bar is the month you are editing. Totals are in EUR.</p>${trendBody}</article>
+      </div>
+      <section class="month-card month-ledger">
+        <div class="month-ledger-head"><div><span class="month-kicker">Ledger</span><h3>Enter ${esc(title)}</h3><p>Set replaces the bucket. Add increases it. Clear a set amount to remove that bucket.</p></div></div>
+        ${state.guest ? '<p class="month-guest-note">Guest mode is a sample. These inputs are read-only and nothing is saved.</p>' : ''}
+        ${quick}
+        ${ledgerBody}
+      </section>
+    </div>`;
+}
+
+function paintExpenseMonthTotal(value) {
+  const el = $('#expenseMonthTotal');
+  if (!el) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches || blurActive();
+  const from = expenseMonthShownTotal == null ? 0 : expenseMonthShownTotal;
+  const same = expenseMonthShownTotal != null && Math.abs(from - value) < 0.005;
+  expenseMonthShownTotal = value;
+  if (reduced || same) {
+    el.textContent = moneyEUR.format(value);
+    return;
+  }
+  const start = performance.now();
+  const tick = now => {
+    if ($('#expenseMonthTotal') !== el) return;
+    const progress = Math.min(1, (now - start) / 680);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = moneyEUR.format(from + (value - from) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function syncExpenseMonthPicker() {
+  const picker = $('#expenseMonthPicker');
+  const label = $('#expenseMonthLabel');
+  if (!picker || !label) return;
+  picker.hidden = !expenseMonthPickerOpen;
+  label.setAttribute('aria-expanded', expenseMonthPickerOpen ? 'true' : 'false');
+  const yearEl = $('#expenseMonthPickerYear');
+  if (yearEl) yearEl.textContent = String(expenseMonthPickerYear);
+  const grid = $('#expenseMonthPickerGrid');
+  if (grid && (grid.dataset.year !== String(expenseMonthPickerYear) || grid.dataset.month !== expenseFocusMonth)) {
+    grid.dataset.year = String(expenseMonthPickerYear);
+    grid.dataset.month = expenseFocusMonth;
+    grid.innerHTML = monthPickerCells(expenseMonthPickerYear);
+  }
+  if (expenseMonthPickerOpen && expenseMonthPickerShouldFocus) {
+    expenseMonthPickerShouldFocus = false;
+    (grid?.querySelector('.is-selected') || grid?.querySelector('.month-picker-cell'))?.focus();
+  }
+}
+
+function expenseMonthDataSignature() {
+  ensureExpenseFocusMonth();
+  return JSON.stringify({
+    month: expenseFocusMonth,
+    write: isWriteAllowed(),
+    guest: !!state.guest,
+    categories: state.expenseCategories,
+    subs: state.expenseSubcategories,
+    expenses: state.expenses,
+    coins: state.currencies.map(currency => currency.coin)
+  });
+}
+
+function renderExpenseMonth() {
+  const root = $('#expenseMonthStudio');
+  if (!root) return false;
+  const signature = expenseMonthDataSignature();
+  if (signature === expenseMonthSignatureCache && root.childElementCount) {
+    syncExpenseMonthPicker();
+    return false;
+  }
+  expenseMonthSignatureCache = signature;
+  expenseCharts.monthMix?.destroy();
+  expenseCharts.monthTrend?.destroy();
+  expenseCharts.monthMix = null;
+  expenseCharts.monthTrend = null;
+  root.innerHTML = expenseMonthMarkup();
+  paintExpenseMonthTotal(expenseMonthBreakdown(expenseFocusMonth).total);
+  syncExpenseMonthPicker();
+  return true;
+}
+
+function drawExpenseMonthCharts() {
+  if (typeof Chart === 'undefined') return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  expenseCharts.monthMix?.destroy();
+  expenseCharts.monthTrend?.destroy();
+  expenseCharts.monthMix = null;
+  expenseCharts.monthTrend = null;
+  const breakdown = expenseMonthBreakdown(expenseFocusMonth);
+  const mixCanvas = $('#expenseMonthMixChart');
+  const slices = breakdown.categories.filter(category => category.total !== 0);
+  if (mixCanvas && slices.length) {
+    const signed = slices.map(category => category.total);
+    const abs = signed.map(value => Math.abs(value));
+    const absSum = abs.reduce((sum, value) => sum + value, 0);
+    const pcts = abs.map(value => absSum ? value / absSum * 100 : 0);
+    expenseCharts.monthMix = new Chart(mixCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: slices.map(category => category.name),
+        datasets: [{
+          data: abs,
+          backgroundColor: slices.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+          borderColor: '#0f1420',
+          borderWidth: 2,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '64%',
+        animation: { duration: reduced ? 0 : 700 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const pct = pcts[context.dataIndex].toFixed(1);
+                return blurActive()
+                  ? `${context.label}: hidden (${pct}%)`
+                  : `${context.label}: ${moneyEUR.format(signed[context.dataIndex])} (${pct}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+  const trendCanvas = $('#expenseMonthTrendChart');
+  const windowRows = expenseMonthWindow(expenseFocusMonth, 6);
+  if (trendCanvas && windowRows.some(row => state.expenses.some(expense => expense.expense_month === row.key))) {
+    expenseCharts.monthTrend = new Chart(trendCanvas, {
+      type: 'bar',
+      data: {
+        labels: windowRows.map(row => row.label),
+        datasets: [{
+          label: 'Spent',
+          data: windowRows.map(row => row.total),
+          backgroundColor: windowRows.map(row => row.selected ? 'rgba(79, 140, 255, .92)' : 'rgba(63, 208, 163, .38)'),
+          borderColor: windowRows.map(row => row.selected ? '#8ec5ff' : 'rgba(63, 208, 163, .85)'),
+          borderWidth: 1.5,
+          borderRadius: 8,
+          maxBarThickness: 42
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: reduced ? 0 : 700 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: context => blurActive() ? 'Spent: hidden' : `Spent: ${moneyEUR.format(Number(context.parsed.y || 0))}` } }
+        },
+        scales: {
+          x: { ticks: { color: '#e6ebf5' }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.06)' } }
+        }
+      }
+    });
+  }
+}
+
+function setExpenseFocusMonth(month) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return;
+  if (month !== expenseFocusMonth) {
+    expenseMonthFlashKey = '';
+    setMonthStatus('');
+  }
+  expenseFocusMonth = month;
+  expenseYear = Number(month.slice(0, 4));
+  expenseMonthPickerYear = expenseYear;
+  expenseMonthPickerOpen = false;
+}
+
+async function commitMonthAddValues(categoryId, subcategoryId, amount, currency) {
+  if (!isWriteAllowed() || expenseMonthWriteLock) return;
+  if (!Number.isInteger(categoryId) || !Number.isFinite(amount) || amount === 0) {
+    setMonthStatus('Enter an amount to add.');
+    return;
+  }
+  const existing = findExpenseRecord(categoryId, subcategoryId, expenseFocusMonth);
+  const resolvedCurrency = existing?.currency || currency || 'EUR';
+  expenseMonthWriteLock = true;
+  try {
+    const payload = {
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      expense_month: expenseFocusMonth,
+      add_amount: amount,
+      currency: resolvedCurrency
+    };
+    const response = await request('/expenses', { method: 'POST', body: JSON.stringify(payload) });
+    applyExpenseMutation(payload, response);
+    expenseMonthFlashKey = `${categoryId}:${subcategoryId || 0}`;
+    setMonthStatus(`Added ${formatCurrency(amount, resolvedCurrency)}.`);
+    renderExpenses();
+  } catch (err) {
+    setMonthStatus(err.message);
+    toast(err.message);
+  } finally {
+    expenseMonthWriteLock = false;
+  }
+}
+
+function commitMonthAdd(input) {
+  const row = input.closest('.month-bucket');
+  if (!row) return;
+  const amount = Number(input.value);
+  const categoryId = Number(row.dataset.category);
+  const subcategoryId = row.dataset.subcategory ? Number(row.dataset.subcategory) : null;
+  const currency = row.querySelector('.month-currency')?.value || 'EUR';
+  commitMonthAddValues(categoryId, subcategoryId, amount, currency);
+}
+
+async function commitMonthSet(input) {
+  if (!isWriteAllowed() || expenseMonthWriteLock || input.disabled) return;
+  const row = input.closest('.month-bucket');
+  if (!row) return;
+  const categoryId = Number(row.dataset.category);
+  const subcategoryId = row.dataset.subcategory ? Number(row.dataset.subcategory) : null;
+  const existing = findExpenseRecord(categoryId, subcategoryId, expenseFocusMonth);
+  const raw = input.value.trim();
+  const next = raw === '' ? null : Number(raw);
+  if (next !== null && !Number.isFinite(next)) {
+    input.value = existing ? String(Number(existing.amount)) : '';
+    setMonthStatus('Enter a valid amount.');
+    return;
+  }
+  const prev = existing ? Number(existing.amount) : null;
+  if (next === prev || (next != null && prev != null && Math.abs(next - prev) < 1e-9)) return;
+  const currency = existing?.currency || row.querySelector('.month-currency')?.value || 'EUR';
+  expenseMonthWriteLock = true;
+  input.disabled = true;
+  try {
+    const payload = {
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      expense_month: expenseFocusMonth,
+      amount: next,
+      currency
+    };
+    const response = await request('/expenses', { method: 'POST', body: JSON.stringify(payload) });
+    applyExpenseMutation(payload, response);
+    expenseMonthFlashKey = `${categoryId}:${subcategoryId || 0}`;
+    setMonthStatus(next === null ? 'Removed that bucket.' : 'Saved.');
+    renderExpenses();
+  } catch (err) {
+    input.disabled = !isWriteAllowed();
+    input.value = existing ? String(Number(existing.amount)) : '';
+    setMonthStatus(err.message);
+    toast(err.message);
+  } finally {
+    expenseMonthWriteLock = false;
+  }
+}
+
+function onExpenseMonthStudioClick(event) {
+  if (event.target.closest('#expenseMonthPrev')) {
+    ensureExpenseFocusMonth();
+    setExpenseFocusMonth(shiftExpenseMonth(expenseFocusMonth, -1));
+    renderExpenses();
+    return;
+  }
+  if (event.target.closest('#expenseMonthNext')) {
+    ensureExpenseFocusMonth();
+    setExpenseFocusMonth(shiftExpenseMonth(expenseFocusMonth, 1));
+    renderExpenses();
+    return;
+  }
+  if (event.target.closest('#expenseMonthToday')) {
+    setExpenseFocusMonth(currentExpenseMonth());
+    renderExpenses();
+    return;
+  }
+  if (event.target.closest('#expenseMonthLabel')) {
+    ensureExpenseFocusMonth();
+    expenseMonthPickerOpen = !expenseMonthPickerOpen;
+    if (expenseMonthPickerOpen) {
+      expenseMonthPickerYear = Number(expenseFocusMonth.slice(0, 4));
+      expenseMonthPickerShouldFocus = true;
+    }
+    syncExpenseMonthPicker();
+    return;
+  }
+  if (event.target.closest('#expenseMonthPickerYearPrev')) {
+    expenseMonthPickerYear -= 1;
+    syncExpenseMonthPicker();
+    return;
+  }
+  if (event.target.closest('#expenseMonthPickerYearNext')) {
+    expenseMonthPickerYear += 1;
+    syncExpenseMonthPicker();
+    return;
+  }
+  const pick = event.target.closest('[data-expense-pick-month]');
+  if (pick) {
+    setExpenseFocusMonth(pick.dataset.expensePickMonth);
+    renderExpenses();
+    $('#expenseMonthLabel')?.focus();
+    return;
+  }
+  const addBtn = event.target.closest('.month-add-btn');
+  if (addBtn) {
+    const input = addBtn.closest('.month-bucket')?.querySelector('.month-add');
+    if (input) commitMonthAdd(input);
+  }
+}
+
+function onExpenseMonthStudioChange(event) {
+  if (event.target.classList.contains('month-set')) commitMonthSet(event.target);
+  if (event.target.id === 'expenseMonthQuickCategory') {
+    const sub = $('#expenseMonthQuickSub');
+    if (sub) sub.innerHTML = monthSubcategoryOptions(event.target.value);
+  }
+}
+
+function onExpenseMonthStudioSubmit(event) {
+  if (event.target.id !== 'expenseMonthQuickAdd') return;
+  event.preventDefault();
+  const amount = Number($('#expenseMonthQuickAmount')?.value);
+  const categoryId = Number($('#expenseMonthQuickCategory')?.value);
+  const subRaw = $('#expenseMonthQuickSub')?.value;
+  commitMonthAddValues(categoryId, subRaw ? Number(subRaw) : null, amount, $('#expenseMonthQuickCurrency')?.value || 'EUR');
+}
+
+function onExpenseMonthStudioKeydown(event) {
+  if (event.key === 'Enter' && event.target.classList?.contains('month-set')) {
+    event.preventDefault();
+    event.target.blur();
+  } else if (event.key === 'Enter' && event.target.classList?.contains('month-add')) {
+    event.preventDefault();
+    commitMonthAdd(event.target);
+  } else if (event.key === 'Escape' && expenseMonthPickerOpen) {
+    expenseMonthPickerOpen = false;
+    syncExpenseMonthPicker();
+    $('#expenseMonthLabel')?.focus();
+  }
+}
+
+function buildGuestExpenseDemo(now = new Date()) {
+  const monthOf = offset => {
+    const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const categories = [
+    { id: 1, name: 'Home' },
+    { id: 2, name: 'Food' },
+    { id: 3, name: 'Transport' },
+    { id: 4, name: 'Life' }
+  ];
+  const subcategories = [
+    { id: 1, category_id: 1, name: 'Rent' },
+    { id: 2, category_id: 1, name: 'Utilities' },
+    { id: 3, category_id: 2, name: 'Groceries' },
+    { id: 4, category_id: 2, name: 'Dining out' },
+    { id: 5, category_id: 3, name: 'Fuel' },
+    { id: 6, category_id: 3, name: 'Transit' },
+    { id: 7, category_id: 4, name: 'Health' },
+    { id: 8, category_id: 4, name: 'Subscriptions' },
+    { id: 9, category_id: 4, name: 'Refunds' }
+  ];
+  const expenses = [];
+  let id = 1;
+  const add = (categoryId, subcategoryId, offset, amount, currency = 'EUR') => {
+    const category = categories.find(item => item.id === categoryId);
+    const subcategory = subcategories.find(item => item.id === subcategoryId);
+    expenses.push({
+      id: id++,
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      expense_month: monthOf(offset),
+      amount,
+      currency,
+      category_name: category?.name || '',
+      subcategory_name: subcategory?.name || null
+    });
+  };
+  for (let offset = -5; offset <= 0; offset++) {
+    const wave = [0, 20, -15, 35, -10, 12][offset + 5];
+    add(1, 1, offset, 1200);
+    add(1, 2, offset, 148 + (offset === 0 ? 0 : wave));
+    add(2, 3, offset, 410 + wave);
+    add(2, 4, offset, offset === 0 ? 86 : 130 + wave);
+    add(3, 5, offset, 70 + Math.abs(wave));
+    add(3, 6, offset, 42);
+    add(4, 7, offset, offset === 0 ? 64 : 28);
+  }
+  add(4, 8, 0, 15, 'USD');
+  add(4, 9, 0, -30);
+  return { categories, subcategories, expenses };
+}
+
 function renderExpenses() {
   const hasCategories = state.expenseCategories.length > 0;
   const newExpenseBtn = $('#newExpenseBtn');
@@ -4989,10 +5680,28 @@ function renderExpenses() {
     newExpenseSubcategoryBtn.disabled = !hasCategories;
     newExpenseSubcategoryBtn.title = hasCategories ? '' : 'Create a category first.';
   }
+  const monthRebuilt = renderExpenseMonth();
   renderExpenseGrid();
   renderExpenseStats();
-  document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.expenseTab === activeExpenseTab));
-  document.querySelectorAll('.expense-panel').forEach(panel => { panel.style.display = panel.id === `expense-panel-${activeExpenseTab}` ? '' : 'none'; });
+  document.querySelectorAll('[data-expense-tab]').forEach(btn => {
+    const on = btn.dataset.expenseTab === activeExpenseTab;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.expense-panel').forEach(panel => {
+    const on = panel.id === `expense-panel-${activeExpenseTab}`;
+    panel.style.display = on ? '' : 'none';
+    panel.setAttribute('aria-hidden', on ? 'false' : 'true');
+  });
+  if (currentPage === 'expenses' && activeExpenseTab === 'month') {
+    const mixNeedsDraw = !!$('#expenseMonthMixChart') && !expenseCharts.monthMix;
+    const trendNeedsDraw = !!$('#expenseMonthTrendChart') && !expenseCharts.monthTrend;
+    if (monthRebuilt || mixNeedsDraw || trendNeedsDraw) requestAnimationFrame(drawExpenseMonthCharts);
+    else requestAnimationFrame(() => {
+      expenseCharts.monthMix?.resize();
+      expenseCharts.monthTrend?.resize();
+    });
+  }
   if (currentPage === 'expenses' && ['year', 'all'].includes(activeExpenseTab)) requestAnimationFrame(renderExpenseCharts);
 }
 
@@ -5006,12 +5715,9 @@ async function submitExpenseModal(event) {
     else if (expenseModalKind === 'renameSubcategory') await request(`/expense-subcategories/${expenseModalTargetId}`, { method: 'PATCH', body: JSON.stringify({ name: $('#expenseSubcategoryName').value }) });
     else {
       const amountInput = $('#expenseEntryAmount');
-      const savedExpense = await request('/expenses', { method: 'POST', body: JSON.stringify({ category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, add_amount: amountInput.value, currency: $('#expenseEntryCurrency').value }) });
-      const savedIndex = state.expenses.findIndex(expense => Number(expense.category_id) === savedExpense.category_id
-        && (expense.subcategory_id == null ? null : Number(expense.subcategory_id)) === savedExpense.subcategory_id
-        && expense.expense_month === savedExpense.expense_month);
-      if (savedIndex >= 0) Object.assign(state.expenses[savedIndex], savedExpense);
-      else state.expenses.push(savedExpense);
+      const payload = { category_id: Number($('#expenseEntryCategory').value), subcategory_id: $('#expenseEntrySubcategory').value || null, expense_month: $('#expenseEntryMonth').value, add_amount: amountInput.value, currency: $('#expenseEntryCurrency').value };
+      const savedExpense = await request('/expenses', { method: 'POST', body: JSON.stringify(payload) });
+      applyExpenseMutation(payload, savedExpense);
       if (error) error.textContent = '';
       renderExpenses();
       updateExpenseAddPreview();
@@ -8293,6 +8999,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#navToggle')?.addEventListener('click', toggleNavDropdown);
   document.querySelectorAll('[data-asset-tab]').forEach(btn => btn.addEventListener('click', () => switchAssetTab(btn.dataset.assetTab)));
   document.querySelectorAll('[data-expense-tab]').forEach(btn => btn.addEventListener('click', () => { activeExpenseTab = btn.dataset.expenseTab; renderExpenses(); }));
+  $('#expenseMonthStudio')?.addEventListener('click', onExpenseMonthStudioClick);
+  $('#expenseMonthStudio')?.addEventListener('change', onExpenseMonthStudioChange);
+  $('#expenseMonthStudio')?.addEventListener('submit', onExpenseMonthStudioSubmit);
+  $('#expenseMonthStudio')?.addEventListener('keydown', onExpenseMonthStudioKeydown);
+  document.addEventListener('click', event => {
+    if (!expenseMonthPickerOpen) return;
+    if (event.target.closest('#expenseMonthPicker') || event.target.closest('#expenseMonthLabel')) return;
+    expenseMonthPickerOpen = false;
+    syncExpenseMonthPicker();
+  });
   $('#expenseStatsYear')?.addEventListener('change', event => { expenseStatsYear = Number(event.target.value); renderExpenseStats(); });
   $('#newExpenseCategoryBtn')?.addEventListener('click', () => openExpenseModal('category'));
   $('#newExpenseSubcategoryBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('subcategory') : alert('Create a category first.'));
