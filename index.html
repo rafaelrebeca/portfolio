@@ -195,14 +195,24 @@
               <button class="btn-sm primary write-action" id="newExpenseBtn" type="button" disabled title="Create a category first.">+ Add Expense</button>
             </div>
           </div>
-          <div class="asset-tabs expense-tabs" role="tablist">
-            <button class="asset-tab active" type="button" data-expense-tab="stats" role="tab">🎉 Year in
-              Review</button>
-            <button class="asset-tab" type="button" data-expense-tab="grid" role="tab">📋 Monthly Grid</button>
-            <button class="asset-tab" type="button" data-expense-tab="year" role="tab">📊 Current Year</button>
-            <button class="asset-tab" type="button" data-expense-tab="all" role="tab">📈 All Time</button>
+          <div class="asset-tabs expense-tabs" role="tablist" aria-label="Expense views">
+            <button class="asset-tab active" type="button" id="expenseTabMonth" data-expense-tab="month" role="tab"
+              aria-selected="true" aria-controls="expense-panel-month">✦ Month</button>
+            <button class="asset-tab" type="button" id="expenseTabStats" data-expense-tab="stats" role="tab"
+              aria-selected="false" aria-controls="expense-panel-stats">🎉 Year in Review</button>
+            <button class="asset-tab" type="button" id="expenseTabGrid" data-expense-tab="grid" role="tab"
+              aria-selected="false" aria-controls="expense-panel-grid">📋 Monthly Grid</button>
+            <button class="asset-tab" type="button" id="expenseTabYear" data-expense-tab="year" role="tab"
+              aria-selected="false" aria-controls="expense-panel-year">📊 Current Year</button>
+            <button class="asset-tab" type="button" id="expenseTabAll" data-expense-tab="all" role="tab"
+              aria-selected="false" aria-controls="expense-panel-all">📈 All Time</button>
           </div>
-          <section class="expense-panel" id="expense-panel-grid" style="display:none;">
+          <section class="expense-panel" id="expense-panel-month" role="tabpanel" aria-labelledby="expenseTabMonth">
+            <div id="expenseMonthStudio"></div>
+            <p id="expenseMonthStatus" class="month-studio-status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="expense-panel" id="expense-panel-grid" role="tabpanel" aria-labelledby="expenseTabGrid"
+            style="display:none;">
             <div class="expense-year-controls"><button class="btn-sm" id="expenseYearPrev" type="button"
                 aria-label="Previous year">←</button><strong id="expenseYearLabel"></strong><button class="btn-sm"
                 id="expenseYearNext" type="button" aria-label="Next year">→</button></div>
@@ -213,7 +223,8 @@
               </table>
             </div>
           </section>
-          <section class="expense-panel" id="expense-panel-year" style="display:none;">
+          <section class="expense-panel" id="expense-panel-year" role="tabpanel" aria-labelledby="expenseTabYear"
+            style="display:none;">
             <div class="expense-chart-grid">
               <article class="card expense-chart-card">
                 <h3>Monthly expenses by category</h3>
@@ -227,7 +238,8 @@
               </article>
             </div>
           </section>
-          <section class="expense-panel" id="expense-panel-all" style="display:none;">
+          <section class="expense-panel" id="expense-panel-all" role="tabpanel" aria-labelledby="expenseTabAll"
+            style="display:none;">
             <div class="expense-chart-grid">
               <article class="card expense-chart-card">
                 <h3>All-time expenses by category</h3>
@@ -241,7 +253,8 @@
               </article>
             </div>
           </section>
-          <section class="expense-panel" id="expense-panel-stats">
+          <section class="expense-panel" id="expense-panel-stats" role="tabpanel" aria-labelledby="expenseTabStats"
+            style="display:none;">
             <div class="expense-stats-heading">
               <div>
                 <div class="expense-stats-kicker">YOUR EXPENSES, WRAPPED</div>
