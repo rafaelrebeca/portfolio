@@ -4699,7 +4699,7 @@ function updateExpenseSubcategoryOptions() {
   if (!subcategorySelect) return;
   const currentVal = subcategorySelect.value;
   const matching = state.expenseSubcategories.filter(s => s.category_id === categoryId);
-  subcategorySelect.innerHTML = '<option value="">Category</option>' +
+  subcategorySelect.innerHTML = '<option value="">General</option>' +
     matching.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   subcategorySelect.value = matching.some(s => String(s.id) === currentVal) ? currentVal : '';
 }
@@ -4758,11 +4758,19 @@ function renderExpenseGrid() {
     return;
   }
   const editable = isWriteAllowed();
-  body.innerHTML = totalRow + rows.map(({ category, subcategory, label: rowLabel, records }) => `<tr class="${subcategory ? 'expense-subcategory-row' : 'expense-category-row'}"><th scope="row"><span class="expense-row-label">${esc(rowLabel)}${editable ? `<span class="expense-row-actions"><button class="expense-row-action" type="button" data-expense-action="rename-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Rename ${subcategory ? 'sub-category' : 'category'}" aria-label="Rename ${esc(rowLabel)}">✎</button><button class="expense-row-action danger" type="button" data-expense-action="delete-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Delete ${subcategory ? 'sub-category' : 'category'}" aria-label="Delete ${esc(rowLabel)}">×</button></span>` : ''}</span></th>${EXPENSE_MONTHS.map((_, i) => {
-    const month = `${expenseYear}-${String(i + 1).padStart(2, '0')}`;
-    const record = records.get(`${category.id}:${subcategory?.id || 0}:${month}`);
-    return `<td><input class="expense-cell" type="number" step="0.01" aria-label="${esc(rowLabel)} ${month}" title="${esc(record?.currency || 'EUR')}" value="${record ? Number(record.amount) : ''}" placeholder="—" ${editable ? '' : 'disabled'} data-category="${category.id}" data-subcategory="${subcategory?.id || ''}" data-month="${month}" data-currency="${esc(record?.currency || 'EUR')}"></td>`;
-  }).join('')}</tr>`).join('');
+  body.innerHTML = totalRow + rows.map(({ category, subcategory, label: rowLabel, records }) => {
+    const bucketLabel = subcategory ? rowLabel : `${category.name} General`;
+    const nameHtml = subcategory
+      ? esc(rowLabel)
+      : `${esc(rowLabel)}<span class="expense-general-label">General</span>`;
+    const actions = editable ? `<span class="expense-row-actions"><button class="expense-row-action" type="button" data-expense-action="rename-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Rename ${subcategory ? 'sub-category' : 'category'}" aria-label="Rename ${esc(rowLabel)}">✎</button><button class="expense-row-action danger" type="button" data-expense-action="delete-${subcategory ? 'subcategory' : 'category'}" data-id="${subcategory?.id || category.id}" title="Delete ${subcategory ? 'sub-category' : 'category'}" aria-label="Delete ${esc(rowLabel)}">×</button></span>` : '';
+    const cells = EXPENSE_MONTHS.map((_, i) => {
+      const month = `${expenseYear}-${String(i + 1).padStart(2, '0')}`;
+      const record = records.get(`${category.id}:${subcategory?.id || 0}:${month}`);
+      return `<td><input class="expense-cell" type="number" step="0.01" aria-label="${esc(bucketLabel)} ${month}" title="${esc(record?.currency || 'EUR')}" value="${record ? Number(record.amount) : ''}" placeholder="—" ${editable ? '' : 'disabled'} data-category="${category.id}" data-subcategory="${subcategory?.id || ''}" data-month="${month}" data-currency="${esc(record?.currency || 'EUR')}"></td>`;
+    }).join('');
+    return `<tr class="${subcategory ? 'expense-subcategory-row' : 'expense-category-row'}"><th scope="row"><span class="expense-row-label"><span class="expense-row-name">${nameHtml}</span>${actions}</span></th>${cells}</tr>`;
+  }).join('');
 }
 
 function expenseGroups(kind) {
@@ -4771,7 +4779,7 @@ function expenseGroups(kind) {
     const key = kind === 'category' ? String(expense.category_id) : String(expense.subcategory_id || `category-${expense.category_id}`);
     const category = state.expenseCategories.find(c => c.id === expense.category_id);
     const subcategory = state.expenseSubcategories.find(s => s.id === expense.subcategory_id);
-    const label = kind === 'category' ? (category?.name || expense.category_name) : (subcategory ? `${category?.name || expense.category_name} · ${subcategory.name}` : `${category?.name || expense.category_name} · Other`);
+    const label = kind === 'category' ? (category?.name || expense.category_name) : (subcategory ? `${category?.name || expense.category_name} · ${subcategory.name}` : `${category?.name || expense.category_name} · General`);
     if (!groups.has(key)) groups.set(key, { label, months: new Map() });
     const group = groups.get(key), month = expense.expense_month;
     group.months.set(month, (group.months.get(month) || 0) + expenseAmountInEur(expense));
@@ -4948,7 +4956,7 @@ function renderExpenseStats() {
     const subcategory = subcategoryId === null ? null : state.expenseSubcategories.find(item => item.id === subcategoryId);
     const subKey = subcategoryId === null ? 'category-level' : String(subcategoryId);
     if (!categoryStats.subcategories.has(subKey)) categoryStats.subcategories.set(subKey, {
-      name: subcategory ? subcategory.name : 'Category-level amount',
+      name: subcategory ? subcategory.name : 'General',
       total: 0
     });
     const subcategoryStats = categoryStats.subcategories.get(subKey);
@@ -5084,9 +5092,9 @@ function expenseMonthBreakdown(month) {
     group.total += amount;
     const subId = expense.subcategory_id == null ? null : Number(expense.subcategory_id);
     const subcategory = subId == null ? null : state.expenseSubcategories.find(item => item.id === subId);
-    const lineName = subcategory ? subcategory.name : 'Category total';
+    const lineName = subcategory ? subcategory.name : 'General';
     group.lines.push({ name: lineName, total: amount });
-    const bucketName = subcategory ? `${group.name} · ${subcategory.name}` : group.name;
+    const bucketName = subcategory ? `${group.name} · ${subcategory.name}` : `${group.name} · General`;
     if (!topBucket || Math.abs(amount) > Math.abs(topBucket.total)) topBucket = { name: bucketName, total: amount };
   }
   const categories = [...byCategory.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
@@ -5125,7 +5133,7 @@ function expenseMonthWindow(month, count = 6) {
 
 function monthSubcategoryOptions(categoryId, selected = '') {
   const matching = state.expenseSubcategories.filter(item => item.category_id === Number(categoryId));
-  return '<option value="">Category total</option>' + matching
+  return '<option value="">General</option>' + matching
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(item => `<option value="${item.id}"${String(item.id) === String(selected) ? ' selected' : ''}>${esc(item.name)}</option>`)
     .join('');
@@ -5160,7 +5168,7 @@ function monthDeltaCard(label, detail, current, baseline, hasBaseline) {
 function monthBucketRow(category, subcategory, editable) {
   const subId = subcategory?.id || '';
   const record = findExpenseRecord(category.id, subcategory?.id ?? null, expenseFocusMonth);
-  const label = subcategory ? subcategory.name : 'Category total';
+  const label = subcategory ? subcategory.name : 'General';
   const monthTitle = expenseMonthTitle(expenseFocusMonth);
   const currency = record?.currency || 'EUR';
   const saved = record
