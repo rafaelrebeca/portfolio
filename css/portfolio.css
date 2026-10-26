@@ -3736,19 +3736,19 @@ select {
   background: var(--panel);
 }
 
-.expense-wrap-summary article > span {
+.expense-wrap-summary article>span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.expense-wrap-summary article > strong {
+.expense-wrap-summary article>strong {
   font-size: clamp(19px, 2vw, 26px);
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
-.expense-wrap-summary article > small {
+.expense-wrap-summary article>small {
   color: var(--muted);
   font-size: 11px;
 }
@@ -3758,8 +3758,14 @@ select {
   background: linear-gradient(145deg, rgba(99, 102, 241, .2), var(--panel));
 }
 
-.expense-wrap-total strong { color: var(--accent); }
-.expense-wrap-summary article > strong small { color: var(--muted); font-size: 15px; }
+.expense-wrap-total strong {
+  color: var(--accent);
+}
+
+.expense-wrap-summary article>strong small {
+  color: var(--muted);
+  font-size: 15px;
+}
 
 .expense-stats-section-head {
   display: flex;
@@ -3783,9 +3789,15 @@ select {
   font-size: 12px;
 }
 
-.expense-top-pick strong { margin-left: 4px; color: var(--text); }
+.expense-top-pick strong {
+  margin-left: 4px;
+  color: var(--text);
+}
 
-.expense-stats-categories { display: grid; gap: 10px; }
+.expense-stats-categories {
+  display: grid;
+  gap: 10px;
+}
 
 .expense-stat-category {
   overflow: hidden;
@@ -3813,7 +3825,9 @@ select {
   font-weight: 800;
 }
 
-.expense-stat-category-main { min-width: 0; }
+.expense-stat-category-main {
+  min-width: 0;
+}
 
 .expense-stat-title {
   display: flex;
@@ -3823,17 +3837,27 @@ select {
   margin-bottom: 9px;
 }
 
-.expense-stat-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.expense-stat-title span { font-weight: 750; font-variant-numeric: tabular-nums; }
+.expense-stat-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.expense-stat-bar, .expense-stat-sub-bar {
+.expense-stat-title span {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-stat-bar,
+.expense-stat-sub-bar {
   overflow: hidden;
   height: 7px;
   border-radius: 999px;
   background: rgba(148, 163, 184, .12);
 }
 
-.expense-stat-bar span, .expense-stat-sub-bar span {
+.expense-stat-bar span,
+.expense-stat-sub-bar span {
   display: block;
   height: 100%;
   min-width: 3px;
@@ -3848,8 +3872,16 @@ select {
   border-left: 1px solid var(--border);
 }
 
-.expense-stat-average span, .expense-stat-sub-average { color: var(--muted); font-size: 11px; }
-.expense-stat-average strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.expense-stat-average span,
+.expense-stat-sub-average {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.expense-stat-average strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
 
 .expense-stat-subcategories {
   display: grid;
@@ -3866,11 +3898,24 @@ select {
   font-size: 12px;
 }
 
-.expense-stat-sub-name { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.expense-stat-subcategory > strong { text-align: right; font-variant-numeric: tabular-nums; }
-.expense-stat-sub-average { text-align: right; }
+.expense-stat-sub-name {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.expense-stats-footnote, .expense-stats-empty {
+.expense-stat-subcategory>strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-stat-sub-average {
+  text-align: right;
+}
+
+.expense-stats-footnote,
+.expense-stats-empty {
   margin: 14px 0 0;
   padding: 13px 15px;
   border: 1px dashed var(--border);
@@ -3880,7 +3925,11 @@ select {
   line-height: 1.5;
 }
 
-.expense-stats-empty { padding: 40px 20px; text-align: center; font-size: 14px; }
+.expense-stats-empty {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 14px;
+}
 
 .expense-modal {
   max-width: 480px;
@@ -3923,19 +3972,73 @@ select {
     flex: 1 1 auto;
   }
 
-  .expense-stats-heading { align-items: stretch; flex-direction: column; padding: 17px; }
-  .expense-stats-heading label { justify-content: space-between; }
-  .expense-wrap-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .expense-wrap-summary article { min-height: 104px; padding: 13px; }
-  .expense-stats-section-head { align-items: flex-start; flex-direction: column; }
-  .expense-stat-category-head { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 13px; }
-  .expense-stat-average { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; padding: 0; border: 0; }
-  .expense-stat-subcategories { padding: 10px 13px 13px; }
-  .expense-stat-subcategory { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
-  .expense-stat-sub-name { grid-column: 1; }
-  .expense-stat-subcategory > strong { grid-column: 2; grid-row: 1; }
-  .expense-stat-sub-bar { grid-column: 1 / -1; grid-row: 2; }
-  .expense-stat-sub-average { grid-column: 1 / -1; text-align: left; }
+  .expense-stats-heading {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 17px;
+  }
+
+  .expense-stats-heading label {
+    justify-content: space-between;
+  }
+
+  .expense-wrap-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .expense-wrap-summary article {
+    min-height: 104px;
+    padding: 13px;
+  }
+
+  .expense-stats-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .expense-stat-category-head {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .expense-stat-average {
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    border: 0;
+  }
+
+  .expense-stat-subcategories {
+    padding: 10px 13px 13px;
+  }
+
+  .expense-stat-subcategory {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+
+  .expense-stat-sub-name {
+    grid-column: 1;
+  }
+
+  .expense-stat-subcategory>strong {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .expense-stat-sub-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .expense-stat-sub-average {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
 }
 
 /* ================= MONTH STUDIO ================= */
@@ -3976,12 +4079,12 @@ select {
   pointer-events: none;
 }
 
-.month-studio > * {
+.month-studio>* {
   position: relative;
   z-index: 1;
 }
 
-.month-studio > .month-hero {
+.month-studio>.month-hero {
   z-index: 4;
 }
 
@@ -4001,7 +4104,6 @@ select {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr);
   gap: 18px 28px;
-  align-items: end;
   padding: 20px 22px 18px;
   overflow: visible;
 }
@@ -4294,8 +4396,14 @@ select {
   line-height: 1.35;
 }
 
-.month-kpi.is-higher strong { color: #ff8ea0; }
-.month-kpi.is-lower strong { color: #3fd0a3; }
+.month-kpi.is-higher strong {
+  color: #ff8ea0;
+}
+
+.month-kpi.is-lower strong {
+  color: #3fd0a3;
+}
+
 .month-kpi.is-accent {
   border-color: rgba(142, 197, 255, .45);
   background:
@@ -4522,7 +4630,7 @@ select {
   padding: 10px 14px;
 }
 
-.month-bucket + .month-bucket {
+.month-bucket+.month-bucket {
   border-top: 1px solid rgba(148, 163, 184, .08);
 }
 
@@ -4579,17 +4687,31 @@ select {
 }
 
 @keyframes month-meter-in {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
 }
 
 @keyframes month-saved {
-  0% { background: rgba(63, 208, 163, 0); }
-  35% { background: rgba(63, 208, 163, .16); }
-  100% { background: transparent; }
+  0% {
+    background: rgba(63, 208, 163, 0);
+  }
+
+  35% {
+    background: rgba(63, 208, 163, .16);
+  }
+
+  100% {
+    background: transparent;
+  }
 }
 
 @media (max-width: 980px) {
+
   .month-hero,
   .month-charts,
   .month-mix,
@@ -4613,6 +4735,7 @@ select {
 }
 
 @media (max-width: 640px) {
+
   .month-hero,
   .month-card {
     padding: 14px;
@@ -4648,6 +4771,7 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .month-meter-fill,
   .month-bucket.is-saved {
     animation: none;
