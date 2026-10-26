@@ -4714,8 +4714,8 @@ function updateExpenseAddPreview() {
   const preview = $('#expenseCurrentAmount');
   const currency = $('#expenseEntryCurrency');
   if (preview) preview.textContent = existing
-    ? `Currently saved: ${formatCurrency(Number(existing.amount), existing.currency || 'EUR')}. The amount below will be added to it.`
-    : 'Currently saved: 0. The amount below will start this month’s total.';
+    ? `Spent ${formatCurrency(Number(existing.amount), existing.currency || 'EUR')}. The amount below will be added to it.`
+    : 'No data. The amount below will start this month’s total.';
   if (currency) {
     if (existing) currency.value = existing.currency || 'EUR';
     currency.disabled = Boolean(existing);
@@ -5171,16 +5171,16 @@ function monthBucketRow(category, subcategory, editable) {
   const label = subcategory ? subcategory.name : 'General';
   const monthTitle = expenseMonthTitle(expenseFocusMonth);
   const currency = record?.currency || 'EUR';
-  const saved = record
-    ? `Saved ${formatCurrency(Number(record.amount), currency)}`
-    : 'Nothing saved';
+  const status = record
+    ? `Spent ${formatCurrency(Number(record.amount), currency)}`
+    : 'No data';
   const eurNote = record && currency !== 'EUR'
     ? ` · ${moneyEUR.format(expenseAmountInEur(record))} in the dashboard`
     : '';
   const disabled = editable ? '' : ' disabled';
   const flash = expenseMonthFlashKey === `${category.id}:${subId || 0}` ? ' is-saved' : '';
   return `<div class="month-bucket${subcategory ? ' is-sub' : ''}${flash}" data-category="${category.id}" data-subcategory="${subId}">
-      <div class="month-bucket-name"><span>${subcategory ? '↳ ' : ''}${esc(label)}</span><small>${saved}${eurNote}</small></div>
+      <div class="month-bucket-name"><span>${subcategory ? '↳ ' : ''}${esc(label)}</span><small>${status}${eurNote}</small></div>
       <select class="month-currency" aria-label="Currency for ${esc(category.name)} ${esc(label)}"${record || !editable ? ' disabled' : ''}>${expenseCurrencyOptions(currency)}</select>
       <input class="month-set" type="number" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Set" aria-label="${esc(category.name)} ${esc(label)} for ${esc(monthTitle)}" value="${record ? esc(String(Number(record.amount))) : ''}"${disabled}>
       ${editable ? `<div class="month-add-wrap"><input class="month-add" type="number" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Add" aria-label="Amount to add to ${esc(category.name)} ${esc(label)}"><button class="month-add-btn" type="button">Add</button></div>` : '<div></div>'}
@@ -5528,7 +5528,7 @@ async function commitMonthSet(input) {
     const response = await request('/expenses', { method: 'POST', body: JSON.stringify(payload) });
     applyExpenseMutation(payload, response);
     expenseMonthFlashKey = `${categoryId}:${subcategoryId || 0}`;
-    setMonthStatus(next === null ? 'Removed that bucket.' : 'Saved.');
+    setMonthStatus(next === null ? 'Removed that bucket.' : `Spent ${formatCurrency(next, currency)}.`);
     renderExpenses();
   } catch (err) {
     input.disabled = !isWriteAllowed();
