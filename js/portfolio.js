@@ -1622,7 +1622,7 @@ function accountCardMarkup(account, prevData, snapshot) {
   const hasHistory = !snapshot && timeTravelList.length > 0;
   return `<div class="account-card dash-account-tile${hasHistory ? ' clickable' : ''}" data-edit-account-context="${account.id}"${hasHistory ? ` data-account-history="${account.id}" title="View account history"` : ''}>
       <div class="aname">${esc(account.name || '—')}</div>
-      <div class="account-card-provider">${provider ? esc(provider) : '&nbsp;'}</div>
+      <div class="account-card-provider">${provider ? esc(provider) : '—'}</div>
       <div class="account-card-foot">
         <strong class="account-card-value">${esc(moneyEUR.format(value).replace('-', '−'))}</strong>
         ${deltaHtml}
@@ -1651,7 +1651,7 @@ function groupedAccountsMarkup(accounts, prevData, snapshot) {
     const changeHtml = comparable ? `<small class="${change > 0.004 ? 'pos' : change < -0.004 ? 'neg' : ''}">${formatSignedEUR(change)}</small>` : '';
     return `<section class="dash-account-group${open ? ' is-open' : ''}">
       <button class="dash-group-head" type="button" data-toggle-account-group="${group.key}" aria-expanded="${open ? 'true' : 'false'}">
-        <span class="chev" aria-hidden="true">▸</span>
+        <span class="chev" aria-hidden="true"><svg class="bar-ico" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></span>
         <span class="dash-group-copy"><strong>${esc(group.title)}</strong><small>${group.accounts.length} account${group.accounts.length === 1 ? '' : 's'} · ${esc(group.hint)}</small></span>
         <span class="dash-group-total"><strong>${esc(moneyEUR.format(total).replace('-', '−'))}</strong>${changeHtml}</span>
       </button>

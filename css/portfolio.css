@@ -5918,8 +5918,9 @@ select {
 
 .dash-split-labels {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
@@ -5930,6 +5931,7 @@ select {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .dash-dot {
@@ -5952,6 +5954,14 @@ select {
   background: rgba(15, 20, 32, .55);
 }
 
+.dash-growth .dash-card-head {
+  flex-wrap: wrap;
+}
+
+.dash-growth .dash-tabs {
+  flex-shrink: 0;
+}
+
 .dash-tabs button {
   border: 0;
   border-radius: 999px;
@@ -5962,6 +5972,7 @@ select {
   font-weight: 600;
   padding: 6px 10px;
   min-height: 28px;
+  white-space: nowrap;
 }
 
 .dash-tabs button.is-on {
@@ -6289,6 +6300,7 @@ select {
 }
 
 .dash-group-head .chev {
+  display: inline-flex;
   color: var(--muted);
   transition: transform .15s ease;
 }
@@ -6383,6 +6395,17 @@ select {
 
   .dash-hero-row {
     grid-template-columns: minmax(0, 1.35fr) minmax(150px, 1fr);
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1200px) {
+  .dash-tabs button {
+    font-size: 10px;
+    padding: 5px 7px;
+  }
+
+  .dash-split-labels {
+    font-size: 11px;
   }
 }
 
