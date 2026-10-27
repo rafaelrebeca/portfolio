@@ -554,6 +554,7 @@ async function loadTimeTravelList() {
     snapshotsLoading = false;
   }
   updateTimeTravelArrows();
+  renderTimeTravelBanner();
   if ($('#page-dashboard')?.classList.contains('active')) {
     renderDashboardSummaryCards();
     renderDashboardAccounts();
@@ -2692,15 +2693,35 @@ function monthExpenseTotal(month) {
   return monthExpenseRows(month).reduce((sum, expense) => sum + expenseAmountInEur(expense), 0);
 }
 
+function dashboardExpenseContext() {
+  const live = new Date();
+  if (timeTravelActive() && timeTravelSnapshot && /^\d{8}$/.test(timeTravelSnapshot.day || '')) {
+    const day = timeTravelSnapshot.day;
+    const year = Number(day.slice(0, 4));
+    const month = Number(day.slice(4, 6));
+    const date = Number(day.slice(6, 8)) || 1;
+    return {
+      now: new Date(year, month - 1, date),
+      currentKey: `${day.slice(0, 4)}-${day.slice(4, 6)}`,
+      inSnapshot: true
+    };
+  }
+  return { now: live, currentKey: expenseMonthKey(live), inSnapshot: false };
+}
+
 function renderDashboardSpending() {
   const root = $('#spendingCard');
   if (!root) return;
-  const now = new Date();
-  const currentKey = expenseMonthKey(now);
+  const { now, currentKey, inSnapshot } = dashboardExpenseContext();
   const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const previousKey = expenseMonthKey(previousDate);
   const currentRows = monthExpenseRows(currentKey);
-  const showingPrevious = currentRows.length === 0 && monthExpenseRows(previousKey).length > 0;
+  if (inSnapshot && !currentRows.length) {
+    const title = `${now.toLocaleDateString(undefined, { month: 'long' })} spending`;
+    root.innerHTML = `<div class="dash-card-head"><h3>${esc(title)}</h3></div><p class="dash-spend-note">No data</p>`;
+    return;
+  }
+  const showingPrevious = !inSnapshot && currentRows.length === 0 && monthExpenseRows(previousKey).length > 0;
   const displayKey = showingPrevious ? previousKey : currentKey;
   const titleDate = showingPrevious ? previousDate : now;
   const title = `${titleDate.toLocaleDateString(undefined, { month: 'long' })} spending`;
@@ -2719,7 +2740,8 @@ function renderDashboardSpending() {
     ? `${top.map(([name, value]) => categoryLine(name, value)).join('')}${ranked.length > 3 ? categoryLine('Everything else', rest) : ''}`
     : '';
   let pace = '';
-  if (!showingPrevious && currentRows.length) {
+  const paceMonth = !inSnapshot || currentKey === expenseMonthKey(new Date());
+  if (!showingPrevious && currentRows.length && paceMonth) {
     const day = now.getDate();
     const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const daysLeft = Math.max(0, days - day);
@@ -2752,7 +2774,7 @@ function renderDashboardSpending() {
     ? `<p class="dash-spend-note">No entries in ${now.toLocaleDateString(undefined, { month: 'long' })} yet</p>`
     : (!currentRows.length ? '<p class="dash-spend-note">No spending recorded yet</p>' : '');
   root.innerHTML = `<div class="dash-card-head"><h3>${esc(title)}</h3></div>
-    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : 'spent so far'}</span></div>
+    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : (inSnapshot && !paceMonth ? 'spent' : 'spent so far')}</span></div>
     ${note}${pace}${categories}`;
 }
 
@@ -3064,10 +3086,15 @@ function renderTimeTravelBanner() {
       const date = new Date(latest.created_at);
       when = Number.isNaN(date.getTime()) ? formatSnapshotDay(latest.day) : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     } else if (latest?.day) when = formatSnapshotDay(latest.day);
-    status.classList.toggle('is-past', timeTravelActive());
-    status.innerHTML = timeTravelActive()
-      ? `<span class="live-dot"></span> Viewing ${esc(formatSnapshotDay(timeTravelSnapshot.day))}`
-      : `<span class="live-dot"></span> ${state.guest ? 'Guest preview' : `Live · latest snapshot ${esc(when)}`}`;
+    if (timeTravelActive()) {
+      status.classList.add('is-reserved');
+      status.setAttribute('aria-hidden', 'true');
+      status.textContent = '';
+    } else {
+      status.classList.remove('is-reserved', 'is-past');
+      status.removeAttribute('aria-hidden');
+      status.innerHTML = `<span class="live-dot"></span> ${state.guest ? 'Guest preview' : `Live · latest snapshot ${esc(when)}`}`;
+    }
   }
   if (banner) {
     banner.style.display = '';

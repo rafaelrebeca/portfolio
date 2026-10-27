@@ -211,14 +211,14 @@ The **Net worth** hero shows the global value, today's change versus the previou
 
 **Growth** sits beside it with All-time, YTD, and Month tabs. The selected mode is stored as `portfolio_growth_card_mode`. Each tab uses the same baseline comparison as before: percentage versus the baseline snapshot and the average pace.
 
-The right column has a current-month **spending** card fed by the same `/api/expenses` buckets as the Expenses Month tab. It shows the month total, the day-of-month position, a typical pace (the average of earlier months with data, prorated by the day of the month), and the top three categories plus everything else. Pace text and its bar are green when spending is under the typical pace and red when it is over. When the current month has no rows yet, the card shows the previous month's total instead. Below it, the **Top goal** card shows the first goal's completion, estimated reach, and monthly pace. In a Time Travel snapshot those reach and pace lines stay in place and read **—**.
+The right column has a current-month **spending** card fed by the same `/api/expenses` buckets as the Expenses Month tab. It shows the month total, the day-of-month position, a typical pace (the average of earlier months with data, prorated by the day of the month), and the top three categories plus everything else. Pace text and its bar are green when spending is under the typical pace and red when it is over. When the current month has no rows yet, the card shows the previous month's total instead. In a Time Travel snapshot the card uses that snapshot's month. A snapshot month with no expenses shows **No data** and does not fall back to another month. Live view stays on the current month. Below it, the **Top goal** card shows the first goal's completion, estimated reach, and monthly pace. In a Time Travel snapshot those reach and pace lines stay in place and read **—**.
 
 The two doughnut charts are:
 
 - **Allocation** — By type / By change, stored as `portfolio_dashboard_allocation_mode`. By type includes holdings, cash, and deposits and excludes loans. Legend names use the asset-type labels (Commodity, Stock, ETF, Cash, Deposits). By change shows Gain and Loss versus the previous snapshot. Clicking Gain or Loss filters Account overview. The slice filter still matches the stored type key.
 - **Providers** — By provider / By account, stored as `portfolio_dashboard_breakdown_mode`. Negative totals are hatched. The legend shows the signed amount and its share of the absolute total.
 
-Both charts use `topNWithOthers(map, 9)`. Clicking a slice or legend row filters Account overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs.
+Both charts use `topNWithOthers(map, 9)`. Clicking a slice or legend row filters Account overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs. From 901px through 1400px the legend sits under the doughnut so names stay readable, and each chart subtitle stays on one line.
 
 #### Account overview
 
@@ -350,7 +350,7 @@ Snapshots are collected by `collectDashboardSnapshot()` and contain:
 
 The snapshot list is cached per user in local storage with a versioned key. Startup and explicit refresh may refresh it from `/api/snapshots`; ordinary display/navigation uses the retained local list. Failed reads do not discard known cached data. Logout removes every versioned snapshot cache key for this origin so a later visitor on the same browser cannot read another account's cached history.
 
-The Dashboard header provides previous/next navigation, save, history, calendar, and playback controls. Guest mode shows the same controls greyed out and disabled. Signed-in behavior is unchanged, with extra space between Save and the history, calendar, and play buttons. The Viewing date chip keeps a reserved slot in live mode so the header does not change height. Time Travel shows that date chip and renders the selected snapshot without replacing live data on the other pages. One snapshot per UTC day is supported; saving again on that day replaces it.
+The Dashboard header provides previous/next navigation, save, history, calendar, and playback controls. Guest mode shows the same controls greyed out and disabled. Signed-in behavior is unchanged, with extra space between Save and the history, calendar, and play buttons. The date chip keeps a reserved slot in live mode so the header does not change height. Live mode shows **Live · latest snapshot** with the latest snapshot time, or **Guest preview** for a guest. Time Travel shows only that date chip with its close button; the live line stays in the header at the same height and is hidden. Time Travel renders the selected snapshot without replacing live data on the other pages. One snapshot per UTC day is supported; saving again on that day replaces it.
 
 ### Snapshot History line chart
 
