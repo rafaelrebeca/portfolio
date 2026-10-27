@@ -4800,8 +4800,29 @@ function drawExpenseChart(slot, canvasId, type, labels, groups, allTime = false)
     borderWidth: 2,
     fill: false,
     tension: 0.25,
-    pointRadius: allTime ? 0 : 2
+    pointRadius: allTime ? 0 : 2,
+    order: allTime ? 1 : 0
   }));
+  if (allTime) {
+    datasets.unshift({
+      label: 'Total',
+      data: labels.map((month, index) => ({
+        x: index,
+        y: groups.reduce((sum, [, group]) => sum + (group.months.get(month) || 0), 0)
+      })),
+      backgroundColor: '#f4f8ff',
+      borderColor: '#f4f8ff',
+      borderWidth: 3,
+      borderDash: [7, 5],
+      fill: false,
+      tension: 0.25,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      pointHitRadius: 10,
+      pointStyle: 'line',
+      order: 0
+    });
+  }
   expenseCharts[slot] = new Chart(canvas, {
     type: allTime ? 'line' : 'bar',
     data: { datasets },
