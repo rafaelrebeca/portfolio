@@ -7119,9 +7119,32 @@ function toggleNavDropdown() {
   const sidebar = document.querySelector('.sidebar');
   const toggle = $('#navToggle');
   if (!sidebar) return;
-  const open = sidebar.classList.toggle('open');
-  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  syncNavBackdrop(open);
+  if (window.innerWidth <= 768) {
+    const open = sidebar.classList.toggle('open');
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    syncNavBackdrop(open);
+  } else {
+    toggleSidebarCollapse();
+  }
+}
+
+function toggleSidebarCollapse(forceState) {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  const isCollapsed = forceState !== undefined 
+    ? Boolean(forceState) 
+    : !sidebar.classList.contains('collapsed');
+  sidebar.classList.toggle('collapsed', isCollapsed);
+  const toggle = $('#navToggle');
+  if (toggle) {
+    const label = isCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)';
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('aria-expanded', String(!isCollapsed));
+  }
+  try {
+    localStorage.setItem('sidebar_collapsed', isCollapsed ? 'true' : 'false');
+  } catch (e) {}
 }
 
 // Close the mobile nav dropdown (e.g. after selecting a page).
@@ -7130,7 +7153,7 @@ function closeNavDropdown() {
   const toggle = $('#navToggle');
   if (!sidebar) return;
   sidebar.classList.remove('open');
-  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  if (toggle && window.innerWidth <= 768) toggle.setAttribute('aria-expanded', 'false');
   syncNavBackdrop(false);
 }
 
@@ -9246,12 +9269,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Pressing Escape closes an open modal, or the mobile menu when no modal is open.
   document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') return;
-    if (document.querySelector('.modal-overlay.show')) {
-      closeAllModals();
-      return;
+    if (event.key === 'Escape') {
+      if (document.querySelector('.modal-overlay.show')) {
+        closeAllModals();
+        return;
+      }
+      if (document.querySelector('.sidebar.open')) closeNavDropdown();
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b' && !event.target.closest('input, textarea, select')) {
+      event.preventDefault();
+      toggleSidebarCollapse();
     }
-    if (document.querySelector('.sidebar.open')) closeNavDropdown();
   });
   $('#navBackdrop')?.addEventListener('click', closeNavDropdown);
   document.addEventListener('pointerdown', event => {
@@ -9259,6 +9286,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (event.target.closest('.sidebar') || event.target.closest('#navToggle')) return;
     closeNavDropdown();
   });
+
+  $('.sidebar-brand')?.addEventListener('click', () => {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar?.classList.contains('collapsed')) {
+      toggleSidebarCollapse(false);
+    }
+  });
+
+  try {
+    if (localStorage.getItem('sidebar_collapsed') === 'true' && window.innerWidth > 768) {
+      toggleSidebarCollapse(true);
+    }
+  } catch (e) {}
 
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
     showPage(button.dataset.page);
