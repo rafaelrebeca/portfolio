@@ -359,6 +359,7 @@ input[type="date"]::-moz-focus-inner {
 .dash-history:focus-visible,
 .dash-tabs button:focus-visible,
 .dash-group-head:focus-visible,
+.dash-account-actions .btn-sm:focus-visible,
 .time-travel-controls .btn-sm:focus-visible,
 .nav-toggle:focus-visible,
 .blur-btn:focus-visible,
@@ -5629,14 +5630,18 @@ select {
 }
 
 /* ================= DASHBOARD REDESIGN ================= */
-.nav-ico {
+.nav-ico,
+.bar-ico {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
+  display: block;
 }
 
 .nav-ico,
-.nav-ico * {
+.nav-ico *,
+.bar-ico,
+.bar-ico * {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -5775,9 +5780,15 @@ select {
   display: flex;
   grid-column: 2;
   grid-row: 1 / span 2;
+  align-self: stretch;
+  height: 100%;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+}
+
+.dash-side > .dash-goal {
+  flex: 1 1 auto;
 }
 
 .dash-accounts {
@@ -5851,10 +5862,13 @@ select {
 }
 
 .dash-today {
-  min-height: 18px;
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.dash-today:empty {
+  display: none;
 }
 
 .dash-note,
@@ -5926,7 +5940,8 @@ select {
 }
 
 .dash-dot.liab {
-  background: #ff8b9a;
+  background-color: #2c364c;
+  background-image: repeating-linear-gradient(-45deg, rgba(176, 188, 210, .95) 0 1.5px, transparent 1.5px 3px);
 }
 
 .dash-tabs {
@@ -6313,7 +6328,9 @@ select {
 }
 
 .dash-group-body .dashboard-accounts-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  --tile-gap: 14px;
+  gap: var(--tile-gap);
+  grid-template-columns: repeat(auto-fill, minmax(max(200px, calc((100% - 4 * var(--tile-gap)) / 5)), 1fr));
 }
 
 .dash-account-tile {
@@ -6359,7 +6376,17 @@ select {
   min-height: 16px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
+  .dash-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  }
+
+  .dash-hero-row {
+    grid-template-columns: minmax(0, 1.35fr) minmax(150px, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
   .dash-layout,
   .dash-hero-row,
   .dash-charts {
@@ -6374,8 +6401,8 @@ select {
     grid-row: auto;
   }
 
-  .dash-group-body .dashboard-accounts-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dash-side {
+    height: auto;
   }
 }
 
@@ -6415,6 +6442,9 @@ select {
     padding: 10px 12px;
   }
 
+}
+
+@media (max-width: 600px) {
   .dash-group-body .dashboard-accounts-grid {
     grid-template-columns: 1fr;
   }

@@ -1613,13 +1613,11 @@ function accountGroupKey(type) {
 function accountCardMarkup(account, prevData, snapshot) {
   const value = snapshot ? Number(account.valueEur || 0) : accountValue(account, true);
   const prevVal = previousAccountValue(prevData, account.id);
-  const delta = prevVal === null ? null : value - prevVal;
-  const flat = delta === null || Math.abs(delta) < 0.005;
+  const delta = prevVal === null ? 0 : value - prevVal;
+  const flat = Math.abs(delta) < 0.005;
   const deltaClass = flat ? 'zero' : (delta > 0 ? 'pos' : 'neg');
   const deltaSign = flat ? '±' : (delta > 0 ? '+' : '−');
-  const deltaHtml = delta === null
-    ? ''
-    : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
+  const deltaHtml = `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
   const provider = snapshot ? '' : (account.provider_name || providerName(account.provider_id) || '');
   const hasHistory = !snapshot && timeTravelList.length > 0;
   return `<div class="account-card dash-account-tile${hasHistory ? ' clickable' : ''}" data-edit-account-context="${account.id}"${hasHistory ? ` data-account-history="${account.id}" title="View account history"` : ''}>
