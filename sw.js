@@ -1,4 +1,4 @@
-const CACHE_NAME = 'portfolio-manager-v7';
+const CACHE_NAME = 'portfolio-manager-v8';
 const APP_SHELL = [
   '/index.html',
   '/css/portfolio.css',

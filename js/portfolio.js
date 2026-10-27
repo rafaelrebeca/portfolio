@@ -574,7 +574,7 @@ function formatCompactEUR(value) {
 
 function renderNetWorthHero({ total, assets, liabilities, accountCount, prev }) {
   const portfolioValueEl = $('#portfolioValue');
-  if (portfolioValueEl) portfolioValueEl.textContent = moneyEUR.format(total);
+  if (portfolioValueEl) portfolioValueEl.textContent = moneyEUR.format(total).replace('-', '−');
   const tag = $('#debtHeavyTag');
   if (tag) tag.hidden = !(total < -0.004);
   const today = $('#netWorthToday');
@@ -596,17 +596,18 @@ function renderNetWorthHero({ total, assets, liabilities, accountCount, prev }) 
     const assetDelta = prev ? assets - Number(prev.debit || 0) : null;
     const liabDelta = prev ? liabilities - Number(prev.credit || 0) : null;
     const deltaText = value => value === null ? '' : ` ${formatSignedEUR(value)}`;
-    split.innerHTML = `<div class="dash-split-bar" aria-hidden="true"><span style="width:${assetPct.toFixed(1)}%"></span></div>
+    split.innerHTML = `<div class="dash-split-bar" aria-hidden="true"><span class="dash-split-assets" style="width:${assetPct.toFixed(1)}%"></span><i class="dash-split-tick"></i></div>
       <div class="dash-split-labels">
-        <span><i class="dash-dot assets"></i>Assets ${moneyEUR.format(assets)}${deltaText(assetDelta)}</span>
-        <span><i class="dash-dot liab"></i>Liabilities ${moneyEUR.format(liabilities)}${deltaText(liabDelta)}</span>
+        <span><i class="dash-dot assets"></i>Assets ${moneyEUR.format(assets).replace('-', '−')}${deltaText(assetDelta)}</span>
+        <span><i class="dash-dot liab"></i>Liabilities ${moneyEUR.format(liabilities).replace('-', '−')}${deltaText(liabDelta)}</span>
       </div>`;
   }
   const even = $('#breakEvenLabel');
   if (even) {
-    even.textContent = Math.abs(total) < 0.005
-      ? 'At break even · assets = liabilities'
-      : `${formatCompactEUR(Math.abs(total))} to break even · assets = liabilities`;
+    const gap = Math.abs(total) < 0.005
+      ? 'At break even'
+      : `${formatCompactEUR(Math.abs(total))} to break even`;
+    even.innerHTML = `<strong>${esc(gap)}</strong> · assets = liabilities`;
   }
 }
 
@@ -1519,7 +1520,7 @@ function renderDashboardAccounts() {
         );
         accounts = state.accounts.filter(a => relevantAccountIds.has(a.id));
       }
-      filterLabel = `Asset Type: ${val}`;
+      filterLabel = `Asset Type: ${assetTypeLabel(val)}`;
     } else if (dashboardFilter.source === 'provider') {
       const val = dashboardFilter.value;
       if (val === 'Others') {
@@ -1612,22 +1613,20 @@ function accountGroupKey(type) {
 function accountCardMarkup(account, prevData, snapshot) {
   const value = snapshot ? Number(account.valueEur || 0) : accountValue(account, true);
   const prevVal = previousAccountValue(prevData, account.id);
-  const changeClass = accountChangeClass(value, prevVal);
   const delta = prevVal === null ? null : value - prevVal;
-  const deltaClass = delta === null || Math.abs(delta) < 0.005 ? 'zero' : (delta > 0 ? 'pos' : 'neg');
-  const deltaSign = delta === null || Math.abs(delta) < 0.005 ? '±' : (delta > 0 ? '+' : '−');
+  const flat = delta === null || Math.abs(delta) < 0.005;
+  const deltaClass = flat ? 'zero' : (delta > 0 ? 'pos' : 'neg');
+  const deltaSign = flat ? '±' : (delta > 0 ? '+' : '−');
   const deltaHtml = delta === null
     ? ''
     : `<div class="account-card-delta ${deltaClass}">${deltaSign}${moneyEUR.format(Math.abs(delta))}</div>`;
   const provider = snapshot ? '' : (account.provider_name || providerName(account.provider_id) || '');
   const hasHistory = !snapshot && timeTravelList.length > 0;
-  return `<div class="account-card${hasHistory ? ' clickable' : ''} ${changeClass}" data-edit-account-context="${account.id}"${hasHistory ? ` data-account-history="${account.id}" title="View account history"` : ''}>
-      <div class="account-card-head" style="margin-bottom:4px;">
-        <span class="aname">${esc(account.name || '—')}</span>
-        <strong class="${value < 0 ? 'neg' : 'pos'}">${moneyEUR.format(value)}</strong>
-      </div>
+  return `<div class="account-card dash-account-tile${hasHistory ? ' clickable' : ''}" data-edit-account-context="${account.id}"${hasHistory ? ` data-account-history="${account.id}" title="View account history"` : ''}>
+      <div class="aname">${esc(account.name || '—')}</div>
+      <div class="account-card-provider">${provider ? esc(provider) : '&nbsp;'}</div>
       <div class="account-card-foot">
-        <div class="account-card-provider">${esc(provider)}</div>
+        <strong class="account-card-value">${esc(moneyEUR.format(value).replace('-', '−'))}</strong>
         ${deltaHtml}
       </div>
     </div>`;
@@ -1656,7 +1655,7 @@ function groupedAccountsMarkup(accounts, prevData, snapshot) {
       <button class="dash-group-head" type="button" data-toggle-account-group="${group.key}" aria-expanded="${open ? 'true' : 'false'}">
         <span class="chev" aria-hidden="true">▸</span>
         <span class="dash-group-copy"><strong>${esc(group.title)}</strong><small>${group.accounts.length} account${group.accounts.length === 1 ? '' : 's'} · ${esc(group.hint)}</small></span>
-        <span class="dash-group-total"><strong class="${total < 0 ? 'neg' : 'pos'}">${moneyEUR.format(total)}</strong>${changeHtml}</span>
+        <span class="dash-group-total"><strong>${esc(moneyEUR.format(total).replace('-', '−'))}</strong>${changeHtml}</span>
       </button>
       <div class="dash-group-body"><div class="dashboard-accounts-grid">${group.accounts.map(account => accountCardMarkup(account, prevData, snapshot)).join('')}</div></div>
     </section>`;
@@ -1778,7 +1777,7 @@ function renderCharts() {
   allocationChartInstance = new Chart(allocCtx, {
     type: 'doughnut',
     data: {
-      labels: allocLabels.length ? allocLabels : ['No Data'],
+      labels: allocLabels.length ? (dashboardAllocationMode === 'change' ? allocLabels : allocLabels.map(assetTypeLabel)) : ['No Data'],
       datasets: [{
         data: allocDataAbs.length ? allocDataAbs : [1],
         backgroundColor: allocDataAbs.length ? allocColors : ['#2a3550'],
@@ -1790,7 +1789,7 @@ function renderCharts() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      cutout: '68%',
+      cutout: '76%',
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !allocLabels.length) return;
@@ -1810,7 +1809,7 @@ function renderCharts() {
   });
 
   // Render allocation legend
-  renderLegend('allocationLegend', allocLabels, allocData, allocColors, true);
+  renderLegend('allocationLegend', allocLabels, allocData, allocColors, true, false, dashboardAllocationMode === 'change' ? null : assetTypeLabel);
 
   // By Provider / By Account chart (pie/doughnut)
   const breakdownMap = {};
@@ -1836,7 +1835,7 @@ function renderCharts() {
     ? state.accounts.filter(account => breakdownTop.others.includes(account.name)).map(account => account.id)
     : [];
 
-  const breakdownColorsPainted = breakdownData.map((value, index) => value < 0 ? dashboardDebtPattern(breakdownColors[index % breakdownColors.length]) : breakdownColors[index % breakdownColors.length]);
+  const breakdownColorsPainted = breakdownData.map((value, index) => value < 0 ? dashboardDebtPattern('#ff8b9a') : breakdownColors[index % breakdownColors.length]);
   accountTypeChartInstance = new Chart(typeCtx, {
     type: 'doughnut',
     data: {
@@ -1852,7 +1851,7 @@ function renderCharts() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      cutout: '68%',
+      cutout: '76%',
       plugins: { legend: { display: false } },
       onClick(event, elements) {
         if (!elements.length || !breakdownLabels.length) return;
@@ -1906,7 +1905,7 @@ function setDonutCenter(id, kicker, value) {
   if (el) el.innerHTML = `<small>${esc(kicker)}</small><strong>${esc(value)}</strong>`;
 }
 
-function renderLegend(elementId, labels, data, colors, onClick = null, signed = false) {
+function renderLegend(elementId, labels, data, colors, onClick = null, signed = false, formatLabel = null) {
   const legendEl = document.getElementById(elementId);
   if (!legendEl) return;
 
@@ -1923,11 +1922,12 @@ function renderLegend(elementId, labels, data, colors, onClick = null, signed = 
     const isNegative = value < 0;
     const pct = totalAbs ? ((absValue / totalAbs) * 100).toFixed(1) : '0.0';
     const color = colors[i % colors.length];
-    const labelText = !signed && isNegative ? `${esc(label)} (negative)` : esc(label);
+    const shown = formatLabel ? formatLabel(label) : label;
+    const labelText = !signed && isNegative ? `${esc(shown)} (negative)` : esc(shown);
     const amount = signed ? formatSignedEUR(value) : moneyEUR.format(absValue);
     const clickable = onClick ? ` data-legend-label="${esc(label)}" style="cursor:pointer;"` : '';
     const swatch = signed && isNegative
-      ? ` class="legend-swatch is-debt" style="color:${color}"`
+      ? ` class="legend-swatch is-debt" style="color:#ff8b9a"`
       : ` class="legend-swatch" style="background:${color}"`;
     return `<div class="legend-row"${clickable}>
       <span${swatch}></span>
@@ -2743,10 +2743,11 @@ function renderDashboardSpending() {
       const gapText = Math.abs(gap) < 0.5 ? 'In line with typical pace' : `${moneyEUR.format(Math.abs(gap))} ${gap < 0 ? 'under' : 'over'} typical pace`;
       const projected = day ? total / day * days : total;
       paceNote = `<span class="dash-pace ${tone}">${gapText} · ~${moneyEUR.format(projected)} by ${monthName} ${days}</span>`;
-      bar = `<div class="dash-pace-bar" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical by today ${moneyEUR.format(typicalToday)} of ${moneyEUR.format(typical)} typical</p>`;
+      bar = `<div class="dash-pace-bar ${tone}" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical by today ${moneyEUR.format(typicalToday)} of ${moneyEUR.format(typical)} typical</p>`;
     }
+    const todayLeft = Math.min(74, Math.max(26, marker));
     pace = `<p class="dash-spend-note">Day ${day} of ${days} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left</p>
-      <div class="dash-dayline" aria-hidden="true"><i></i><b style="left:${marker.toFixed(1)}%"></b><small style="left:0">${monthName} 1</small><small style="left:${marker.toFixed(1)}%;transform:translateX(-50%)">Today, ${day}</small><small style="right:0">${days}</small></div>
+      <div class="dash-dayline" aria-hidden="true"><div class="dash-dayline-track"><i></i><b style="left:${marker.toFixed(1)}%"></b></div><div class="dash-dayline-labels"><small>${monthName} 1</small><small class="is-today" style="left:${todayLeft.toFixed(1)}%">Today, ${day}</small><small>${days}</small></div></div>
       ${paceNote}${bar}`;
   }
   const note = showingPrevious
@@ -2767,12 +2768,13 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
   const paceEl = $('#topGoalPace');
   const barEl = $('#topGoalBar');
   const savingEl = $('#topGoalSaving');
-  const paintGoalExtras = (pctValue, estimate) => {
+  const paintGoalExtras = (pctValue, estimate, reserve = false) => {
     if (barEl) barEl.style.width = `${Math.max(0, Math.min(100, pctValue || 0)).toFixed(1)}%`;
     if (!estimate) {
-      if (topGoalEstimateEl) topGoalEstimateEl.textContent = '';
-      if (paceEl) paceEl.textContent = '';
-      if (savingEl) savingEl.textContent = '';
+      const placeholder = reserve ? '—' : '';
+      if (topGoalEstimateEl) topGoalEstimateEl.textContent = placeholder;
+      if (paceEl) paceEl.textContent = placeholder;
+      if (savingEl) savingEl.textContent = placeholder;
       return;
     }
     if (topGoalEstimateEl) topGoalEstimateEl.textContent = estimate.reachText && estimate.reachText !== 'Need snapshot history' ? estimate.reachText : '';
@@ -2794,7 +2796,7 @@ function renderTopGoalDashboardCard(snapshotAccounts) {
   if (snapshotAccounts && Array.isArray(snapshotAccounts)) {
     const prog = goalProgressFromSnapshot(topGoal, snapshotAccounts);
     pct = prog !== null ? prog : 0;
-    paintGoalExtras(pct, null);
+    paintGoalExtras(pct, null, true);
   } else {
     const current = goalCurrentValue(topGoal);
     const target = Number(topGoal.value || 0);
@@ -2982,11 +2984,11 @@ function renderDashboardFromSnapshot(data) {
       allocationChartInstance = new Chart(allocCtx, {
         type: 'doughnut',
         data: {
-          labels: allocTop.labels.length ? allocTop.labels : ['No Data'],
+          labels: allocTop.labels.length ? (dashboardAllocationMode === 'change' ? allocTop.labels : allocTop.labels.map(assetTypeLabel)) : ['No Data'],
           datasets: [{ data: allocDataAbs.length ? allocDataAbs : [1], backgroundColor: allocDataAbs.length ? (dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS) : ['#2a3550'], borderColor: '#0f1420', borderWidth: 2 }]
         },
         options: {
-          responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%', plugins: { legend: { display: false } },
+          responsive: true, maintainAspectRatio: false, animation: false, cutout: '76%', plugins: { legend: { display: false } },
           onClick(event, elements) {
             if (!elements.length || !allocTop.labels.length) return;
             const clickedLabel = allocTop.labels[elements[0].index];
@@ -3004,10 +3006,10 @@ function renderDashboardFromSnapshot(data) {
         type: 'doughnut',
         data: {
           labels: breakdownTop.labels.length ? breakdownTop.labels : ['No Data'],
-          datasets: [{ data: breakdownDataAbs.length ? breakdownDataAbs : [1], backgroundColor: breakdownDataAbs.length ? breakdownTop.data.map((value, index) => value < 0 ? dashboardDebtPattern(CHART_COLORS[index % CHART_COLORS.length]) : CHART_COLORS[index % CHART_COLORS.length]) : ['#2a3550'], borderColor: '#0f1420', borderWidth: 2 }]
+          datasets: [{ data: breakdownDataAbs.length ? breakdownDataAbs : [1], backgroundColor: breakdownDataAbs.length ? breakdownTop.data.map((value, index) => value < 0 ? dashboardDebtPattern('#ff8b9a') : CHART_COLORS[index % CHART_COLORS.length]) : ['#2a3550'], borderColor: '#0f1420', borderWidth: 2 }]
         },
         options: {
-          responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%', plugins: { legend: { display: false } },
+          responsive: true, maintainAspectRatio: false, animation: false, cutout: '76%', plugins: { legend: { display: false } },
           onClick(event, elements) {
             if (!elements.length || !breakdownTop.labels.length) return;
             const clickedLabel = breakdownTop.labels[elements[0].index];
@@ -3020,7 +3022,7 @@ function renderDashboardFromSnapshot(data) {
         }
       });
     }
-    renderLegend('allocationLegend', allocTop.labels, allocTop.data, dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS, true);
+    renderLegend('allocationLegend', allocTop.labels, allocTop.data, dashboardAllocationMode === 'change' ? ['#3fd0a3', '#ff5c72'] : CHART_COLORS, true, false, dashboardAllocationMode === 'change' ? null : assetTypeLabel);
     renderLegend('providerLegend', breakdownTop.labels, breakdownTop.data, CHART_COLORS, true, true);
     const allocSum = allocTop.data.reduce((sum, value) => sum + value, 0);
     setDonutCenter('allocationCenter', dashboardAllocationMode === 'change' ? 'Change' : 'Assets', allocTop.labels.length ? (dashboardAllocationMode === 'change' ? formatSignedEUR((allocTop.data[0] || 0) - (allocTop.data[1] || 0)) : formatCompactEUR(allocSum)) : '—');
@@ -3052,8 +3054,10 @@ function renderDashboardFromSnapshot(data) {
 function renderTimeTravelBanner() {
   const banner = $('#timeTravelBanner');
   const controls = document.querySelector('.time-travel-controls');
-  const loggedIn = !state.guest && state.user;
-  if (controls) controls.style.display = loggedIn ? '' : 'none';
+  if (controls) {
+    controls.style.display = '';
+    controls.classList.toggle('is-guest', !!state.guest);
+  }
   const status = $('#timeTravelStatus');
   if (status) {
     const latest = timeTravelList[0];
@@ -3068,13 +3072,14 @@ function renderTimeTravelBanner() {
       : `<span class="live-dot"></span> ${state.guest ? 'Guest preview' : `Live · latest snapshot ${esc(when)}`}`;
   }
   if (banner) {
+    banner.style.display = '';
     if (timeTravelActive()) {
-      banner.style.display = '';
-      banner.innerHTML = `<strong>${esc(formatSnapshotDay(timeTravelSnapshot.day))}</strong> <button class="btn-sm icon-btn" type="button" id="exitTimeTravelBtn" title="Exit Time Travel">✕</button>`;
+      banner.classList.remove('is-reserved');
+      banner.innerHTML = `<strong>${esc(formatSnapshotDay(timeTravelSnapshot.day))}</strong> <button class="btn-sm icon-btn" type="button" id="exitTimeTravelBtn" title="Exit Time Travel" aria-label="Exit Time Travel">✕</button>`;
       const exitBtn = $('#exitTimeTravelBtn');
       if (exitBtn) exitBtn.addEventListener('click', exitTimeTravel);
     } else {
-      banner.style.display = 'none';
+      banner.classList.add('is-reserved');
       banner.innerHTML = '';
     }
   }
@@ -3094,6 +3099,17 @@ function updateTimeTravelArrows() {
   const nextBtn = $('#timeTravelNextBtn');
   if (!prevBtn || !nextBtn || !controls) return;
 
+  if (state.guest) {
+    controls.classList.remove('is-loading');
+    controls.classList.add('is-guest');
+    controls.title = 'Snapshot controls are available after you sign in';
+    [prevBtn, mainBtn, saveBtn, historyBtn, calendarBtn, playBtn, nextBtn].forEach(button => {
+      if (button) button.disabled = true;
+    });
+    return;
+  }
+
+  controls.classList.remove('is-guest');
   if (snapshotsLoading) {
     controls.classList.add('is-loading');
     controls.setAttribute('title', 'Loading snapshots from database...');
@@ -7066,12 +7082,21 @@ function showPage(page) {
 }
 
 // Toggle the mobile nav dropdown (hamburger menu).
+function syncNavBackdrop(open) {
+  const backdrop = $('#navBackdrop');
+  const mobile = window.matchMedia('(max-width: 768px)').matches;
+  const visible = open && mobile;
+  if (backdrop) backdrop.hidden = !visible;
+  document.body.classList.toggle('nav-open', visible);
+}
+
 function toggleNavDropdown() {
   const sidebar = document.querySelector('.sidebar');
   const toggle = $('#navToggle');
   if (!sidebar) return;
   const open = sidebar.classList.toggle('open');
   if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  syncNavBackdrop(open);
 }
 
 // Close the mobile nav dropdown (e.g. after selecting a page).
@@ -7081,6 +7106,7 @@ function closeNavDropdown() {
   if (!sidebar) return;
   sidebar.classList.remove('open');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  syncNavBackdrop(false);
 }
 
 // ---- Blur (privacy) feature ----
@@ -9189,12 +9215,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Re-adapt the currency pagination when the window is resized (only while the
   // Currency page is active, so it keeps fitting the current window size).
   window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) closeNavDropdown();
     if (currentPage === 'currency') renderCurrency();
   });
 
-  // Pressing Escape closes any open modal without saving.
+  // Pressing Escape closes an open modal, or the mobile menu when no modal is open.
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeAllModals();
+    if (event.key !== 'Escape') return;
+    if (document.querySelector('.modal-overlay.show')) {
+      closeAllModals();
+      return;
+    }
+    if (document.querySelector('.sidebar.open')) closeNavDropdown();
+  });
+  $('#navBackdrop')?.addEventListener('click', closeNavDropdown);
+  document.addEventListener('pointerdown', event => {
+    if (!document.querySelector('.sidebar.open')) return;
+    if (event.target.closest('.sidebar') || event.target.closest('#navToggle')) return;
+    closeNavDropdown();
   });
 
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
