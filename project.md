@@ -205,32 +205,30 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 ### Dashboard
 
-The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`. The Assets/Liabilities card lists the positive total in green and the negative total in red, and omits a line whose total is zero, so a portfolio with no liabilities shows the assets total alone and a portfolio with neither shows a dash.
+The Dashboard is a net-worth layout. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
 
-The Global Value and Assets/Liabilities cards highlight on hover and open the same Portfolio Value Ranges modal. Its range view shows snapshot-recorded min/max and live current values for Global Value, Assets, and Liabilities.
+The **Net worth** hero shows the global value, today's change versus the previous snapshot, and a neutral **Debt-heavy** tag when the value is negative. A split bar compares assets (positive account values, stored as `debit`) with liabilities (negative values, stored as `credit`), and a break-even line shows the absolute gap. **History** opens the existing Portfolio Value Ranges modal for Global Value, Assets, and Liabilities.
 
-The **Top Goal Status** card shows the first goal's completion percentage, its name, and — when snapshot history exists — an estimated reach date and monthly growth pace (e.g. `Est: Oct 2026 (~8 mos) (+$450/mo)`). The estimate is hidden when viewing a past Time Travel snapshot.
+**Growth** sits beside it with All-time, YTD, and Month tabs. The selected mode is stored as `portfolio_growth_card_mode`. Each tab uses the same baseline comparison as before: percentage versus the baseline snapshot and the average pace.
+
+The right column has a current-month **spending** card fed by the same `/api/expenses` buckets as the Expenses Month tab. It shows the month total, the day-of-month position, a typical pace (the average of earlier months with data, prorated by the day of the month), and the top three categories plus everything else. When the current month has no rows yet, the card shows the previous month's total instead. Below it, the **Top goal** card shows the first goal's completion, estimated reach, and monthly pace. The estimate is hidden when viewing a past Time Travel snapshot.
 
 The two doughnut charts are:
 
-- **By Type / By Change** — the card is clickable. By Type shows asset holdings plus Loans, Cash, and Deposits; By Change shows Gain and Loss slices based on account value movement versus the previous snapshot. Clicking Gain or Loss filters Account Overview to accounts that increased or decreased.
-- **By Provider / By Account** — the card is clickable and cycles between provider totals and account totals. The selected mode is stored in `localStorage` as `portfolio_dashboard_breakdown_mode`, so it survives reloads.
+- **Allocation** — By type / By change, stored as `portfolio_dashboard_allocation_mode`. By type includes holdings, cash, and deposits and excludes loans. By change shows Gain and Loss versus the previous snapshot. Clicking Gain or Loss filters Account overview.
+- **Providers** — By provider / By account, stored as `portfolio_dashboard_breakdown_mode`. Negative totals are hatched. The legend shows the signed amount and its share of the absolute total.
 
-Both breakdown charts use the reusable `topNWithOthers(map, 9)` helper: the nine largest categories are shown individually and the remainder is grouped into **Others**. Clicking a slice or legend row filters Account Overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs rather than displaying only an aggregate.
+Both charts use `topNWithOthers(map, 9)`. Clicking a slice or legend row filters Account overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs.
 
-The Growth card cycles through All-Time Growth, YTD Growth, and Month Growth. Its mode is stored as `portfolio_growth_card_mode`. Growth compares the current value to an appropriate baseline snapshot and shows the percentage and average pace.
+#### Account overview
 
-#### Collapsible Account Overview
-
-Account Overview is visible by default and has the `#toggleDashboardAccountsBtn` collapse control. The summary is rendered as:
+Accounts are grouped by type: Bank, Interest, Asset, Loan, and Other for an account with no matching type. Each group shows its total and the change versus the previous snapshot, and can be collapsed. **Expand all** and **Collapse all** (`#toggleDashboardAccountsBtn`) set every group. The summary is:
 
 ```text
-6 accounts · 4 up · 1 down · 1 unchanged · Top movers: Trading 212 +€318.42 / Mortgage −€201.70 / Revolut +€65.20
+6 accounts · 4 up · 1 down · 1 unchanged · Today +€181.92
 ```
 
-Up/down/unchanged status uses the same previous-snapshot comparison as the account-card border colors. Accounts without a comparison are counted as unchanged. The top three movers are ranked by absolute EUR change and exclude accounts without a previous value. The summary and cards update when filters, data, or Time Travel state changes.
-
-Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is absent when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. Time Travel renders the same card layout and difference value, comparing against the next older snapshot in the list.
+Up/down/unchanged uses the same previous-snapshot comparison as the account-card border colors. Accounts without a comparison count as unchanged. A live tile shows the provider under the name. In Time Travel the provider line is left blank, because a snapshot does not reliably carry the provider, and the line keeps its height. Snapshot accounts do include `type`, so grouping still works. The difference versus the previous snapshot stays on the tile. Account cards remain clickable for account history when snapshots exist.
 
 Account cards become clickable for account history when snapshots exist. The account history modal plots that account's EUR value through time.
 
