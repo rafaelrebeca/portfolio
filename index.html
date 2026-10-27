@@ -13,6 +13,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/portfolio.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -42,130 +45,170 @@
   <!-- ============ APP SHELL ============ -->
   <div id="app">
     <div class="topbar">
-      <div class="brand"><span class="dot"></span> Portfolio Manager</div>
       <div class="topbar-center">
-        <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Menu" aria-expanded="false">☰</button>
+        <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Menu" aria-expanded="false"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
         <button class="blur-btn" id="blurButton" title="Toggle privacy blur (H)"
-          aria-label="Toggle privacy blur (H)">👁</button>
-        <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data">⟳</button>
-        <button class="logout-btn" id="helpButton" title="Show usage guide" aria-label="Show usage guide">?</button>
-        <button class="logout-btn" id="logoutButton" title="Log out" aria-label="Log out">⏻</button>
+          aria-label="Toggle privacy blur (H)"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+        <button class="refresh-btn" id="refreshButton" title="Refresh data" aria-label="Refresh data"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg></button>
+        <button class="logout-btn" id="helpButton" title="Show usage guide" aria-label="Show usage guide"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1.2.9-1.2 1.6V14"></path><path d="M12 17h.01"></path></svg></button>
+        <button class="logout-btn" id="logoutButton" title="Log out" aria-label="Log out"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"></path><path d="M7 6.5a8 8 0 1 0 10 0"></path></svg></button>
       </div>
-      <div class="topbar-spacer"></div>
     </div>
 
     <div class="layout">
+      <div class="nav-backdrop" id="navBackdrop" hidden></div>
       <div class="sidebar" aria-label="Main navigation">
+        <div class="sidebar-brand">
+          <span class="sidebar-mark" aria-hidden="true"><img src="icons/icon-192.png" alt="" width="32" height="32"></span>
+          <span class="sidebar-brand-copy"><strong>Portfolio Manager</strong><small>EUR</small></span>
+        </div>
         <div class="nav-section-label">Personal</div>
-        <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
-        <div class="nav-item" id="navCalendar" data-page="calendar">📅 Calendar</div>
-        <div class="nav-item" id="navSimulation" data-page="simulation">🧮 Simulation</div>
-        <div class="nav-item" id="navGoals" data-page="goals">🎯 Goals</div>
-        <div class="nav-item" id="navPortfolio" data-page="portfolio">💼 My Portfolio</div>
-        <div class="nav-item" id="navAccounts" data-page="accounts">🏦 My Accounts</div>
-        <div class="nav-item" id="navExpenses" data-page="expenses">🧾 My Expenses</div>
+        <button type="button" class="nav-item active" data-page="dashboard"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>Dashboard</button>
+        <button type="button" class="nav-item" id="navCalendar" data-page="calendar"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Calendar</button>
+        <button type="button" class="nav-item" id="navSimulation" data-page="simulation"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 4 7-8"></path><path d="M14 7h6v6"></path></svg>Simulation</button>
+        <button type="button" class="nav-item" id="navGoals" data-page="goals"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r="1"></circle></svg>Goals</button>
+        <button type="button" class="nav-item" id="navPortfolio" data-page="portfolio"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>My Portfolio</button>
+        <button type="button" class="nav-item" id="navAccounts" data-page="accounts"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10l9-6 9 6"></path><path d="M5 10v8M10 10v8M14 10v8M19 10v8M3 18h18"></path></svg>My Accounts</button>
+        <button type="button" class="nav-item" id="navExpenses" data-page="expenses"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M14 3v6h6M8 13h8M8 17h6"></path></svg>My Expenses</button>
 
         <div class="nav-section-label">System</div>
-        <div class="nav-item" id="navAssets" data-page="assets">📈 Assets</div>
-        <div class="nav-item" id="navDividends" data-page="dividends">💰 Dividends</div>
-        <div class="nav-item" id="navCurrency" data-page="currency">💱 Currency</div>
+        <button type="button" class="nav-item" id="navAssets" data-page="assets"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l6-6 3 3 7-8"></path><path d="M14 7h6v6"></path></svg>Assets</button>
+        <button type="button" class="nav-item" id="navDividends" data-page="dividends"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"></ellipse><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"></path><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"></path></svg>Dividends</button>
+        <button type="button" class="nav-item" id="navCurrency" data-page="currency"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h9a4 4 0 0 1 0 8H8"></path><path d="M9 5L7 7l2 2M17 15l2 2-2 2"></path></svg>Currency</button>
 
         <div class="nav-section-label">Account</div>
-        <div class="nav-item" id="navProfile" data-page="profile">👤 Profile</div>
+        <button type="button" class="nav-item" id="navProfile" data-page="profile"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"></circle><path d="M5 19c1.5-3 3.8-4.5 7-4.5S17.5 16 19 19"></path></svg>Profile</button>
 
         <div class="nav-section-label" id="adminSectionLabel" style="display:none;">Admin</div>
-        <div class="nav-item" id="navTools" style="display:none;" data-page="tools">🛠️ Tools</div>
-        <div class="nav-item" id="navUsers" style="display:none;" data-page="users">👥 Users</div>
+        <button type="button" class="nav-item" id="navTools" style="display:none;" data-page="tools"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7a4 4 0 0 0-5.7 5.2L4 16.5 7.5 20l4.3-4.3A4 4 0 0 0 17 10l-3 3-2-2 2-4z"></path></svg>Tools</button>
+        <button type="button" class="nav-item" id="navUsers" style="display:none;" data-page="users"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 19c1.2-2.5 3-3.8 6-3.8s4.8 1.3 6 3.8"></path><circle cx="17" cy="9" r="2.2"></circle><path d="M16 15.2c2 .3 3.5 1.4 4.5 3.3"></path></svg>Users</button>
+        <div class="sidebar-user" id="sidebarUser">
+          <span class="sidebar-avatar" id="sidebarAvatar" aria-hidden="true">—</span>
+          <span class="sidebar-user-copy"><strong id="sidebarUserName">—</strong><small id="sidebarUserRole">—</small></span>
+        </div>
       </div>
 
       <div class="main" id="mainScroll">
 
         <!-- DASHBOARD -->
         <div class="page active" id="page-dashboard">
-          <div class="page-head">
+          <div class="page-head dash-head">
             <div>
               <div class="page-title">Dashboard</div>
               <div class="page-desc">Portfolio overview and recent activity</div>
             </div>
             <div class="time-travel-group">
+              <div id="timeTravelStatus" class="time-travel-status"></div>
               <div id="timeTravelBanner" class="time-travel-banner" style="display:none;"></div>
               <div class="time-travel-controls" style="display:none;">
-                <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot"
-                  disabled>←</button>
-                <button class="btn-sm icon-btn" id="timeTravelBtn"
-                  title="View or save a snapshot of the dashboard">🕰</button>
+                <button class="btn-sm" id="timeTravelPrevBtn" type="button" title="Previous snapshot" aria-label="Previous snapshot"
+                  disabled><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+                <button class="btn-sm icon-btn" id="timeTravelBtn" type="button"
+                  title="View or save a snapshot of the dashboard" aria-label="View or save a snapshot of the dashboard"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v5l3 2"></path></svg></button>
                 <button class="btn-sm icon-btn" id="timeTravelSaveBtn" type="button"
-                  title="Save today's snapshot">💾</button>
+                  title="Save today's snapshot" aria-label="Save today's snapshot"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h7"></path><path d="M8 20v-6h8v6"></path></svg></button>
                 <button class="btn-sm icon-btn" id="timeTravelHistoryBtn" type="button"
-                  title="Snapshot history">📈</button>
+                  title="Snapshot history" aria-label="Snapshot history"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l6-6 3 3 7-8"></path><path d="M14 7h6v6"></path></svg></button>
                 <button class="btn-sm icon-btn" id="timeTravelCalendarBtn" type="button"
-                  title="Snapshot calendar">📅</button>
-                <button class="btn-sm icon-btn" id="timeTravelPlayBtn" type="button" title="Play through snapshots"
-                  disabled>▶</button>
-                <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" disabled>→</button>
+                  title="Snapshot calendar" aria-label="Snapshot calendar"><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M8 3v4M16 3v4"></path></svg></button>
+                <button class="btn-sm icon-btn" id="timeTravelPlayBtn" type="button" title="Play through snapshots" aria-label="Play through snapshots"
+                  disabled><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6l11 6-11 6z"></path></svg></button>
+                <button class="btn-sm" id="timeTravelNextBtn" type="button" title="Next snapshot" aria-label="Next snapshot" disabled><svg class="bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
               </div>
             </div>
           </div>
           <div id="guestBanner" class="banner" style="display:none;">
             You are viewing an isolated demo in Guest mode. Sign in to view and manage your own portfolio.
           </div>
-          <div class="grid-cards">
-            <div class="card">
-              <div class="label">Top Goal Status</div>
-              <div class="value" id="topGoalValue">—</div>
-              <div class="delta" id="topGoalSubtext">no active goals</div>
-              <div class="delta" id="topGoalEstimate" style="display:none;"></div>
+          <div class="dash-layout">
+            <div class="dash-hero-row">
+              <article class="card dash-networth" id="globalValueCard">
+                <div class="dash-card-head">
+                  <div class="dash-kicker">Net worth <span id="debtHeavyTag" class="dash-tag" hidden>Debt-heavy</span></div>
+                  <button class="dash-history" id="netWorthHistoryBtn" type="button">History <span aria-hidden="true">↗</span></button>
+                </div>
+                <div class="dash-networth-value" id="portfolioValue">—</div>
+                <div class="dash-today" id="netWorthToday"></div>
+                <p class="dash-note" id="netWorthNote">Assets minus liabilities</p>
+                <div id="assetsLiabilitiesCard">
+                  <div id="debitCreditValue"></div>
+                </div>
+                <p class="dash-even" id="breakEvenLabel"></p>
+              </article>
+              <article class="card dash-growth" id="growthCard">
+                <div class="dash-card-head">
+                  <div class="dash-kicker" id="growthCardLabel">Growth</div>
+                  <div class="dash-tabs" role="tablist" aria-label="Growth period">
+                    <button type="button" data-growth-mode="all" role="tab" aria-selected="true">All-time</button>
+                    <button type="button" data-growth-mode="ytd" role="tab" aria-selected="false">YTD</button>
+                    <button type="button" data-growth-mode="month" role="tab" aria-selected="false">Month</button>
+                  </div>
+                </div>
+                <div class="value" id="allTimeGrowthValue">—</div>
+                <div class="delta" id="allTimeGrowthSubtext">no snapshot history</div>
+              </article>
             </div>
-            <div class="card" id="growthCard" style="cursor: pointer;"
-              title="Click to cycle growth period (All-Time → YTD → Month)">
-              <div class="label" id="growthCardLabel">All-Time Growth</div>
-              <div class="value" id="allTimeGrowthValue">—</div>
-              <div class="delta" id="allTimeGrowthSubtext">no snapshot history</div>
+            <aside class="dash-side">
+              <article class="card dash-spend" id="spendingCard"></article>
+              <article class="card dash-goal" id="topGoalCard">
+                <div class="dash-card-head">
+                  <div class="dash-kicker">Top goal · <span id="topGoalSubtext">no active goals</span></div>
+                  <span class="dash-goal-est" id="topGoalEstimate"></span>
+                </div>
+                <div class="dash-goal-pct" id="topGoalValue">—</div>
+                <div class="dash-goal-meta" id="topGoalPace"></div>
+                <div class="dash-goal-bar" aria-hidden="true"><span id="topGoalBar"></span></div>
+                <div class="dash-goal-foot"><span id="topGoalSaving"></span><span>Target 100%</span></div>
+              </article>
+            </aside>
+            <div class="dash-charts">
+              <article class="card dash-chart" id="dashboardAllocationCard">
+                <div class="dash-card-head">
+                  <div>
+                    <h3 id="dashboardAllocationTitle">Allocation</h3>
+                    <p class="page-desc" id="dashboardAllocationSubtitle">Assets only, no loans</p>
+                  </div>
+                  <div class="dash-tabs" role="tablist" aria-label="Allocation">
+                    <button type="button" data-allocation-mode="type" role="tab">By type</button>
+                    <button type="button" data-allocation-mode="change" role="tab">By change</button>
+                  </div>
+                </div>
+                <div class="dash-chart-body">
+                  <div class="dash-donut"><canvas id="allocationChart"></canvas><div class="dash-donut-center" id="allocationCenter"></div></div>
+                  <div class="chart-legend" id="allocationLegend"></div>
+                </div>
+              </article>
+              <article class="card dash-chart" id="dashboardBreakdownCard">
+                <div class="dash-card-head">
+                  <div>
+                    <h3 id="dashboardBreakdownTitle">Providers</h3>
+                    <p class="page-desc" id="dashboardBreakdownSubtitle">Net value · hatched = net debt</p>
+                  </div>
+                  <div class="dash-tabs" role="tablist" aria-label="Providers">
+                    <button type="button" data-breakdown-mode="provider" role="tab">By provider</button>
+                    <button type="button" data-breakdown-mode="account" role="tab">By account</button>
+                  </div>
+                </div>
+                <div class="dash-chart-body">
+                  <div class="dash-donut"><canvas id="accountTypeChart"></canvas><div class="dash-donut-center" id="providerCenter"></div></div>
+                  <div class="chart-legend" id="providerLegend"></div>
+                </div>
+              </article>
             </div>
-            <div class="card" id="globalValueCard" role="button" tabindex="0" aria-haspopup="dialog"
-              title="View Global Value history ranges">
-              <div class="label">Global Value</div>
-              <div class="value" id="portfolioValue">—</div>
-              <div class="delta up">total net worth</div>
-            </div>
-            <div class="card" id="assetsLiabilitiesCard" role="button" tabindex="0" aria-haspopup="dialog"
-              title="View Assets and Liabilities history ranges">
-              <div class="label">Assets / Liabilities</div>
-              <div class="value" id="debitCreditValue" style="font-size:16px;">—</div>
-            </div>
-          </div>
-          <div class="charts-row">
-            <div class="chart-card" id="dashboardAllocationCard" style="cursor: pointer;"
-              title="Click to switch between By Type and By Change">
-              <div style="flex-shrink:0;">
-                <h3 id="dashboardAllocationTitle">By Type</h3>
-                <p class="page-desc" id="dashboardAllocationSubtitle" style="margin-bottom:12px;">Value allocation</p>
-                <div style="position:relative;height:200px;width:200px;"><canvas id="allocationChart"></canvas></div>
+            <section class="dash-accounts">
+              <div class="dashboard-accounts-head">
+                <div>
+                  <div class="page-title dash-accounts-title">Account overview</div>
+                  <div class="dashboard-accounts-summary" id="dashboardAccountsSummary"></div>
+                </div>
+                <div class="dash-account-actions">
+                  <span class="dash-group-note">Grouped by account type</span>
+                  <button class="btn-sm" id="expandDashboardAccountsBtn" type="button" data-account-groups="expand">Expand all</button>
+                  <button class="btn-sm" id="toggleDashboardAccountsBtn" type="button" data-account-groups="collapse">Collapse all</button>
+                </div>
               </div>
-              <div class="chart-legend" id="allocationLegend"></div>
-            </div>
-            <div class="chart-card" id="dashboardBreakdownCard" style="cursor: pointer;"
-              title="Click to switch between By Provider and By Account">
-              <div style="flex-shrink:0;">
-                <h3 id="dashboardBreakdownTitle">By Provider</h3>
-                <p class="page-desc" id="dashboardBreakdownSubtitle" style="margin-bottom:12px;">Account value by
-                  provider</p>
-                <div style="position:relative;height:200px;width:200px;"><canvas id="accountTypeChart"></canvas></div>
-              </div>
-              <div class="chart-legend" id="providerLegend"></div>
-            </div>
-          </div>
-          <div style="margin-top:20px;">
-            <div class="dashboard-accounts-head">
-              <div>
-                <div class="page-title" style="font-size:16px;margin-bottom:2px;">Account Overview</div>
-                <div class="dashboard-accounts-summary" id="dashboardAccountsSummary"></div>
-              </div>
-              <button class="btn-sm icon-btn" id="toggleDashboardAccountsBtn" type="button"
-                data-toggle-dashboard-accounts title="Collapse Account Overview"
-                aria-label="Collapse Account Overview">−</button>
-            </div>
-            <div id="dashboardAccounts">Loading…</div>
+              <div id="dashboardAccounts">Loading…</div>
+            </section>
           </div>
         </div>
 

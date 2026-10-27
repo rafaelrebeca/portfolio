@@ -195,7 +195,7 @@ Sub-goals are stored in the `subgoals` table and submitted as an ordered `subgoa
 
 ## 7. Frontend pages
 
-Navigation is conditionally shown by `updateNavVisibility()`:
+Navigation items are buttons with the same `data-page` values. `#navAssets` still reads **Assets**. On screens 768px and narrower the sidebar stays closed until the menu button opens it, with a dim backdrop. Escape or a tap outside closes it. `updateNavVisibility()` still shows or hides items:
 
 - Dashboard, Calendar, and My Accounts are always available.
 - Simulation and Goals appear when the user has at least one account. If the last account is removed while Simulation is open, the view returns to Dashboard.
@@ -205,32 +205,30 @@ Navigation is conditionally shown by `updateNavVisibility()`:
 
 ### Dashboard
 
-The Dashboard renders summary cards for Top Goal Status, Growth, Global Value, and Assets/Liabilities. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`. The Assets/Liabilities card lists the positive total in green and the negative total in red, and omits a line whose total is zero, so a portfolio with no liabilities shows the assets total alone and a portfolio with neither shows a dash.
+The Dashboard is a net-worth layout. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
 
-The Global Value and Assets/Liabilities cards highlight on hover and open the same Portfolio Value Ranges modal. Its range view shows snapshot-recorded min/max and live current values for Global Value, Assets, and Liabilities.
+The **Net worth** hero shows the global value, today's change versus the previous snapshot, and a neutral **Debt-heavy** tag when the value is negative. A split bar compares assets (positive account values, stored as `debit`) with liabilities (negative values, stored as `credit`), and a break-even line shows the absolute gap. **History** opens the existing Portfolio Value Ranges modal for Global Value, Assets, and Liabilities.
 
-The **Top Goal Status** card shows the first goal's completion percentage, its name, and — when snapshot history exists — an estimated reach date and monthly growth pace (e.g. `Est: Oct 2026 (~8 mos) (+$450/mo)`). The estimate is hidden when viewing a past Time Travel snapshot.
+**Growth** sits beside it with All-time, YTD, and Month tabs. The selected mode is stored as `portfolio_growth_card_mode`. Each tab uses the same baseline comparison as before: percentage versus the baseline snapshot and the average pace.
+
+The right column has a current-month **spending** card fed by the same `/api/expenses` buckets as the Expenses Month tab. It shows the month total, the day-of-month position, a typical pace (the average of earlier months with data, prorated by the day of the month), and the top three categories plus everything else. Pace text and its bar are green when spending is under the typical pace and red when it is over. When the current month has no rows yet, the card shows the previous month's total instead. In a Time Travel snapshot the card uses that snapshot's month. A snapshot month with no expenses shows **No data** and does not fall back to another month. Live view stays on the current month. Below it, the **Top goal** card shows the first goal's completion, estimated reach, and monthly pace. In a Time Travel snapshot those reach and pace lines stay in place and read **—**.
 
 The two doughnut charts are:
 
-- **By Type / By Change** — the card is clickable. By Type shows asset holdings plus Loans, Cash, and Deposits; By Change shows Gain and Loss slices based on account value movement versus the previous snapshot. Clicking Gain or Loss filters Account Overview to accounts that increased or decreased.
-- **By Provider / By Account** — the card is clickable and cycles between provider totals and account totals. The selected mode is stored in `localStorage` as `portfolio_dashboard_breakdown_mode`, so it survives reloads.
+- **Allocation** — By type / By change, stored as `portfolio_dashboard_allocation_mode`. By type includes holdings, cash, and deposits and excludes loans. Legend names use the asset-type labels (Commodity, Stock, ETF, Cash, Deposits). By change shows Gain and Loss versus the previous snapshot. Clicking Gain or Loss filters Account overview. The slice filter still matches the stored type key.
+- **Providers** — By provider / By account, stored as `portfolio_dashboard_breakdown_mode`. Negative totals are hatched. The legend shows the signed amount and its share of the absolute total.
 
-Both breakdown charts use the reusable `topNWithOthers(map, 9)` helper: the nine largest categories are shown individually and the remainder is grouped into **Others**. Clicking a slice or legend row filters Account Overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs rather than displaying only an aggregate.
+Both charts use `topNWithOthers(map, 9)`. Clicking a slice or legend row filters Account overview. Clicking the same slice again clears that filter. “Others” resolves to the underlying providers or account IDs. From 901px through 1400px the legend sits under the doughnut so names stay readable, and each chart subtitle stays on one line.
 
-The Growth card cycles through All-Time Growth, YTD Growth, and Month Growth. Its mode is stored as `portfolio_growth_card_mode`. Growth compares the current value to an appropriate baseline snapshot and shows the percentage and average pace.
+#### Account overview
 
-#### Collapsible Account Overview
-
-Account Overview is visible by default and has the `#toggleDashboardAccountsBtn` collapse control. The summary is rendered as:
+Accounts are grouped by type: Bank, Interest, Asset, Loan, and Other for an account with no matching type. Each group shows its total and the change versus the previous snapshot, and can be collapsed. **Expand all** and **Collapse all** (`#toggleDashboardAccountsBtn`) set every group. The summary is:
 
 ```text
-6 accounts · 4 up · 1 down · 1 unchanged · Top movers: Trading 212 +€318.42 / Mortgage −€201.70 / Revolut +€65.20
+6 accounts · 4 up · 1 down · 1 unchanged · Today +€181.92
 ```
 
-Up/down/unchanged status uses the same previous-snapshot comparison as the account-card border colors. Accounts without a comparison are counted as unchanged. The top three movers are ranked by absolute EUR change and exclude accounts without a previous value. The summary and cards update when filters, data, or Time Travel state changes.
-
-Each account card shows the account name, type tag, and current EUR value, followed by a footer row with the provider name on the left and the difference versus the previous snapshot right-aligned beneath the total (e.g. `+€318.42` in green, `−€201.70` in red, `±€0.00` in muted grey). The difference line is absent when the account has no previous snapshot value to compare against. Its color matches the card border highlight: green for an increase, red for a decrease. Time Travel renders the same card layout and difference value, comparing against the next older snapshot in the list.
+Up/down/unchanged uses the same previous-snapshot comparison. Accounts without a comparison count as unchanged. Tiles use `repeat(auto-fill, minmax(200px, 1fr))`, capped at five columns, and drop to one column below 600px. The account name wraps, the provider is a subtitle under the name, and the balance stays neutral. Every tile shows a daily change, `±€0.00` when there is no earlier snapshot. On the live dashboard that change is versus the previous snapshot, and in Time Travel it is versus the older snapshot when one exists. A live tile shows the provider. In Time Travel the provider line shows a muted —, because a snapshot does not reliably carry the provider, and the line keeps its height. Snapshot accounts do include `type`, so grouping still works. Account cards remain clickable for account history when snapshots exist.
 
 Account cards become clickable for account history when snapshots exist. The account history modal plots that account's EUR value through time.
 
@@ -352,7 +350,7 @@ Snapshots are collected by `collectDashboardSnapshot()` and contain:
 
 The snapshot list is cached per user in local storage with a versioned key. Startup and explicit refresh may refresh it from `/api/snapshots`; ordinary display/navigation uses the retained local list. Failed reads do not discard known cached data. Logout removes every versioned snapshot cache key for this origin so a later visitor on the same browser cannot read another account's cached history.
 
-The Dashboard header provides previous/next navigation, save, history, calendar, and playback controls. Time Travel shows a date banner and renders the selected snapshot without replacing live data on the other pages. One snapshot per UTC day is supported; saving again on that day replaces it.
+The Dashboard header provides previous/next navigation, save, history, calendar, and playback controls. Guest mode shows the same controls greyed out and disabled. Signed-in behavior is unchanged, with extra space between Save and the history, calendar, and play buttons. The date chip keeps a reserved slot in live mode so the header does not change height. Live mode shows **Live · latest snapshot** with the latest snapshot time, or **Guest preview** for a guest. Time Travel shows only that date chip with its close button; the live line stays in the header at the same height and is hidden. Time Travel renders the selected snapshot without replacing live data on the other pages. One snapshot per UTC day is supported; saving again on that day replaces it.
 
 ### Snapshot History line chart
 
