@@ -603,13 +603,6 @@ function renderNetWorthHero({ total, assets, liabilities, accountCount, prev }) 
         <span><i class="dash-dot liab"></i>Liabilities ${moneyEUR.format(liabilities).replace('-', '−')}${deltaText(liabDelta)}</span>
       </div>`;
   }
-  const even = $('#breakEvenLabel');
-  if (even) {
-    const gap = Math.abs(total) < 0.005
-      ? 'At break even'
-      : `${formatCompactEUR(Math.abs(total))} to break even`;
-    even.innerHTML = `<strong>${esc(gap)}</strong> · assets = liabilities`;
-  }
 }
 
 function renderDashboardSummaryCards() {
@@ -1661,7 +1654,7 @@ function groupedAccountsMarkup(accounts, prevData, snapshot) {
   }).join('');
 }
 
-function syncDashboardAccountsCollapsed() {}
+function syncDashboardAccountsCollapsed() { }
 
 function setAccountGroupsCollapsed(collapsed) {
   if (collapsed) ACCOUNT_GROUP_DEFS.forEach(group => collapsedAccountGroups.add(group.key));
@@ -2774,7 +2767,7 @@ function renderDashboardSpending() {
     ? `<p class="dash-spend-note">No entries in ${now.toLocaleDateString(undefined, { month: 'long' })} yet</p>`
     : (!currentRows.length ? '<p class="dash-spend-note">No spending recorded yet</p>' : '');
   root.innerHTML = `<div class="dash-card-head"><h3>${esc(title)}</h3></div>
-    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : (inSnapshot && !paceMonth ? 'spent' : 'spent so far')}</span></div>
+    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : (inSnapshot && !paceMonth ? 'spent' : 'spent')}</span></div>
     ${note}${pace}${categories}`;
 }
 
@@ -7131,8 +7124,8 @@ function toggleNavDropdown() {
 function toggleSidebarCollapse(forceState) {
   const sidebar = document.querySelector('.sidebar');
   if (!sidebar) return;
-  const isCollapsed = forceState !== undefined 
-    ? Boolean(forceState) 
+  const isCollapsed = forceState !== undefined
+    ? Boolean(forceState)
     : !sidebar.classList.contains('collapsed');
   sidebar.classList.toggle('collapsed', isCollapsed);
   const toggle = $('#navToggle');
@@ -7144,7 +7137,7 @@ function toggleSidebarCollapse(forceState) {
   }
   try {
     localStorage.setItem('sidebar_collapsed', isCollapsed ? 'true' : 'false');
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // Close the mobile nav dropdown (e.g. after selecting a page).
@@ -9298,7 +9291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem('sidebar_collapsed') === 'true' && window.innerWidth > 768) {
       toggleSidebarCollapse(true);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
     showPage(button.dataset.page);
