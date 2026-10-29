@@ -403,11 +403,15 @@ function closeLoadingModal(token) {
 }
 
 // The steps shown for a full data load, in the order loadData performs them.
-function dataLoadSteps(includeSnapshots = true) {
-  const steps = [
+function dataLoadSteps(includeSnapshots = true, updateCurrency = false) {
+  const steps = [];
+  if (updateCurrency && state.user?.role === 'admin') {
+    steps.push({ key: 'currency', label: 'Updating currency rates' });
+  }
+  steps.push(
     { key: 'portfolio', label: 'Loading portfolio data' },
     { key: 'expenses', label: 'Loading expenses' }
-  ];
+  );
   if (state.user && state.user.role === 'admin') {
     steps.splice(2, 0, { key: 'users', label: 'Loading user accounts' });
   }
@@ -463,7 +467,7 @@ function gainLossValue(h, currency = 'USD') {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
-async function loadData({ refreshSnapshots = false, showLoading = false } = {}) {
+async function loadData({ refreshSnapshots = false, refreshCurrencyRates = false, showLoading = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
     const guestExpenses = buildGuestExpenseDemo();
@@ -478,13 +482,32 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
   }
   hydrateSnapshotCache();
   const shouldFetchSnapshots = refreshSnapshots || (!timeTravelList.length && !state.guest && Boolean(state.user));
+  const shouldRefreshCurrency = refreshCurrencyRates && state.user?.role === 'admin';
   const loadingToken = showLoading
-    ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps(shouldFetchSnapshots))
+    ? openLoadingModal('Refreshing data', 'Preparing the latest portfolio data…', dataLoadSteps(shouldFetchSnapshots, shouldRefreshCurrency))
     : null;
   if (loadingToken) {
-    setLoadingStep(loadingToken, 'portfolio', 'active');
-    setLoadingStep(loadingToken, 'expenses', 'active');
-    if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+    if (shouldRefreshCurrency) {
+      setLoadingStep(loadingToken, 'currency', 'active');
+    } else {
+      setLoadingStep(loadingToken, 'portfolio', 'active');
+      setLoadingStep(loadingToken, 'expenses', 'active');
+      if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+    }
+  }
+  if (shouldRefreshCurrency) {
+    try {
+      await request('/admin/update-currency', { method: 'POST' });
+    } catch (err) {
+      // Keep using the last stored rates if the optional external refresh fails.
+      console.error('Failed to update currency rates:', err.message);
+    }
+    if (loadingToken) {
+      setLoadingStep(loadingToken, 'currency', 'done');
+      setLoadingStep(loadingToken, 'portfolio', 'active');
+      setLoadingStep(loadingToken, 'expenses', 'active');
+      if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+    }
   }
   let snapshotsFresh = true;
   try {
@@ -7641,19 +7664,10 @@ async function signIn(event) {
     state.user = (await request('/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) })).user;
     state.guest = false;
     showApp();
-    await loadData({ refreshSnapshots: true, showLoading: true });
+    await loadData({ refreshSnapshots: true, refreshCurrencyRates: true, showLoading: true });
     toast(`Signed in as ${state.user.username}`);
     maybeShowWelcomeModal();
 
-    // Update currency rates if admin
-    if (state.user.role === 'admin') {
-      try {
-        const result = await request('/admin/update-currency', { method: 'POST' });
-        console.log('Currency rates updated:', result.message);
-      } catch (error) {
-        console.error('Failed to update currency rates:', error.message);
-      }
-    }
   } catch (error) {
     $('#loginError').textContent = error.message;
   }
@@ -10438,17 +10452,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.user = me.user;
       state.guest = false;
       showApp();
-      await loadData({ refreshSnapshots: true, showLoading: true });
+      await loadData({ refreshSnapshots: true, refreshCurrencyRates: true, showLoading: true });
 
-      // Update currency rates if admin
-      if (state.user.role === 'admin') {
-        try {
-          const result = await request('/admin/update-currency', { method: 'POST' });
-          console.log('Currency rates updated:', result.message);
-        } catch (error) {
-          console.error('Failed to update currency rates:', error.message);
-        }
-      }
     }
   } catch {
     /* No active session */
