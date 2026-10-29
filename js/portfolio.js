@@ -403,14 +403,16 @@ function closeLoadingModal(token) {
 }
 
 // The steps shown for a full data load, in the order loadData performs them.
-function dataLoadSteps() {
+function dataLoadSteps(includeSnapshots = true) {
   const steps = [
     { key: 'portfolio', label: 'Loading portfolio data' },
-    { key: 'expenses', label: 'Loading expenses' },
-    { key: 'snapshots', label: 'Loading snapshot history' }
+    { key: 'expenses', label: 'Loading expenses' }
   ];
   if (state.user && state.user.role === 'admin') {
     steps.splice(2, 0, { key: 'users', label: 'Loading user accounts' });
+  }
+  if (includeSnapshots) {
+    steps.push({ key: 'snapshots', label: 'Loading snapshot history' });
   }
   return steps;
 }
@@ -474,17 +476,27 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     render();
     return true;
   }
-  const loadingToken = showLoading
-    ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps())
-    : null;
-  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'active');
-  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'active');
   hydrateSnapshotCache();
+  const shouldFetchSnapshots = refreshSnapshots || (!timeTravelList.length && !state.guest && Boolean(state.user));
+  const loadingToken = showLoading
+    ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps(shouldFetchSnapshots))
+    : null;
+  if (loadingToken) {
+    setLoadingStep(loadingToken, 'portfolio', 'active');
+    setLoadingStep(loadingToken, 'expenses', 'active');
+    if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+  }
+  let snapshotsFresh = true;
   try {
-    const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses] = await Promise.all([
+    const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses, snapshotsRes] = await Promise.all([
       request('/assets'), request('/providers'), request('/accounts'),
       request('/holdings'), request('/currency'), request('/goals'), request('/asset-types'),
-      request('/expense-categories'), request('/expense-subcategories'), request('/expenses')
+      request('/expense-categories'), request('/expense-subcategories'), request('/expenses'),
+      shouldFetchSnapshots ? request('/snapshots').catch(err => {
+        console.warn('Could not refresh snapshots:', err.message);
+        snapshotsFresh = false;
+        return null;
+      }) : Promise.resolve(null)
     ]);
     Object.assign(state, {
       assets: assets?.items || [],
@@ -498,6 +510,9 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
       expenses: expenses?.items || []
     });
     assetTypesCache = assetTypes?.items || [];
+    if (snapshotsRes && Array.isArray(snapshotsRes.snapshots)) {
+      setSnapshotList(snapshotsRes.snapshots);
+    }
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
     invalidateAccountGrowthCache();
@@ -505,9 +520,11 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     closeLoadingModal(loadingToken);
     return false;
   }
-  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'done');
-  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'done');
-  let snapshotsFresh = true;
+  if (loadingToken) {
+    setLoadingStep(loadingToken, 'portfolio', 'done');
+    setLoadingStep(loadingToken, 'expenses', 'done');
+    if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'done');
+  }
   if (state.user && state.user.role === 'admin') {
     if (loadingToken) setLoadingStep(loadingToken, 'users', 'active');
     try {
@@ -522,17 +539,8 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     if (loadingToken) setLoadingStep(loadingToken, 'users', 'done');
   }
   invalidateAccountGrowthCache();
+  updateTimeTravelArrows();
   render();
-  if (!refreshSnapshots) {
-    closeLoadingModal(loadingToken);
-    return true;
-  }
-  if (loadingToken) {
-    setLoadingStep(loadingToken, 'snapshots', 'active');
-    setLoadingSub(loadingToken, 'Loading snapshot history…');
-  }
-  snapshotsFresh = await loadTimeTravelList();
-  if (loadingToken) setLoadingStep(loadingToken, 'snapshots', 'done');
   closeLoadingModal(loadingToken);
   return snapshotsFresh;
 }
@@ -554,14 +562,8 @@ async function loadTimeTravelList() {
     snapshotsLoading = false;
   }
   updateTimeTravelArrows();
-  renderTimeTravelBanner();
-  if ($('#page-dashboard')?.classList.contains('active')) {
-    renderDashboardSummaryCards();
-    renderDashboardAccounts();
-    renderGrowthCard();
-  }
-  if ($('#page-simulation')?.classList.contains('active')) renderSimulation();
-  if ($('#page-calendar')?.classList.contains('active')) renderGrowthCalendarPage();
+  invalidateAccountGrowthCache();
+  render();
   return refreshed;
 }
 
@@ -3173,9 +3175,24 @@ async function loadSnapshotList() {
   const list = $('#snapshotList');
   if (!list) return;
   hydrateSnapshotCache();
-  snapshotsLoading = false;
-  if (timeTravelList.length) renderSnapshotPage();
-  else list.innerHTML = '<div class="page-desc">No snapshots stored locally.</div>';
+  if (timeTravelList.length) {
+    renderSnapshotPage();
+  } else {
+    list.innerHTML = '<div class="page-desc">Loading snapshots…</div>';
+  }
+  if (!timeTravelList.length && !state.guest && state.user) {
+    snapshotsLoading = true;
+    try {
+      await refreshSnapshotList();
+    } finally {
+      snapshotsLoading = false;
+    }
+  }
+  if (timeTravelList.length) {
+    renderSnapshotPage();
+  } else {
+    list.innerHTML = '<div class="page-desc">No snapshots stored yet. Save today\'s snapshot with the bookmark icon.</div>';
+  }
   updateTimeTravelArrows();
 }
 
@@ -3752,6 +3769,7 @@ async function saveSnapshot() {
     if (result.snapshot) upsertSnapshot(result.snapshot);
     toast('Today\'s snapshot saved.');
     renderSnapshotPage();
+    render();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -3913,6 +3931,9 @@ async function openHistoryModal() {
 // Load the full data of every snapshot (newest first) into historyData.
 async function loadHistoryData() {
   hydrateSnapshotCache();
+  if (!timeTravelList.length && !state.guest && state.user) {
+    await refreshSnapshotList();
+  }
   historyData = timeTravelList;
   if (!historyData.length) throw new Error('No snapshots to display.');
 }
@@ -4350,6 +4371,9 @@ async function openAccountHistoryModal(accountId) {
   if (empty) empty.style.display = 'none';
   try {
     hydrateSnapshotCache();
+    if (!timeTravelList.length && !state.guest && state.user) {
+      await refreshSnapshotList();
+    }
     accountHistoryData = timeTravelList;
     renderAccountHistoryChart();
   } catch (error) {
@@ -4601,6 +4625,9 @@ async function openGoalHistoryModal(goalId) {
   if (empty) empty.style.display = 'none';
   try {
     hydrateSnapshotCache();
+    if (!timeTravelList.length && !state.guest && state.user) {
+      await refreshSnapshotList();
+    }
     goalHistoryData = timeTravelList;
     renderGoalHistoryChart();
   } catch (error) {
@@ -7096,6 +7123,7 @@ function showPage(page) {
   if (page === 'simulation') renderSimulation();
   if (page === 'calendar') renderGrowthCalendarPage();
   if (page === 'expenses') renderExpenses();
+  if (page === 'goals') renderGoals();
   applyBlur();
 }
 
