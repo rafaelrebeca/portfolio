@@ -2117,6 +2117,20 @@
     </div>
   </div>
 
+  <!-- MODAL: Year in Review expense trend -->
+  <div class="modal-overlay" id="expenseStatsTrendModalOverlay">
+    <div class="modal expense-stats-trend-modal">
+      <div class="modal-head">
+        <h3 id="expenseStatsTrendTitle">Expense evolution</h3>
+        <div class="modal-head-actions">
+          <button class="modal-close" type="button" data-modal-maximize title="Maximize" aria-label="Maximize">⛶</button>
+          <button class="modal-close" type="button" id="closeExpenseStatsTrendBtn" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="expense-stats-trend-chart modal-chart-fill"><canvas id="expenseStatsTrendChart"></canvas></div>
+    </div>
+  </div>
+
   <!-- MODAL: Confirm (Delete / destructive actions) -->
   <div class="modal-overlay" id="confirmModalOverlay">
     <div class="modal">

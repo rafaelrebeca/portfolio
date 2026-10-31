@@ -49,6 +49,7 @@ let currentPage = 'dashboard';
 let activeExpenseTab = 'month';
 let expenseYear = new Date().getFullYear();
 let expenseStatsYear = null;
+let expenseStatsTrendChart = null;
 let expenseFocusMonth = '';
 let expenseMonthPickerOpen = false;
 let expenseMonthPickerYear = new Date().getFullYear();
@@ -5216,6 +5217,7 @@ function renderExpenseStats() {
     const subcategory = subcategoryId === null ? null : state.expenseSubcategories.find(item => item.id === subcategoryId);
     const subKey = subcategoryId === null ? 'category-level' : String(subcategoryId);
     if (!categoryStats.subcategories.has(subKey)) categoryStats.subcategories.set(subKey, {
+      id: subcategoryId,
       name: subcategory ? subcategory.name : 'General',
       total: 0
     });
@@ -5246,14 +5248,49 @@ function renderExpenseStats() {
     const subcategories = [...category.subcategories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const maxSubcategory = Math.max(1, ...subcategories.map(item => Math.abs(item.total)));
     return `<article class="expense-stat-category">
-        <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><strong>${esc(category.name)}</strong><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
+        <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><button type="button" class="expense-stat-trend-link" data-expense-trend-category="${category.id}">${esc(category.name)}</button><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
         <div class="expense-stat-subcategories">${subcategories.map(subcategory => {
       const average = activeMonths ? subcategory.total / activeMonths : 0;
-      return `<div class="expense-stat-subcategory"><span class="expense-stat-sub-name">↳ ${esc(subcategory.name)}</span><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
+      return `<div class="expense-stat-subcategory"><button type="button" class="expense-stat-trend-link expense-stat-sub-name" data-expense-trend-category="${category.id}" data-expense-trend-subcategory="${subcategory.id ?? 'general'}">↳ ${esc(subcategory.name)}</button><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
     }).join('')}</div>
       </article>`;
   }).join('')}</div>
     <p class="expense-stats-footnote">Year, category and sub-category averages all use the same active-month count: months with at least one recorded expense anywhere in the year. Months with no data are skipped. Category totals include their sub-categories. Refunds reduce totals and can make averages negative.</p>`;
+}
+
+function openExpenseStatsTrend(categoryId, subcategoryId = null) {
+  const year = expenseStatsYear;
+  const category = state.expenseCategories.find(item => Number(item.id) === Number(categoryId));
+  const catName = category?.name || 'Category';
+  const isGeneral = subcategoryId === 'general';
+  const subcategory = subcategoryId === null || isGeneral ? null : state.expenseSubcategories.find(item => Number(item.id) === Number(subcategoryId));
+  const subName = subcategoryId === null ? null : (subcategory?.name || 'General');
+  const monthly = Array(12).fill(0);
+  for (const expense of state.expenses) {
+    if (Number(expense.expense_month.slice(0, 4)) !== year || Number(expense.category_id) !== Number(categoryId)) continue;
+    if (isGeneral ? expense.subcategory_id != null : (subcategoryId !== null && (expense.subcategory_id == null || Number(expense.subcategory_id) !== Number(subcategoryId)))) continue;
+    const monthIndex = Number(expense.expense_month.slice(5, 7)) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) monthly[monthIndex] += expenseAmountInEur(expense);
+  }
+  $('#expenseStatsTrendTitle').textContent = `${catName}${subName ? ` · ${subName}` : ''} · ${year}`;
+  const canvas = $('#expenseStatsTrendChart');
+  expenseStatsTrendChart?.destroy();
+  expenseStatsTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: Array.from({ length: 12 }, (_, index) => new Date(year, index, 1).toLocaleDateString(undefined, { month: 'short' })),
+      datasets: [{ label: subName || catName, data: monthly, borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.16)', fill: true, tension: .25, pointRadius: 3, pointHoverRadius: 6, borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
+      scales: {
+        x: { ticks: { color: '#e6ebf5', autoSkip: false }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.08)' } }
+      }
+    }
+  });
+  openModal('expenseStatsTrendModalOverlay');
 }
 
 function currentExpenseMonth() {
@@ -9356,6 +9393,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncExpenseMonthPicker();
   });
   $('#expenseStatsYear')?.addEventListener('change', event => { expenseStatsYear = Number(event.target.value); renderExpenseStats(); });
+  document.addEventListener('click', event => {
+    const trendLink = event.target.closest('[data-expense-trend-category]');
+    if (!trendLink) return;
+    const subcategory = trendLink.dataset.expenseTrendSubcategory;
+    openExpenseStatsTrend(Number(trendLink.dataset.expenseTrendCategory), subcategory === 'general' ? 'general' : (subcategory ? Number(subcategory) : null));
+  });
+  $('#closeExpenseStatsTrendBtn')?.addEventListener('click', () => closeModal('expenseStatsTrendModalOverlay'));
   $('#newExpenseCategoryBtn')?.addEventListener('click', () => openExpenseModal('category'));
   $('#newExpenseSubcategoryBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('subcategory') : alert('Create a category first.'));
   $('#newExpenseBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('expense') : alert('Create a category first.'));
