@@ -5038,11 +5038,31 @@ function drawExpenseChart(slot, canvasId, type, labels, groups, allTime = false)
     backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
     borderColor: CHART_COLORS[i % CHART_COLORS.length],
     borderWidth: 2,
-    fill: allTime ? 'stack' : false,
+    fill: false,
     tension: 0.25,
     pointRadius: allTime ? 0 : 2,
     order: allTime ? 1 : 0
   }));
+  if (allTime) {
+    datasets.unshift({
+      label: 'Total',
+      data: labels.map((month, index) => ({
+        x: index,
+        y: groups.reduce((sum, [, group]) => sum + (group.months.get(month) || 0), 0)
+      })),
+      backgroundColor: '#f4f8ff',
+      borderColor: '#f4f8ff',
+      borderWidth: 3,
+      borderDash: [7, 5],
+      fill: false,
+      tension: 0.25,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      pointHitRadius: 10,
+      pointStyle: 'line',
+      order: 0
+    });
+  }
   expenseCharts[slot] = new Chart(canvas, {
     type: allTime ? 'line' : 'bar',
     data: { datasets },
@@ -5056,57 +5076,7 @@ function drawExpenseChart(slot, canvasId, type, labels, groups, allTime = false)
       },
       scales: {
         x: { type: 'linear', stacked: !allTime, ticks: { color: '#e6ebf5', maxTicksLimit: 12, callback: value => labels[Math.round(Number(value))] || '' }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { stacked: true, beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.08)' } }
-      }
-    }
-  });
-}
-
-function drawExpenseRadar(slot, canvasId, labels, groups) {
-  const canvas = $(`#${canvasId}`);
-  if (!canvas || typeof Chart === 'undefined') return;
-  expenseCharts[slot]?.destroy();
-  if (!labels.length || !groups.length) { expenseCharts[slot] = null; return; }
-  const datasets = groups.map(([, group], index) => {
-    const color = CHART_COLORS[index % CHART_COLORS.length];
-    return {
-      label: group.label,
-      data: labels.map(month => group.months.get(month) || 0),
-      backgroundColor: `${color}33`,
-      borderColor: color,
-      pointBackgroundColor: color,
-      borderWidth: 2,
-      pointRadius: 3
-    };
-  });
-  datasets.push({
-    label: 'Total',
-    data: labels.map(month => groups.reduce((sum, [, group]) => sum + (group.months.get(month) || 0), 0)),
-    backgroundColor: 'rgba(244,248,255,.08)',
-    borderColor: '#f4f8ff',
-    pointBackgroundColor: '#f4f8ff',
-    borderWidth: 3,
-    pointRadius: 4
-  });
-  expenseCharts[slot] = new Chart(canvas, {
-    type: 'radar',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: true, position: 'bottom', labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
-        tooltip: { callbacks: { label: privacyMoneyTooltipLabel } }
-      },
-      scales: {
-        r: {
-          beginAtZero: true,
-          ticks: { display: false, backdropColor: 'transparent' },
-          pointLabels: { color: '#e6ebf5' },
-          angleLines: { color: 'rgba(255,255,255,.08)' },
-          grid: { color: 'rgba(255,255,255,.08)' }
-        }
+        y: { stacked: !allTime, beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.08)' } }
       }
     }
   });
@@ -5193,7 +5163,7 @@ function renderExpenseCharts() {
   const yearLabels = EXPENSE_MONTHS.map((_, i) => `${chartYear}-${String(i + 1).padStart(2, '0')}`);
   const yearly = state.expenses.filter(e => e.expense_month.startsWith(`${chartYear}-`));
   const categories = expenseGroups('category').filter(([id]) => yearly.some(e => String(e.category_id) === id)).map(([key, group]) => [key, { label: group.label, months: new Map([...group.months].filter(([month]) => month.startsWith(`${chartYear}-`))) }]);
-  drawExpenseRadar('yearCategory', 'expenseYearCategoryChart', yearLabels, categories);
+  drawExpenseChart('yearCategory', 'expenseYearCategoryChart', 'category', yearLabels, categories);
   drawExpensePieChart('yearCategoryPie', 'expenseYearCategoryPieChart', categories);
   const allMonths = [...new Set(state.expenses.map(e => e.expense_month))].sort();
   let allLabels = [];
