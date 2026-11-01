@@ -2782,7 +2782,7 @@ function renderDashboardSpending() {
       const gapText = Math.abs(gap) < 0.5 ? 'In line with typical pace' : `${moneyEUR.format(Math.abs(gap))} ${gap < 0 ? 'under' : 'over'} typical pace`;
       const projected = day ? total / day * days : total;
       paceNote = `<span class="dash-pace ${tone}">${gapText} · ~${moneyEUR.format(projected)} by ${monthName} ${days}</span>`;
-      bar = `<div class="dash-pace-bar ${tone}" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical by today ${moneyEUR.format(typicalToday)} out of ${moneyEUR.format(typical)}</p>`;
+      bar = `<div class="dash-pace-bar ${tone}" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical spending by today: ${moneyEUR.format(typicalToday)} </br> For the month: ${moneyEUR.format(typical)}</p>`;
     }
     const todayLeft = Math.min(74, Math.max(26, marker));
     pace = `<p class="dash-spend-note">Day ${day} of ${days} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left</p>
