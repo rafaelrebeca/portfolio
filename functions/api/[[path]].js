@@ -163,7 +163,7 @@ export async function onRequest(context) {
       const body = await readBody(request);
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
       let months = [];
       if (Array.isArray(body.payment_months)) {
@@ -193,7 +193,7 @@ export async function onRequest(context) {
       const body = await readBody(request);
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
       let months = [];
       if (Array.isArray(body.payment_months)) {
@@ -234,7 +234,7 @@ export async function onRequest(context) {
       const body = await readBody(request);
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
       if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
       const result = await env.myd1db.prepare('INSERT INTO personal_assets (user_id, name, symbol, type, price, coin, dividend_yield) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(user.id, name, symbol, type, price, coin, Number.isFinite(dividendYield) ? dividendYield : null).run();
@@ -246,7 +246,7 @@ export async function onRequest(context) {
       const body = await readBody(request);
       const name = clean(body.name), symbol = clean(body.symbol).toUpperCase() || null, type = clean(body.type);
       const price = body.price === null || body.price === undefined || body.price === '' ? null : Number(body.price);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const dividendYield = body.dividend_yield === null || body.dividend_yield === undefined || body.dividend_yield === '' ? null : Number(body.dividend_yield);
       if (!name || name.length > 100 || !(await validAssetType(env.myd1db, type))) return fail('Provide a valid asset name (up to 100 characters) and type (stock, bond, etf, cfd, commodity).');
       const updateRes = await env.myd1db.prepare(`UPDATE personal_assets
@@ -464,7 +464,7 @@ export async function onRequest(context) {
       const accountId = body.account_id ? Number(body.account_id) : null;
       const providerId = Number(body.provider_id), name = clean(body.name), type = clean(body.type);
       const balance = body.balance === null ? null : Number(body.balance), rate = body.interest_rate === null ? null : Number(body.interest_rate);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const finishDate = type === 'loan' ? clean(body.finish_date) : null;
       if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) || (finishDate !== null && !/^\d{8}$/.test(finishDate))) return fail('Provide valid account details.');
       const owner = await env.myd1db.prepare('SELECT id FROM providers WHERE id = ? AND user_id = ?').bind(providerId, user.id).first(); if (!owner) return fail('Provider not found.', 404);
@@ -488,7 +488,7 @@ export async function onRequest(context) {
       const user = await requireMember(request, env), id = Number(path.split('/')[1]), body = await readBody(request);
       const providerId = Number(body.provider_id), name = clean(body.name), type = clean(body.type);
       const balance = body.balance === null ? null : Number(body.balance), rate = body.interest_rate === null ? null : Number(body.interest_rate);
-      const coin = clean(body.coin) || 'USD';
+      const coin = clean(body.coin).toUpperCase() || 'USD';
       const finishDate = type === 'loan' ? clean(body.finish_date) : null;
       if (!Number.isInteger(providerId) || !name || name.length > 100 || !['loan', 'interest_account', 'bank_account', 'asset_account'].includes(type) || (balance !== null && !Number.isFinite(balance)) || (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) || (finishDate !== null && !/^\d{8}$/.test(finishDate))) return fail('Provide valid account details.');
       const owner = await env.myd1db.prepare('SELECT id FROM providers WHERE id = ? AND user_id = ?').bind(providerId, user.id).first(); if (!owner) return fail('Provider not found.', 404);
@@ -591,7 +591,7 @@ export async function onRequest(context) {
     if (method === 'POST' && path === 'goals') {
       const user = await requireMember(request, env), body = await readBody(request);
       const goalId = body.goal_id ? Number(body.goal_id) : null;
-      const goalName = clean(body.goal_name), value = Number(body.value), coin = clean(body.coin) || 'USD';
+      const goalName = clean(body.goal_name), value = Number(body.value), coin = clean(body.coin).toUpperCase() || 'USD';
       if (!goalName || goalName.length > 200 || !Number.isFinite(value) || value < 0) return fail('Provide a valid goal name and value.');
       // Sub-goals arrive as an ordered list; blank entries are dropped.
       const subValues = (Array.isArray(body.subgoals) ? body.subgoals : [])
@@ -720,7 +720,7 @@ export async function onRequest(context) {
         const symbol = clean(row.symbol).toUpperCase();
         const name = clean(row.name);
         const type = clean(row.type);
-        const coin = clean(row.coin) || 'USD';
+        const coin = clean(row.coin).toUpperCase() || 'USD';
         const price = row.price === null || row.price === undefined || row.price === '' ? null : Number(row.price);
         const dividendYield = row.yield === null || row.yield === undefined || row.yield === '' ? null : Number(row.yield);
 

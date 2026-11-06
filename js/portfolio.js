@@ -7143,32 +7143,47 @@ function fillSelects() {
     $('#holdingAccount').innerHTML = assetAccounts.length ? assetAccounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('') : '<option value="">No asset accounts available</option>';
   }
 
-  // Fill currency selects with EUR and USD at top
-  const currencyOptions = fillCurrencyOptions();
-  if ($('#assetCoin')) {
-    $('#assetCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
-  if ($('#accountCoin')) {
-    $('#accountCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
-  if ($('#goalCoin')) {
-    $('#goalCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
+  // Fill currency selects with EUR and USD at top, preserving current values
+  const updateCurrencySelect = (select, placeholder = 'Select currency...') => {
+    if (!select) return;
+    const prev = select.value ? select.value.trim().toUpperCase() : '';
+    const currencyOptions = fillCurrencyOptions(prev);
+    select.innerHTML = (placeholder ? `<option value="">${placeholder}</option>` : '') + currencyOptions;
+    if (prev) select.value = prev;
+  };
+
+  updateCurrencySelect($('#assetCoin'));
+  updateCurrencySelect($('#accountCoin'));
+  updateCurrencySelect($('#goalCoin'));
   for (let i = 1; i <= 5; i++) {
-    const fromSel = $('#currencyTestFrom' + i);
-    if (fromSel) fromSel.innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
+    updateCurrencySelect($('#currencyTestFrom' + i));
   }
-  if ($('#currencyTestTo')) {
-    $('#currencyTestTo').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
+  updateCurrencySelect($('#currencyTestTo'));
 }
 
-function fillCurrencyOptions() {
+function fillCurrencyOptions(includeCurrency = null) {
   const topCurrencies = ['EUR', 'USD'];
-  const otherCurrencies = state.currencies.filter(c => !topCurrencies.includes(c.coin)).sort((a, b) => a.coin.localeCompare(b.coin));
+  const knownCoins = new Set(topCurrencies);
+  const otherCoins = [];
+
+  (state.currencies || []).forEach(c => {
+    const code = typeof c?.coin === 'string' ? c.coin.trim().toUpperCase() : '';
+    if (code && !knownCoins.has(code)) {
+      knownCoins.add(code);
+      otherCoins.push(code);
+    }
+  });
+
+  const normalizedInclude = typeof includeCurrency === 'string' ? includeCurrency.trim().toUpperCase() : '';
+  if (normalizedInclude && !knownCoins.has(normalizedInclude)) {
+    knownCoins.add(normalizedInclude);
+    otherCoins.push(normalizedInclude);
+  }
+
+  otherCoins.sort((a, b) => a.localeCompare(b));
 
   const topOptions = topCurrencies.map(code => `<option value="${code}">${code}</option>`).join('');
-  const otherOptions = otherCurrencies.map(c => `<option value="${esc(c.coin)}">${esc(c.coin)}</option>`).join('');
+  const otherOptions = otherCoins.map(code => `<option value="${esc(code)}">${esc(code)}</option>`).join('');
 
   return topOptions + (otherOptions ? '<option disabled>───────</option>' + otherOptions : '');
 }
@@ -7719,6 +7734,7 @@ async function logout() {
 /* ================= MODAL OPEN / EDIT HELPERS ================= */
 
 function openAssetModal(assetId = null, isPersonal = null) {
+  fillSelects();
   const form = $('#assetForm');
   if (!form) return;
   form.reset();
@@ -7732,7 +7748,17 @@ function openAssetModal(assetId = null, isPersonal = null) {
     $('#assetName').value = a.name;
     $('#assetSymbol').value = a.symbol || '';
     $('#assetType').value = a.type;
-    $('#assetCoin').value = a.coin || 'USD';
+    const targetCoin = (a.coin ? String(a.coin).trim().toUpperCase() : 'USD') || 'USD';
+    const coinSelect = $('#assetCoin');
+    if (coinSelect) {
+      if (targetCoin && !Array.from(coinSelect.options).some(opt => opt.value === targetCoin)) {
+        const newOpt = document.createElement('option');
+        newOpt.value = targetCoin;
+        newOpt.textContent = targetCoin;
+        coinSelect.appendChild(newOpt);
+      }
+      coinSelect.value = targetCoin;
+    }
     $('#assetPrice').value = a.price ?? '';
     $('#assetYield').value = a.dividend_yield ?? '';
     $('#assetMonths').value = (a.payment_months || []).join(',');
@@ -9674,6 +9700,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const err = $('#assetForm .form-error'); if (err) err.textContent = '';
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
+    values.coin = (values.coin || 'USD').trim().toUpperCase();
     const assetId = values.asset_id ? Number(values.asset_id) : null;
     const months = values.payment_months ? values.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => m >= 1 && m <= 12) : [];
 
@@ -9684,7 +9711,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           a.name = values.name;
           a.symbol = (values.symbol || '').toUpperCase();
           a.type = values.type;
-          a.coin = values.coin || 'USD';
+          a.coin = values.coin;
           a.price = numeric(values.price);
           a.dividend_yield = numeric(values.dividend_yield);
           a.payment_months = months;
@@ -9696,7 +9723,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           name: values.name,
           symbol: (values.symbol || '').toUpperCase(),
           type: values.type,
-          coin: values.coin || 'USD',
+          coin: values.coin,
           price: numeric(values.price),
           dividend_yield: numeric(values.dividend_yield),
           payment_months: months
@@ -10043,7 +10070,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (parsedRows[0]?.[0]?.toLowerCase() === 'symbol') parsedRows.shift();
     const rows = parsedRows.filter(parts => parts[0]).map(parts => ({
-      symbol: parts[0], name: parts[1] || '', type: parts[2] || 'stock', coin: parts[3] || 'USD',
+      symbol: (parts[0] || '').trim().toUpperCase(),
+      name: (parts[1] || '').trim(),
+      type: (parts[2] || 'stock').trim().toLowerCase(),
+      coin: (parts[3] || 'USD').trim().toUpperCase(),
       price: parts[4] ? numeric(parts[4]) : null,
       yield: parts[5] ? numeric(parts[5]) : null,
       payment_months: parts[6] || ''
