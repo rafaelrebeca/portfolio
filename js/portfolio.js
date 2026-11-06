@@ -49,6 +49,7 @@ let currentPage = 'dashboard';
 let activeExpenseTab = 'month';
 let expenseYear = new Date().getFullYear();
 let expenseStatsYear = null;
+let expenseStatsTrendChart = null;
 let expenseFocusMonth = '';
 let expenseMonthPickerOpen = false;
 let expenseMonthPickerYear = new Date().getFullYear();
@@ -403,14 +404,20 @@ function closeLoadingModal(token) {
 }
 
 // The steps shown for a full data load, in the order loadData performs them.
-function dataLoadSteps() {
-  const steps = [
+function dataLoadSteps(includeSnapshots = true, updateCurrency = false) {
+  const steps = [];
+  if (updateCurrency && state.user?.role === 'admin') {
+    steps.push({ key: 'currency', label: 'Updating currency rates' });
+  }
+  steps.push(
     { key: 'portfolio', label: 'Loading portfolio data' },
-    { key: 'expenses', label: 'Loading expenses' },
-    { key: 'snapshots', label: 'Loading snapshot history' }
-  ];
+    { key: 'expenses', label: 'Loading expenses' }
+  );
   if (state.user && state.user.role === 'admin') {
     steps.splice(2, 0, { key: 'users', label: 'Loading user accounts' });
+  }
+  if (includeSnapshots) {
+    steps.push({ key: 'snapshots', label: 'Loading snapshot history' });
   }
   return steps;
 }
@@ -461,7 +468,7 @@ function gainLossValue(h, currency = 'USD') {
   return `<span class="${className}" style="font-weight:600;">${formatted}</span>`;
 }
 
-async function loadData({ refreshSnapshots = false, showLoading = false } = {}) {
+async function loadData({ refreshSnapshots = false, refreshCurrencyRates = false, showLoading = false } = {}) {
   if (state.guest) {
     Object.assign(state, structuredClone(guestData));
     const guestExpenses = buildGuestExpenseDemo();
@@ -474,17 +481,46 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     render();
     return true;
   }
-  const loadingToken = showLoading
-    ? openLoadingModal('Refreshing data', 'Fetching the latest portfolio data…', dataLoadSteps())
-    : null;
-  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'active');
-  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'active');
   hydrateSnapshotCache();
+  const shouldFetchSnapshots = refreshSnapshots || (!timeTravelList.length && !state.guest && Boolean(state.user));
+  const shouldRefreshCurrency = refreshCurrencyRates && state.user?.role === 'admin';
+  const loadingToken = showLoading
+    ? openLoadingModal('Refreshing data', 'Preparing the latest portfolio data…', dataLoadSteps(shouldFetchSnapshots, shouldRefreshCurrency))
+    : null;
+  if (loadingToken) {
+    if (shouldRefreshCurrency) {
+      setLoadingStep(loadingToken, 'currency', 'active');
+    } else {
+      setLoadingStep(loadingToken, 'portfolio', 'active');
+      setLoadingStep(loadingToken, 'expenses', 'active');
+      if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+    }
+  }
+  if (shouldRefreshCurrency) {
+    try {
+      await request('/admin/update-currency', { method: 'POST' });
+    } catch (err) {
+      // Keep using the last stored rates if the optional external refresh fails.
+      console.error('Failed to update currency rates:', err.message);
+    }
+    if (loadingToken) {
+      setLoadingStep(loadingToken, 'currency', 'done');
+      setLoadingStep(loadingToken, 'portfolio', 'active');
+      setLoadingStep(loadingToken, 'expenses', 'active');
+      if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'active');
+    }
+  }
+  let snapshotsFresh = true;
   try {
-    const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses] = await Promise.all([
+    const [assets, providers, accounts, holdings, currencies, goals, assetTypes, expenseCategories, expenseSubcategories, expenses, snapshotsRes] = await Promise.all([
       request('/assets'), request('/providers'), request('/accounts'),
       request('/holdings'), request('/currency'), request('/goals'), request('/asset-types'),
-      request('/expense-categories'), request('/expense-subcategories'), request('/expenses')
+      request('/expense-categories'), request('/expense-subcategories'), request('/expenses'),
+      shouldFetchSnapshots ? request('/snapshots').catch(err => {
+        console.warn('Could not refresh snapshots:', err.message);
+        snapshotsFresh = false;
+        return null;
+      }) : Promise.resolve(null)
     ]);
     Object.assign(state, {
       assets: assets?.items || [],
@@ -498,6 +534,9 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
       expenses: expenses?.items || []
     });
     assetTypesCache = assetTypes?.items || [];
+    if (snapshotsRes && Array.isArray(snapshotsRes.snapshots)) {
+      setSnapshotList(snapshotsRes.snapshots);
+    }
   } catch (err) {
     console.error('Failed to load portfolio data:', err);
     invalidateAccountGrowthCache();
@@ -505,9 +544,11 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     closeLoadingModal(loadingToken);
     return false;
   }
-  if (loadingToken) setLoadingStep(loadingToken, 'portfolio', 'done');
-  if (loadingToken) setLoadingStep(loadingToken, 'expenses', 'done');
-  let snapshotsFresh = true;
+  if (loadingToken) {
+    setLoadingStep(loadingToken, 'portfolio', 'done');
+    setLoadingStep(loadingToken, 'expenses', 'done');
+    if (shouldFetchSnapshots) setLoadingStep(loadingToken, 'snapshots', 'done');
+  }
   if (state.user && state.user.role === 'admin') {
     if (loadingToken) setLoadingStep(loadingToken, 'users', 'active');
     try {
@@ -522,17 +563,8 @@ async function loadData({ refreshSnapshots = false, showLoading = false } = {}) 
     if (loadingToken) setLoadingStep(loadingToken, 'users', 'done');
   }
   invalidateAccountGrowthCache();
+  updateTimeTravelArrows();
   render();
-  if (!refreshSnapshots) {
-    closeLoadingModal(loadingToken);
-    return true;
-  }
-  if (loadingToken) {
-    setLoadingStep(loadingToken, 'snapshots', 'active');
-    setLoadingSub(loadingToken, 'Loading snapshot history…');
-  }
-  snapshotsFresh = await loadTimeTravelList();
-  if (loadingToken) setLoadingStep(loadingToken, 'snapshots', 'done');
   closeLoadingModal(loadingToken);
   return snapshotsFresh;
 }
@@ -554,14 +586,8 @@ async function loadTimeTravelList() {
     snapshotsLoading = false;
   }
   updateTimeTravelArrows();
-  renderTimeTravelBanner();
-  if ($('#page-dashboard')?.classList.contains('active')) {
-    renderDashboardSummaryCards();
-    renderDashboardAccounts();
-    renderGrowthCard();
-  }
-  if ($('#page-simulation')?.classList.contains('active')) renderSimulation();
-  if ($('#page-calendar')?.classList.contains('active')) renderGrowthCalendarPage();
+  invalidateAccountGrowthCache();
+  render();
   return refreshed;
 }
 
@@ -602,13 +628,6 @@ function renderNetWorthHero({ total, assets, liabilities, accountCount, prev }) 
         <span><i class="dash-dot assets"></i>Assets ${moneyEUR.format(assets).replace('-', '−')}${deltaText(assetDelta)}</span>
         <span><i class="dash-dot liab"></i>Liabilities ${moneyEUR.format(liabilities).replace('-', '−')}${deltaText(liabDelta)}</span>
       </div>`;
-  }
-  const even = $('#breakEvenLabel');
-  if (even) {
-    const gap = Math.abs(total) < 0.005
-      ? 'At break even'
-      : `${formatCompactEUR(Math.abs(total))} to break even`;
-    even.innerHTML = `<strong>${esc(gap)}</strong> · assets = liabilities`;
   }
 }
 
@@ -1661,7 +1680,7 @@ function groupedAccountsMarkup(accounts, prevData, snapshot) {
   }).join('');
 }
 
-function syncDashboardAccountsCollapsed() {}
+function syncDashboardAccountsCollapsed() { }
 
 function setAccountGroupsCollapsed(collapsed) {
   if (collapsed) ACCOUNT_GROUP_DEFS.forEach(group => collapsedAccountGroups.add(group.key));
@@ -2763,7 +2782,7 @@ function renderDashboardSpending() {
       const gapText = Math.abs(gap) < 0.5 ? 'In line with typical pace' : `${moneyEUR.format(Math.abs(gap))} ${gap < 0 ? 'under' : 'over'} typical pace`;
       const projected = day ? total / day * days : total;
       paceNote = `<span class="dash-pace ${tone}">${gapText} · ~${moneyEUR.format(projected)} by ${monthName} ${days}</span>`;
-      bar = `<div class="dash-pace-bar ${tone}" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical by today ${moneyEUR.format(typicalToday)} of ${moneyEUR.format(typical)} typical</p>`;
+      bar = `<div class="dash-pace-bar ${tone}" aria-hidden="true"><span style="width:${marker.toFixed(1)}%"></span></div><p class="dash-spend-note">Typical spending by today: ${moneyEUR.format(typicalToday)} </br> For the month: ${moneyEUR.format(typical)}</p>`;
     }
     const todayLeft = Math.min(74, Math.max(26, marker));
     pace = `<p class="dash-spend-note">Day ${day} of ${days} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left</p>
@@ -2774,7 +2793,7 @@ function renderDashboardSpending() {
     ? `<p class="dash-spend-note">No entries in ${now.toLocaleDateString(undefined, { month: 'long' })} yet</p>`
     : (!currentRows.length ? '<p class="dash-spend-note">No spending recorded yet</p>' : '');
   root.innerHTML = `<div class="dash-card-head"><h3>${esc(title)}</h3></div>
-    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : (inSnapshot && !paceMonth ? 'spent' : 'spent so far')}</span></div>
+    <div class="dash-spend-figure"><strong>${moneyEUR.format(total)}</strong><span>${showingPrevious ? 'last month' : (inSnapshot && !paceMonth ? 'spent' : 'spent')}</span></div>
     ${note}${pace}${categories}`;
 }
 
@@ -3180,9 +3199,24 @@ async function loadSnapshotList() {
   const list = $('#snapshotList');
   if (!list) return;
   hydrateSnapshotCache();
-  snapshotsLoading = false;
-  if (timeTravelList.length) renderSnapshotPage();
-  else list.innerHTML = '<div class="page-desc">No snapshots stored locally.</div>';
+  if (timeTravelList.length) {
+    renderSnapshotPage();
+  } else {
+    list.innerHTML = '<div class="page-desc">Loading snapshots…</div>';
+  }
+  if (!timeTravelList.length && !state.guest && state.user) {
+    snapshotsLoading = true;
+    try {
+      await refreshSnapshotList();
+    } finally {
+      snapshotsLoading = false;
+    }
+  }
+  if (timeTravelList.length) {
+    renderSnapshotPage();
+  } else {
+    list.innerHTML = '<div class="page-desc">No snapshots stored yet. Save today\'s snapshot with the bookmark icon.</div>';
+  }
   updateTimeTravelArrows();
 }
 
@@ -3759,6 +3793,7 @@ async function saveSnapshot() {
     if (result.snapshot) upsertSnapshot(result.snapshot);
     toast('Today\'s snapshot saved.');
     renderSnapshotPage();
+    render();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -3920,6 +3955,9 @@ async function openHistoryModal() {
 // Load the full data of every snapshot (newest first) into historyData.
 async function loadHistoryData() {
   hydrateSnapshotCache();
+  if (!timeTravelList.length && !state.guest && state.user) {
+    await refreshSnapshotList();
+  }
   historyData = timeTravelList;
   if (!historyData.length) throw new Error('No snapshots to display.');
 }
@@ -4357,6 +4395,9 @@ async function openAccountHistoryModal(accountId) {
   if (empty) empty.style.display = 'none';
   try {
     hydrateSnapshotCache();
+    if (!timeTravelList.length && !state.guest && state.user) {
+      await refreshSnapshotList();
+    }
     accountHistoryData = timeTravelList;
     renderAccountHistoryChart();
   } catch (error) {
@@ -4608,6 +4649,9 @@ async function openGoalHistoryModal(goalId) {
   if (empty) empty.style.display = 'none';
   try {
     hydrateSnapshotCache();
+    if (!timeTravelList.length && !state.guest && state.user) {
+      await refreshSnapshotList();
+    }
     goalHistoryData = timeTravelList;
     renderGoalHistoryChart();
   } catch (error) {
@@ -5173,6 +5217,7 @@ function renderExpenseStats() {
     const subcategory = subcategoryId === null ? null : state.expenseSubcategories.find(item => item.id === subcategoryId);
     const subKey = subcategoryId === null ? 'category-level' : String(subcategoryId);
     if (!categoryStats.subcategories.has(subKey)) categoryStats.subcategories.set(subKey, {
+      id: subcategoryId,
       name: subcategory ? subcategory.name : 'General',
       total: 0
     });
@@ -5203,14 +5248,49 @@ function renderExpenseStats() {
     const subcategories = [...category.subcategories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const maxSubcategory = Math.max(1, ...subcategories.map(item => Math.abs(item.total)));
     return `<article class="expense-stat-category">
-        <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><strong>${esc(category.name)}</strong><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
+        <div class="expense-stat-category-head"><span class="expense-stat-rank">${medals[index] || `#${index + 1}`}</span><div class="expense-stat-category-main"><div class="expense-stat-title"><button type="button" class="expense-stat-trend-link" data-expense-trend-category="${category.id}">${esc(category.name)}</button><span>${moneyEUR.format(category.total)}</span></div><div class="expense-stat-bar"><span style="width:${Math.max(2, Math.abs(category.total) / largestCategory * 100)}%;background:${color};"></span></div></div><div class="expense-stat-average"><span>Avg / active month</span><strong>${moneyEUR.format(categoryAverage)}</strong></div></div>
         <div class="expense-stat-subcategories">${subcategories.map(subcategory => {
       const average = activeMonths ? subcategory.total / activeMonths : 0;
-      return `<div class="expense-stat-subcategory"><span class="expense-stat-sub-name">↳ ${esc(subcategory.name)}</span><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
+      return `<div class="expense-stat-subcategory"><button type="button" class="expense-stat-trend-link expense-stat-sub-name" data-expense-trend-category="${category.id}" data-expense-trend-subcategory="${subcategory.id ?? 'general'}">↳ ${esc(subcategory.name)}</button><div class="expense-stat-sub-bar"><span style="width:${Math.max(2, Math.abs(subcategory.total) / maxSubcategory * 100)}%;background:${color};"></span></div><strong>${moneyEUR.format(subcategory.total)}</strong><span class="expense-stat-sub-average">Avg ${moneyEUR.format(average)} / active month</span></div>`;
     }).join('')}</div>
       </article>`;
   }).join('')}</div>
     <p class="expense-stats-footnote">Year, category and sub-category averages all use the same active-month count: months with at least one recorded expense anywhere in the year. Months with no data are skipped. Category totals include their sub-categories. Refunds reduce totals and can make averages negative.</p>`;
+}
+
+function openExpenseStatsTrend(categoryId, subcategoryId = null) {
+  const year = expenseStatsYear;
+  const category = state.expenseCategories.find(item => Number(item.id) === Number(categoryId));
+  const catName = category?.name || 'Category';
+  const isGeneral = subcategoryId === 'general';
+  const subcategory = subcategoryId === null || isGeneral ? null : state.expenseSubcategories.find(item => Number(item.id) === Number(subcategoryId));
+  const subName = subcategoryId === null ? null : (subcategory?.name || 'General');
+  const monthly = Array(12).fill(0);
+  for (const expense of state.expenses) {
+    if (Number(expense.expense_month.slice(0, 4)) !== year || Number(expense.category_id) !== Number(categoryId)) continue;
+    if (isGeneral ? expense.subcategory_id != null : (subcategoryId !== null && (expense.subcategory_id == null || Number(expense.subcategory_id) !== Number(subcategoryId)))) continue;
+    const monthIndex = Number(expense.expense_month.slice(5, 7)) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) monthly[monthIndex] += expenseAmountInEur(expense);
+  }
+  $('#expenseStatsTrendTitle').textContent = `${catName}${subName ? ` · ${subName}` : ''} · ${year}`;
+  const canvas = $('#expenseStatsTrendChart');
+  expenseStatsTrendChart?.destroy();
+  expenseStatsTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: Array.from({ length: 12 }, (_, index) => new Date(year, index, 1).toLocaleDateString(undefined, { month: 'short' })),
+      datasets: [{ label: subName || catName, data: monthly, borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.16)', fill: true, tension: .25, pointRadius: 3, pointHoverRadius: 6, borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#e6ebf5' } }, tooltip: { callbacks: { label: privacyMoneyTooltipLabel } } },
+      scales: {
+        x: { ticks: { color: '#e6ebf5', autoSkip: false }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { beginAtZero: true, ticks: { color: '#e6ebf5', callback: privacyMoneyTick }, grid: { color: 'rgba(255,255,255,.08)' } }
+      }
+    }
+  });
+  openModal('expenseStatsTrendModalOverlay');
 }
 
 function currentExpenseMonth() {
@@ -7063,32 +7143,47 @@ function fillSelects() {
     $('#holdingAccount').innerHTML = assetAccounts.length ? assetAccounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('') : '<option value="">No asset accounts available</option>';
   }
 
-  // Fill currency selects with EUR and USD at top
-  const currencyOptions = fillCurrencyOptions();
-  if ($('#assetCoin')) {
-    $('#assetCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
-  if ($('#accountCoin')) {
-    $('#accountCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
-  if ($('#goalCoin')) {
-    $('#goalCoin').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
+  // Fill currency selects with EUR and USD at top, preserving current values
+  const updateCurrencySelect = (select, placeholder = 'Select currency...') => {
+    if (!select) return;
+    const prev = select.value ? select.value.trim().toUpperCase() : '';
+    const currencyOptions = fillCurrencyOptions(prev);
+    select.innerHTML = (placeholder ? `<option value="">${placeholder}</option>` : '') + currencyOptions;
+    if (prev) select.value = prev;
+  };
+
+  updateCurrencySelect($('#assetCoin'));
+  updateCurrencySelect($('#accountCoin'));
+  updateCurrencySelect($('#goalCoin'));
   for (let i = 1; i <= 5; i++) {
-    const fromSel = $('#currencyTestFrom' + i);
-    if (fromSel) fromSel.innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
+    updateCurrencySelect($('#currencyTestFrom' + i));
   }
-  if ($('#currencyTestTo')) {
-    $('#currencyTestTo').innerHTML = '<option value="">Select currency...</option>' + currencyOptions;
-  }
+  updateCurrencySelect($('#currencyTestTo'));
 }
 
-function fillCurrencyOptions() {
+function fillCurrencyOptions(includeCurrency = null) {
   const topCurrencies = ['EUR', 'USD'];
-  const otherCurrencies = state.currencies.filter(c => !topCurrencies.includes(c.coin)).sort((a, b) => a.coin.localeCompare(b.coin));
+  const knownCoins = new Set(topCurrencies);
+  const otherCoins = [];
+
+  (state.currencies || []).forEach(c => {
+    const code = typeof c?.coin === 'string' ? c.coin.trim().toUpperCase() : '';
+    if (code && !knownCoins.has(code)) {
+      knownCoins.add(code);
+      otherCoins.push(code);
+    }
+  });
+
+  const normalizedInclude = typeof includeCurrency === 'string' ? includeCurrency.trim().toUpperCase() : '';
+  if (normalizedInclude && !knownCoins.has(normalizedInclude)) {
+    knownCoins.add(normalizedInclude);
+    otherCoins.push(normalizedInclude);
+  }
+
+  otherCoins.sort((a, b) => a.localeCompare(b));
 
   const topOptions = topCurrencies.map(code => `<option value="${code}">${code}</option>`).join('');
-  const otherOptions = otherCurrencies.map(c => `<option value="${esc(c.coin)}">${esc(c.coin)}</option>`).join('');
+  const otherOptions = otherCoins.map(code => `<option value="${esc(code)}">${esc(code)}</option>`).join('');
 
   return topOptions + (otherOptions ? '<option disabled>───────</option>' + otherOptions : '');
 }
@@ -7103,6 +7198,7 @@ function showPage(page) {
   if (page === 'simulation') renderSimulation();
   if (page === 'calendar') renderGrowthCalendarPage();
   if (page === 'expenses') renderExpenses();
+  if (page === 'goals') renderGoals();
   applyBlur();
 }
 
@@ -7131,8 +7227,8 @@ function toggleNavDropdown() {
 function toggleSidebarCollapse(forceState) {
   const sidebar = document.querySelector('.sidebar');
   if (!sidebar) return;
-  const isCollapsed = forceState !== undefined 
-    ? Boolean(forceState) 
+  const isCollapsed = forceState !== undefined
+    ? Boolean(forceState)
     : !sidebar.classList.contains('collapsed');
   sidebar.classList.toggle('collapsed', isCollapsed);
   const toggle = $('#navToggle');
@@ -7144,7 +7240,7 @@ function toggleSidebarCollapse(forceState) {
   }
   try {
     localStorage.setItem('sidebar_collapsed', isCollapsed ? 'true' : 'false');
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // Close the mobile nav dropdown (e.g. after selecting a page).
@@ -7620,19 +7716,10 @@ async function signIn(event) {
     state.user = (await request('/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) })).user;
     state.guest = false;
     showApp();
-    await loadData({ refreshSnapshots: true, showLoading: true });
+    await loadData({ refreshSnapshots: true, refreshCurrencyRates: true, showLoading: true });
     toast(`Signed in as ${state.user.username}`);
     maybeShowWelcomeModal();
 
-    // Update currency rates if admin
-    if (state.user.role === 'admin') {
-      try {
-        const result = await request('/admin/update-currency', { method: 'POST' });
-        console.log('Currency rates updated:', result.message);
-      } catch (error) {
-        console.error('Failed to update currency rates:', error.message);
-      }
-    }
   } catch (error) {
     $('#loginError').textContent = error.message;
   }
@@ -7647,6 +7734,7 @@ async function logout() {
 /* ================= MODAL OPEN / EDIT HELPERS ================= */
 
 function openAssetModal(assetId = null, isPersonal = null) {
+  fillSelects();
   const form = $('#assetForm');
   if (!form) return;
   form.reset();
@@ -7660,7 +7748,17 @@ function openAssetModal(assetId = null, isPersonal = null) {
     $('#assetName').value = a.name;
     $('#assetSymbol').value = a.symbol || '';
     $('#assetType').value = a.type;
-    $('#assetCoin').value = a.coin || 'USD';
+    const targetCoin = (a.coin ? String(a.coin).trim().toUpperCase() : 'USD') || 'USD';
+    const coinSelect = $('#assetCoin');
+    if (coinSelect) {
+      if (targetCoin && !Array.from(coinSelect.options).some(opt => opt.value === targetCoin)) {
+        const newOpt = document.createElement('option');
+        newOpt.value = targetCoin;
+        newOpt.textContent = targetCoin;
+        coinSelect.appendChild(newOpt);
+      }
+      coinSelect.value = targetCoin;
+    }
     $('#assetPrice').value = a.price ?? '';
     $('#assetYield').value = a.dividend_yield ?? '';
     $('#assetMonths').value = (a.payment_months || []).join(',');
@@ -9298,7 +9396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem('sidebar_collapsed') === 'true' && window.innerWidth > 768) {
       toggleSidebarCollapse(true);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => {
     showPage(button.dataset.page);
@@ -9321,6 +9419,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncExpenseMonthPicker();
   });
   $('#expenseStatsYear')?.addEventListener('change', event => { expenseStatsYear = Number(event.target.value); renderExpenseStats(); });
+  document.addEventListener('click', event => {
+    const trendLink = event.target.closest('[data-expense-trend-category]');
+    if (!trendLink) return;
+    const subcategory = trendLink.dataset.expenseTrendSubcategory;
+    openExpenseStatsTrend(Number(trendLink.dataset.expenseTrendCategory), subcategory === 'general' ? 'general' : (subcategory ? Number(subcategory) : null));
+  });
+  $('#closeExpenseStatsTrendBtn')?.addEventListener('click', () => closeModal('expenseStatsTrendModalOverlay'));
   $('#newExpenseCategoryBtn')?.addEventListener('click', () => openExpenseModal('category'));
   $('#newExpenseSubcategoryBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('subcategory') : alert('Create a category first.'));
   $('#newExpenseBtn')?.addEventListener('click', () => state.expenseCategories.length ? openExpenseModal('expense') : alert('Create a category first.'));
@@ -9595,6 +9700,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const err = $('#assetForm .form-error'); if (err) err.textContent = '';
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
+    values.coin = (values.coin || 'USD').trim().toUpperCase();
     const assetId = values.asset_id ? Number(values.asset_id) : null;
     const months = values.payment_months ? values.payment_months.split(/[,|]/).map(m => Number(m.trim())).filter(m => m >= 1 && m <= 12) : [];
 
@@ -9605,7 +9711,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           a.name = values.name;
           a.symbol = (values.symbol || '').toUpperCase();
           a.type = values.type;
-          a.coin = values.coin || 'USD';
+          a.coin = values.coin;
           a.price = numeric(values.price);
           a.dividend_yield = numeric(values.dividend_yield);
           a.payment_months = months;
@@ -9617,7 +9723,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           name: values.name,
           symbol: (values.symbol || '').toUpperCase(),
           type: values.type,
-          coin: values.coin || 'USD',
+          coin: values.coin,
           price: numeric(values.price),
           dividend_yield: numeric(values.dividend_yield),
           payment_months: months
@@ -9964,7 +10070,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (parsedRows[0]?.[0]?.toLowerCase() === 'symbol') parsedRows.shift();
     const rows = parsedRows.filter(parts => parts[0]).map(parts => ({
-      symbol: parts[0], name: parts[1] || '', type: parts[2] || 'stock', coin: parts[3] || 'USD',
+      symbol: (parts[0] || '').trim().toUpperCase(),
+      name: (parts[1] || '').trim(),
+      type: (parts[2] || 'stock').trim().toLowerCase(),
+      coin: (parts[3] || 'USD').trim().toUpperCase(),
       price: parts[4] ? numeric(parts[4]) : null,
       yield: parts[5] ? numeric(parts[5]) : null,
       payment_months: parts[6] || ''
@@ -10417,17 +10526,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.user = me.user;
       state.guest = false;
       showApp();
-      await loadData({ refreshSnapshots: true, showLoading: true });
+      await loadData({ refreshSnapshots: true, refreshCurrencyRates: true, showLoading: true });
 
-      // Update currency rates if admin
-      if (state.user.role === 'admin') {
-        try {
-          const result = await request('/admin/update-currency', { method: 'POST' });
-          console.log('Currency rates updated:', result.message);
-        } catch (error) {
-          console.error('Failed to update currency rates:', error.message);
-        }
-      }
     }
   } catch {
     /* No active session */

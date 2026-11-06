@@ -3962,6 +3962,27 @@ select {
   white-space: nowrap;
 }
 
+.expense-stat-trend-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(148, 163, 184, .45);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.expense-stat-trend-link:hover,
+.expense-stat-trend-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
 .expense-stat-title span {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -4022,6 +4043,20 @@ select {
   color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.expense-stats-trend-modal {
+  display: flex;
+  width: min(900px, 94vw);
+  height: min(560px, 86vh);
+  flex-direction: column;
+}
+
+.expense-stats-trend-chart {
+  position: relative;
+  height: 420px;
+  min-height: 280px;
+  margin-top: 12px;
 }
 
 .expense-stat-subcategory>strong {
