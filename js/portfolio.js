@@ -1050,15 +1050,29 @@ function fireTargetFromMonthlyExpenses(monthlyExpenses) {
   return monthly * 12 * 25;
 }
 
-// Average EUR monthly total over the last six calendar months, including the
-// current month. Reuses the My Expenses month window and EUR conversion.
-// Months with no expense rows count as zero. Null when the window has no rows,
-// so this never falls back to the old snapshot-loss estimate.
-function simulationSixMonthExpenseAverage() {
-  const windowMonths = expenseMonthWindow(currentExpenseMonth(), 6);
-  const hasRows = windowMonths.some(item => state.expenses.some(expense => expense.expense_month === item.key));
-  if (!hasRows) return null;
-  return windowMonths.reduce((sum, item) => sum + item.total, 0) / windowMonths.length;
+function simulationMonthShort(key) {
+  const index = Number(String(key).slice(5, 7)) - 1;
+  const name = EXPENSE_MONTHS[index] || '';
+  return name.slice(0, 3);
+}
+
+// Average of the last six complete expense months, excluding the current month.
+// Months with no rows are left out of the divisor. Null when none of them have rows.
+function simulationSixMonthExpenses() {
+  const end = shiftExpenseMonth(currentExpenseMonth(), -1);
+  const keys = [];
+  for (let offset = 5; offset >= 0; offset -= 1) keys.push(shiftExpenseMonth(end, -offset));
+  const totals = [];
+  keys.forEach(key => {
+    const rows = state.expenses.filter(expense => expense.expense_month === key);
+    if (!rows.length) return;
+    totals.push(rows.reduce((sum, expense) => sum + expenseAmountInEur(expense), 0));
+  });
+  if (!totals.length) return null;
+  return {
+    monthly: totals.reduce((sum, value) => sum + value, 0) / totals.length,
+    caption: `6-month avg · ${simulationMonthShort(keys[0])}–${simulationMonthShort(keys[keys.length - 1])}`
+  };
 }
 
 function simulationProfileMonthlyExpenses() {
@@ -1068,16 +1082,31 @@ function simulationProfileMonthlyExpenses() {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-// Linear pace, or the existing illustrative +5% path: each full year adds
-// twelve months of pace and then multiplies by 1.05. Partial years add pace only.
+// Illustrative +5% as a monthly rate. Growth applies only while the balance is positive,
+// so a negative balance moves at the same pace as the linear line.
+const SIMULATION_FIVE_PERCENT_MONTHLY = Math.pow(1.05, 1 / 12) - 1;
+
+function simulationStepValue(value, monthly, compounded) {
+  if (!compounded || !(value > 0)) return value + monthly;
+  return value * (1 + SIMULATION_FIVE_PERCENT_MONTHLY) + monthly;
+}
+
 function simulationValueAtMonth(current, monthly, months, compounded) {
   if (!Number.isFinite(current) || !Number.isFinite(monthly) || !Number.isFinite(months)) return null;
-  if (!compounded) return current + monthly * months;
   let value = current;
-  const fullYears = Math.floor(months / 12);
-  const remainder = months % 12;
-  for (let year = 0; year < fullYears; year += 1) value = (value + monthly * 12) * 1.05;
-  return value + monthly * remainder;
+  const count = Math.max(0, Math.round(months));
+  for (let month = 0; month < count; month += 1) value = simulationStepValue(value, monthly, compounded);
+  return value;
+}
+
+function simulationSeries(current, monthly, months, compounded) {
+  const data = [{ x: 0, y: current }];
+  let value = current;
+  for (let month = 1; month <= months; month += 1) {
+    value = simulationStepValue(value, monthly, compounded);
+    data.push({ x: month, y: value });
+  }
+  return data;
 }
 
 function simulationMonthsToTarget(target, current, monthly, compounded) {
@@ -1100,6 +1129,17 @@ function simulationDateAfterMonths(months) {
 function simulationFormatMoney(value) {
   if (!Number.isFinite(value)) return '—';
   return moneyEUR.format(value).replace(/-/g, '−');
+}
+
+function simulationAxisLabel(value) {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.5) return '€0';
+  const sign = value < 0 ? '−' : '';
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `${sign}€${Math.round(abs / 1e12)}T`;
+  if (abs >= 1e9) return `${sign}€${Math.round(abs / 1e9)}B`;
+  if (abs >= 1e6) return `${sign}€${Math.round(abs / 1e6)}M`;
+  if (abs >= 1000) return `${sign}€${Math.round(abs / 1000)}k`;
+  return `${sign}€${Math.round(abs)}`;
 }
 
 function simulationYearsLabel(months) {
@@ -1184,6 +1224,7 @@ function onSimulationPaceCommit() {
 function resetSimulationPace() {
   simulationPaceOverride = null;
   renderSimulation();
+  $('#simulationMonthlyInput')?.focus();
 }
 
 function renderSimulationPaceControls(real) {
@@ -1203,16 +1244,21 @@ function renderSimulationPaceControls(real) {
     slider.disabled = locked;
     if (!locked && Number.isFinite(shown)) {
       const span = Math.max(Math.abs(real) * 2, 1000);
-      let min = Math.min(real - span, shown);
-      let max = Math.max(real + span, shown);
-      if (max <= min) max = min + 1;
-      slider.min = String(min);
-      slider.max = String(max);
-      slider.step = String(simulationSliderStep(min, max));
-      slider.value = String(shown);
+      const step = simulationSliderStep(real - span, real + span);
+      const reach = Math.ceil(span / step) * step;
+      let min = real - reach;
+      let max = real + reach;
+      if (shown < min) min -= Math.ceil((min - shown) / step) * step;
+      if (shown > max) max += Math.ceil((shown - max) / step) * step;
+      if (max <= min) max = min + step;
+      const decimals = step < 1 ? 4 : 2;
+      slider.min = min.toFixed(decimals);
+      slider.max = max.toFixed(decimals);
+      slider.step = String(step);
+      slider.value = shown.toFixed(decimals);
       const pct = ((Number(slider.value) - min) / (max - min)) * 100;
       slider.style.background = `linear-gradient(90deg, var(--accent) ${pct}%, #61728f ${pct}%) center / 100% 4px no-repeat`;
-      slider.setAttribute('aria-valuetext', formatSignedEUR(Number.isFinite(Number(slider.value)) ? Number(slider.value) : shown));
+      slider.setAttribute('aria-valuetext', formatSignedEUR(Number(slider.value)));
     }
   }
   if (reset) reset.disabled = !edited;
@@ -1227,18 +1273,19 @@ function renderSimulationPaceControls(real) {
   return edited;
 }
 
-function simulationFireModel(projection) {
-  const paceKnown = Number.isFinite(projection.monthlyChange);
+function simulationFireModel(projection, activePace) {
+  const paceKnown = Number.isFinite(activePace);
+  const sixMonth = simulationSixMonthExpenses();
   const specs = [
     {
       key: 'avg',
-      label: '6-month avg expenses',
+      label: sixMonth?.caption || '6-month avg expenses',
       lineName: 'FIRE · 6-month avg expenses',
       shortName: '6-month avg',
       swatch: '',
       color: '#5ce1e6',
       dash: [14, 5],
-      monthly: simulationSixMonthExpenseAverage()
+      monthly: sixMonth ? sixMonth.monthly : null
     },
     {
       key: 'profile',
@@ -1251,43 +1298,41 @@ function simulationFireModel(projection) {
       monthly: simulationProfileMonthlyExpenses()
     }
   ];
-  const hints = [];
   const targets = [];
   specs.forEach(spec => {
     if (!(spec.monthly > 0)) {
-      const hint = spec.key === 'avg' && spec.monthly !== null && !(spec.monthly > 0)
+      spec.hint = spec.key === 'avg' && spec.monthly !== null
         ? 'Six-month average is not above zero.'
         : spec.key === 'avg'
           ? 'Add monthly expenses in My Expenses.'
           : 'Add monthly expenses in Profile.';
-      hints.push(hint);
-      spec.hint = hint;
       return;
     }
     const value = fireTargetFromMonthlyExpenses(spec.monthly);
-    const months = paceKnown ? simulationMonthsToTarget(value, projection.current, projection.monthlyChange, false) : null;
+    const months = paceKnown ? simulationMonthsToTarget(value, projection.current, activePace, false) : null;
     targets.push({ ...spec, value, months });
   });
-  return { targets, hints, specs };
+  return { targets, specs };
 }
 
-function renderSimulationFire(model, projection) {
+function renderSimulationFire(model, activePace, edited) {
   const root = $('#simulationFireTargets');
   if (!root) return;
-  const paceKnown = Number.isFinite(projection.monthlyChange);
+  const paceKnown = Number.isFinite(activePace);
+  const paceName = edited ? 'At your edited pace' : 'At current pace';
   const items = model.specs.map(spec => {
     if (spec.hint) return `<p class="sim-fire-hint">${esc(spec.hint)}</p>`;
     const target = model.targets.find(item => item.key === spec.key);
     const detail = !paceKnown
       ? `${simulationFormatMoney(spec.monthly)}/mo`
-      : target.months === null
-        ? `${simulationFormatMoney(spec.monthly)}/mo · Not reached at current pace`
+      : !(activePace > 0) || target.months === null
+        ? `${simulationFormatMoney(spec.monthly)}/mo · Not reached at this pace`
         : target.months <= 0
           ? `${simulationFormatMoney(spec.monthly)}/mo · Reached`
           : `${simulationFormatMoney(spec.monthly)}/mo · ${formatSimulationDate(simulationDateAfterMonths(target.months))} · ${simulationYearsLabel(target.months)}`;
     return `<div class="sim-fire-item"><span class="sim-fire-source"><i class="sim-swatch ${spec.swatch}" aria-hidden="true"></i>${esc(spec.label)}</span><strong>${esc(simulationFormatMoney(target.value))}</strong><small>${esc(detail)}</small></div>`;
   }).join('');
-  root.innerHTML = `<h3>FIRE targets</h3>${items}<p class="sim-fire-formula">At current pace · 25× annual expenses.</p>`;
+  root.innerHTML = `<h3>FIRE targets</h3>${items}<p class="sim-fire-formula">${esc(paceName)} · 25× annual expenses.</p>`;
 }
 
 function simulationScenarioColumns(real, edited, editedMonthly) {
@@ -1336,29 +1381,34 @@ function renderSimulationCrossings(targets, projection, edited, editedMonthly) {
   const foot = edited
     ? 'Crossings: ○ real pace · □ +5% · △ edit. Rounded up to a month. Offset markers keep nearby dates readable.'
     : 'Crossings: ○ real pace · □ +5%. Rounded up to a month. Offset markers keep nearby dates readable.';
-  root.innerHTML = `<div class="sim-cross-wrap"><table class="sim-cross"><thead><tr><th scope="col">FIRE crossing · rounded up to a month</th>${head}</tr></thead><tbody>${body}</tbody></table></div><p class="sim-cross-foot">${esc(foot)}</p>`;
+  root.innerHTML = `<div class="sim-cross-wrap" tabindex="0" role="region" aria-label="FIRE crossings"><table class="sim-cross"><thead><tr><th scope="col">FIRE crossing · rounded up to a month</th>${head}</tr></thead><tbody>${body}</tbody></table></div><p class="sim-cross-foot">${esc(foot)}</p>`;
 }
 
-function renderSimulationNextStop(projection) {
+function renderSimulationNextStop(projection, activePace, edited) {
   const root = $('#simulationNextStop');
   if (!root) return;
   const next = simulationNextTarget(projection.current);
-  const real = projection.monthlyChange;
-  const improving = Number.isFinite(real) && real > 0;
-  const months = improving ? Math.ceil((next - projection.current) / real) : null;
-  const dateText = months === null ? 'Not reached at current pace' : formatSimulationDate(simulationDateAfterMonths(months));
-  const sub = !Number.isFinite(real)
+  const paceKnown = Number.isFinite(activePace);
+  const improving = paceKnown && activePace > 0;
+  const months = improving ? Math.ceil((next - projection.current) / activePace) : null;
+  const dateText = !paceKnown
+    ? '—'
+    : months === null
+      ? 'Not reached at this pace'
+      : formatSimulationDate(simulationDateAfterMonths(months));
+  const sub = !paceKnown
     ? 'Need two dated snapshots'
     : months === null
-      ? 'Current pace is not improving'
-      : `~${months} month${months === 1 ? '' : 's'} · at current pace`;
+      ? (edited ? 'Edited pace is not improving' : 'Current pace is not improving')
+      : `~${months} month${months === 1 ? '' : 's'} · at ${edited ? 'your edited pace' : 'current pace'}`;
   const stops = simulationLadderStops(projection.current);
   const rungs = stops.map(stop => {
-    const stopMonths = improving && projection.current < stop ? Math.ceil((stop - projection.current) / real) : null;
+    const stopMonths = improving && projection.current < stop ? Math.ceil((stop - projection.current) / activePace) : null;
     const when = !improving || stopMonths === null ? '—' : formatSimulationDate(simulationDateAfterMonths(stopMonths));
     return `<div class="sim-rung${stop === next ? ' on' : ''}"><strong>${esc(simulationStopLabel(stop))}</strong><small>${esc(when)}</small></div>`;
   }).join('');
-  root.innerHTML = `<div class="sim-next-head"><div><h2 id="simulationNextTitle">Next stop: ${esc(simulationStopLabel(next))}</h2><p>The next step above your current Global Value</p></div><div class="sim-next-date"><strong>${esc(dateText)}</strong><p>${esc(sub)}</p></div></div><div class="sim-ladder-wrap"><div class="sim-ladder">${rungs}</div></div><p class="sim-ladder-caption">At current pace · ${esc(stops.map(simulationStopLabel).join(' → '))}…<br>Small steps share a month; after each crossing, the next power of ten becomes the target.</p>`;
+  const paceCaption = !paceKnown ? '' : `${edited ? 'At your edited pace' : 'At current pace'} · ${stops.map(simulationStopLabel).join(' → ')}…<br>`;
+  root.innerHTML = `<div class="sim-next-head"><div><h2 id="simulationNextTitle">Next stop: ${esc(simulationStopLabel(next))}</h2><p>The next step above your current Global Value</p></div><div class="sim-next-date"><strong>${esc(dateText)}</strong><p>${esc(sub)}</p></div></div><div class="sim-ladder-wrap" tabindex="0" role="region" aria-label="Next stop ladder"><div class="sim-ladder">${rungs}</div></div><p class="sim-ladder-caption">${paceCaption}Small steps share a month; after each crossing, the next power of ten becomes the target.</p>`;
 }
 
 function renderSimulationDrivers() {
@@ -1409,16 +1459,23 @@ function drawSimulationCorridor(chart) {
     return { ...target, y, labelY: y };
   }).filter(target => target.y >= chartArea.top - 2 && target.y <= chartArea.bottom + 2);
   placed.sort((a, b) => a.y - b.y);
-  const gap = 32;
-  for (let index = 1; index < placed.length; index += 1) {
-    if (placed[index].labelY < placed[index - 1].labelY + gap) placed[index].labelY = placed[index - 1].labelY + gap;
-  }
-  for (let index = placed.length - 1; index >= 0; index -= 1) {
-    if (placed[index].labelY > chart.height - 18) placed[index].labelY = chart.height - 18;
-    if (index < placed.length - 1 && placed[index].labelY > placed[index + 1].labelY - gap) {
-      placed[index].labelY = placed[index + 1].labelY - gap;
+  if (options.labelOutside) {
+    const gap = 32;
+    for (let index = 1; index < placed.length; index += 1) {
+      if (placed[index].labelY < placed[index - 1].labelY + gap) placed[index].labelY = placed[index - 1].labelY + gap;
     }
-    if (placed[index].labelY < 16) placed[index].labelY = 16;
+    for (let index = placed.length - 1; index >= 0; index -= 1) {
+      if (placed[index].labelY > chart.height - 18) placed[index].labelY = chart.height - 18;
+      if (index < placed.length - 1 && placed[index].labelY > placed[index + 1].labelY - gap) {
+        placed[index].labelY = placed[index + 1].labelY - gap;
+      }
+      if (placed[index].labelY < 16) placed[index].labelY = 16;
+    }
+  } else {
+    placed.forEach(target => { target.labelY = target.y - 4; });
+    for (let index = placed.length - 1; index >= 1; index -= 1) {
+      if (placed[index].labelY - 14 < placed[index - 1].labelY) placed[index - 1].labelY = placed[index].labelY - 16;
+    }
   }
   placed.forEach(target => {
     ctx.beginPath();
@@ -1428,25 +1485,22 @@ function drawSimulationCorridor(chart) {
     ctx.moveTo(chartArea.left, target.y);
     ctx.lineTo(chartArea.right, target.y);
     ctx.stroke();
-    const labelX = options.labelOutside ? chartArea.right + 10 : chartArea.right - 6;
-    ctx.textAlign = options.labelOutside ? 'left' : 'right';
-    ctx.textBaseline = 'alphabetic';
-    if (!options.labelOutside) {
-      ctx.font = '500 11px Inter, sans-serif';
-      const nameWidth = ctx.measureText(target.name).width;
-      ctx.font = '600 12px Inter, sans-serif';
-      const amountWidth = ctx.measureText(target.amount || '').width;
-      const box = Math.max(nameWidth, amountWidth) + 10;
-      ctx.fillStyle = 'rgba(23, 30, 46, 0.92)';
-      ctx.fillRect(chartArea.right - box - 4, target.labelY - 16, box, 32);
-    }
-    ctx.font = '500 11px Inter, sans-serif';
     ctx.fillStyle = target.color;
-    ctx.fillText(target.name, labelX, target.labelY - 1);
-    if (target.amount) {
-      ctx.font = '600 12px Inter, sans-serif';
-      ctx.fillStyle = '#e6ebf5';
-      ctx.fillText(target.amount, labelX, target.labelY + 13);
+    if (options.labelOutside) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = '500 11px Inter, sans-serif';
+      ctx.fillText(target.name, chartArea.right + 10, target.labelY - 1);
+      if (target.amount) {
+        ctx.font = '600 12px Inter, sans-serif';
+        ctx.fillStyle = '#e6ebf5';
+        ctx.fillText(target.amount, chartArea.right + 10, target.labelY + 13);
+      }
+    } else if (target.amount) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.font = '600 11px Inter, sans-serif';
+      ctx.fillText(target.amount, chartArea.left + 4, target.labelY);
     }
   });
   if (Number.isFinite(options.current)) {
@@ -1526,27 +1580,12 @@ function renderSimulationChart(projection, targets, edited, editedMonthly, marke
   canvas.hidden = false;
   if (empty) empty.hidden = true;
   const horizon = simulationHorizonYears * 12;
-  const pace = [];
-  const five = [];
-  const edit = [];
-  for (let month = 0; month <= horizon; month += 1) {
-    pace.push({ x: month, y: simulationValueAtMonth(projection.current, real, month, false) });
-    five.push({ x: month, y: simulationValueAtMonth(projection.current, real, month, true) });
-    if (edited) edit.push({ x: month, y: simulationValueAtMonth(projection.current, editedMonthly, month, false) });
-  }
-  const finite = [...pace, ...five, ...edit].map(point => point.y).concat(targets.map(target => target.value)).filter(Number.isFinite);
-  let yMin = Math.min(...finite);
-  let yMax = Math.max(...finite);
-  if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) return;
-  if (yMin === yMax) {
-    yMin -= 1;
-    yMax += 1;
-  }
-  const pad = (yMax - yMin) * 0.08;
+  const pace = simulationSeries(projection.current, real, horizon, false);
+  const five = simulationSeries(projection.current, real, horizon, true);
+  const edit = edited ? simulationSeries(projection.current, editedMonthly, horizon, false) : [];
   const labelOutside = targets.length > 0 && (wrap?.clientWidth || 0) >= 720;
   const step = simulationHorizonYears <= 5 ? 12 : simulationHorizonYears <= 10 ? 24 : 60;
   canvas.setAttribute('aria-label', `Scenario corridor for ${simulationHorizonYears} years at the real pace, compared with an illustrative 5 percent annual path${edited ? ' and your edited pace' : ''}.`);
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try {
     simulationTrendChartInstance = new Chart(canvas, {
       type: 'line',
@@ -1586,19 +1625,29 @@ function renderSimulationChart(projection, targets, edited, editedMonthly, marke
             pointHoverRadius: 0,
             tension: 0,
             fill: false
-          }] : [])
+          }] : []),
+          {
+            label: 'Scale',
+            data: targets.flatMap(target => [{ x: 0, y: target.value }, { x: horizon, y: target.value }]),
+            borderColor: 'transparent',
+            borderWidth: 0,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false
+          }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: reducedMotion ? false : false,
+        animation: false,
         transitions: { active: { animation: { duration: 0 } } },
         interaction: { mode: 'index', intersect: false, axis: 'x' },
-        layout: { padding: { top: 16, right: labelOutside ? 196 : 12, bottom: 4, left: 0 } },
+        layout: { padding: { top: 18, right: labelOutside ? 196 : 8, bottom: 4, left: 0 } },
         plugins: {
           legend: { display: false },
           tooltip: {
+            filter: item => item.dataset.label !== 'Scale',
             callbacks: {
               title(items) {
                 const months = Math.round(Number(items[0]?.parsed?.x ?? 0));
@@ -1610,8 +1659,8 @@ function renderSimulationChart(projection, targets, edited, editedMonthly, marke
           simulationCorridor: {
             targets: targets.map(target => ({
               value: target.value,
-              name: labelOutside ? target.lineName : target.shortName,
-              amount: blurActive() ? '' : simulationFormatMoney(target.value),
+              name: target.lineName,
+              amount: blurActive() ? '' : (labelOutside ? simulationFormatMoney(target.value) : simulationStopLabel(target.value)),
               color: target.color,
               dash: target.dash
             })),
@@ -1639,9 +1688,14 @@ function renderSimulationChart(projection, targets, edited, editedMonthly, marke
             border: { color: 'rgba(255,255,255,.08)' }
           },
           y: {
-            min: yMin - pad,
-            max: yMax + pad,
-            ticks: { color: '#e6ebf5', callback: privacyMoneyTick, maxTicksLimit: 6 },
+            grace: '5%',
+            bounds: 'ticks',
+            ticks: {
+              includeBounds: false,
+              color: '#e6ebf5',
+              maxTicksLimit: 6,
+              callback: value => (blurActive() ? '' : simulationAxisLabel(Number(value)))
+            },
             grid: { color: 'rgba(255,255,255,.05)' },
             border: { color: 'rgba(255,255,255,.08)' }
           }
@@ -1656,6 +1710,16 @@ function renderSimulationChart(projection, targets, edited, editedMonthly, marke
       empty.textContent = 'The corridor chart could not be drawn.';
     }
   }
+}
+
+function simulationMarkScrollHints() {
+  const mark = () => {
+    document.querySelectorAll('#page-simulation .sim-cross-wrap, #page-simulation .sim-ladder-wrap').forEach(el => {
+      el.classList.toggle('is-overflowing', el.scrollWidth > el.clientWidth + 1);
+    });
+  };
+  mark();
+  requestAnimationFrame(mark);
 }
 
 function renderSimulation() {
@@ -1692,10 +1756,11 @@ function renderSimulation() {
     }
     const edited = renderSimulationPaceControls(real);
     const editedMonthly = edited ? simulationPaceOverride : null;
-    const model = simulationFireModel(projection);
-    renderSimulationFire(model, projection);
+    const activePace = edited ? editedMonthly : real;
+    const model = simulationFireModel(projection, activePace);
+    renderSimulationFire(model, activePace, edited);
     const hintEl = $('#simulationTargetHints');
-    if (hintEl) hintEl.textContent = model.hints.join(' ');
+    if (hintEl) hintEl.textContent = '';
     const key = $('#simulationScenarioKey');
     if (key) {
       const editKey = edited
@@ -1706,13 +1771,14 @@ function renderSimulation() {
     const markers = simulationCrossingMarkers(model.targets, projection, edited, editedMonthly);
     renderSimulationCrossings(model.targets, projection, edited, editedMonthly);
     renderSimulationChart(projection, model.targets, edited, editedMonthly, markers);
-    renderSimulationNextStop(projection);
+    renderSimulationNextStop(projection, activePace, edited);
     renderSimulationDrivers();
+    simulationMarkScrollHints();
     const note = $('#simulationDataNote');
     if (note) {
-      note.textContent = !Number.isFinite(real)
-        ? 'Add at least two snapshots on different dates to unlock the projection.'
-        : `Uses the dashboard All-Time Growth pace from ${formatSimulationDate(projection.oldestDate)} (${projection.snapshots.length} snapshot${projection.snapshots.length === 1 ? '' : 's'}). Values are linear estimates, not forecasts.`;
+      note.textContent = Number.isFinite(real)
+        ? `Uses the dashboard All-Time Growth pace from ${formatSimulationDate(projection.oldestDate)} (${projection.snapshots.length} snapshot${projection.snapshots.length === 1 ? '' : 's'}). Values are linear estimates, not forecasts.`
+        : '';
     }
   } finally {
     simulationRendering = false;
