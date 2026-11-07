@@ -5915,6 +5915,14 @@ select {
   line-height: 1.05;
 }
 
+.dash-networth-value.pos {
+  color: var(--accent2);
+}
+
+.dash-networth-value.neg {
+  color: var(--danger);
+}
+
 .dash-today {
   margin-top: 4px;
   font-size: 13px;
