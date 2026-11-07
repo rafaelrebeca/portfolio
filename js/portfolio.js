@@ -1412,7 +1412,7 @@ function renderSimulationNextStop(projection, activePace, edited) {
     return `<div class="sim-rung${stop === next ? ' on' : ''}"><strong>${esc(simulationStopLabel(stop))}</strong><small>${esc(when)}</small></div>`;
   }).join('');
   const paceCaption = !paceKnown ? '' : `${edited ? 'At your edited pace' : 'At current pace'} · ${stops.map(simulationStopLabel).join(' → ')}…<br>`;
-  root.innerHTML = `<div class="sim-next-head"><div><h2 id="simulationNextTitle">Next stop: ${esc(simulationStopLabel(next))}</h2><p>The next step above your current Global Value</p></div><div class="sim-next-date"><strong>${esc(dateText)}</strong><p>${esc(sub)}</p></div></div><div class="sim-ladder-wrap" tabindex="0" role="region" aria-label="Next stop ladder"><div class="sim-ladder">${rungs}</div></div><p class="sim-ladder-caption">${paceCaption}Small steps share a month; after each crossing, the next power of ten becomes the target.</p>`;
+  root.innerHTML = `<div class="sim-next-head"><div><h2 id="simulationNextTitle">Next stop: ${esc(simulationStopLabel(next))}</h2><p>The next step above your current Global Value</p></div><div class="sim-next-date"><strong>${esc(dateText)}</strong><p>${esc(sub)}</p></div></div><div class="sim-ladder-wrap" tabindex="0" role="region" aria-label="Next stop ladder"><div class="sim-ladder">${rungs}</div></div><p class="sim-ladder-caption">${paceCaption} The next power of ten becomes the target.</p>`;
 }
 
 function renderSimulationDrivers() {
