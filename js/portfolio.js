@@ -601,7 +601,11 @@ function formatCompactEUR(value) {
 
 function renderNetWorthHero({ total, assets, liabilities, accountCount, prev }) {
   const portfolioValueEl = $('#portfolioValue');
-  if (portfolioValueEl) portfolioValueEl.textContent = moneyEUR.format(total).replace('-', '−');
+  if (portfolioValueEl) {
+    portfolioValueEl.textContent = moneyEUR.format(total).replace('-', '−');
+    portfolioValueEl.classList.toggle('neg', total < -0.004);
+    portfolioValueEl.classList.toggle('pos', total > 0.004);
+  }
   const tag = $('#debtHeavyTag');
   if (tag) tag.hidden = !(total < -0.004);
   const today = $('#netWorthToday');
