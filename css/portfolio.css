@@ -6609,15 +6609,15 @@ select {
 
 #page-simulation .sim-top {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
 }
 
 #page-simulation .sim-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
   margin-top: 16px;
 }
 
