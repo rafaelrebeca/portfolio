@@ -545,45 +545,104 @@
         <!-- SIMULATION -->
         <div class="page" id="page-simulation">
           <div class="page-title">Simulation</div>
-          <div class="page-desc">A principal-only projection based on your historical Global Value growth.</div>
-          <div class="banner simulation-assumption">
-            This is a simple trend projection: it uses the average monthly change between your oldest snapshot and
-            today. It ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
-          </div>
-          <div class="grid-cards simulation-summary-cards">
-            <div class="card">
-              <div class="label">Current Global Value</div>
-              <div class="value" id="simulationCurrentValue">—</div>
-              <div class="delta" id="simulationCurrentSubtext">live value</div>
-            </div>
-            <div class="card">
-              <div class="label">Growth Rate Used</div>
-              <div class="value" id="simulationMonthlyChange">—</div>
-              <div class="delta" id="simulationMonthlySubtext">same pace shown on Dashboard</div>
-            </div>
-            <div class="card" id="simulationTargetCard" style="cursor: pointer;"
-              title="Click to switch between the milestone path, Path to FIRE (auto), and Path to FIRE (user)">
-              <div class="label" id="simulationTargetLabel">Path to €0</div>
-              <div class="value" id="simulationZeroValue">—</div>
-              <div class="delta" id="simulationZeroSubtext">only relevant when global value is negative</div>
-            </div>
-          </div>
-          <div class="charts-row simulation-charts-row">
-            <div class="chart-card simulation-chart-card">
-              <h3>Historical &amp; Projected Global Value</h3>
-              <p class="page-desc">History, current pace, and a current pace +5% annual growth scenario</p>
-              <div class="simulation-chart-wrap"><canvas id="simulationTrendChart"></canvas></div>
-            </div>
-            <div class="chart-card simulation-chart-card simulation-growth-card" id="simulationGrowthCard"
-              title="Click to switch between All-Time, YTD, and Month">
-              <h3 id="simulationGrowthTitle">Growth Contribution by Account</h3>
-              <p class="page-desc" id="simulationGrowthSubtitle">Monthly change during each account's known lifetime</p>
-              <div class="simulation-chart-wrap simulation-doughnut-wrap"><canvas id="simulationGrowthChart"></canvas>
+          <p class="page-desc">Explore your next milestone — and the path to financial independence.</p>
+          <p class="sim-info">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 16v-4M12 8h.01"></path>
+            </svg>
+            <span><strong>Trend, not a forecast.</strong> This is a simple trend projection: it uses the average monthly
+              change between your oldest snapshot and today. It ignores interest, dividends, market returns, inflation,
+              and future deposits or withdrawals.</span>
+          </p>
+          <div class="sim-top">
+            <section class="sim-card" aria-labelledby="simulationSettingsTitle">
+              <h2 id="simulationSettingsTitle">Scenario settings</h2>
+              <p class="sim-quiet">Preview only · nothing is saved</p>
+              <div class="sim-settings-grid">
+              <div class="sim-pace-col">
+              <div class="sim-field">
+                <div class="sim-field-top">
+                  <label for="simulationMonthlyInput">Monthly growth</label>
+                  <button type="button" class="sim-reset" id="simulationResetPace" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                      <path d="M3 3v5h5"></path>
+                    </svg>
+                    Reset
+                  </button>
+                </div>
+                <div class="sim-money">
+                  <input id="simulationMonthlyInput" type="number" inputmode="decimal" step="0.01" autocomplete="off"
+                    aria-describedby="simulationEditHint" disabled>
+                  <span>/ month</span>
+                </div>
+                <input id="simulationMonthlySlider" class="sim-slider" type="range" min="0" max="1" step="1" value="0"
+                  aria-label="Monthly growth" disabled>
+                <p class="sim-edit-hint" id="simulationEditHint" aria-live="polite"></p>
               </div>
-              <div class="chart-legend simulation-growth-legend" id="simulationGrowthLegend"></div>
-            </div>
+              <div class="sim-annual">
+                <span>Annual comparison</span>
+                <strong>+5%</strong>
+                <small>Illustrative</small>
+              </div>
+              </div>
+              <div class="sim-fire" id="simulationFireTargets"></div>
+              </div>
+            </section>
+            <section class="sim-card" aria-labelledby="simulationCorridorTitle">
+              <div class="sim-card-head">
+                <div>
+                  <h2 id="simulationCorridorTitle">Your scenario corridor</h2>
+                  <p>Real pace, +5% comparison and your edit · not a confidence interval</p>
+                </div>
+                <div class="sim-chips" role="group" aria-label="Projection range">
+                  <button type="button" class="sim-chip" data-simulation-horizon="5" aria-pressed="false">5y</button>
+                  <button type="button" class="sim-chip" data-simulation-horizon="10" aria-pressed="false">10y</button>
+                  <button type="button" class="sim-chip" data-simulation-horizon="20" aria-pressed="true">20y</button>
+                </div>
+              </div>
+              <div class="sim-kpis">
+                <div>
+                  <p>Current Global Value</p>
+                  <strong class="sim-kpi-value" id="simulationCurrentValue">—</strong>
+                  <small>Live value</small>
+                </div>
+                <div>
+                  <p>Real monthly pace</p>
+                  <strong class="sim-kpi-value" id="simulationMonthlyChange">—</strong>
+                  <small id="simulationMonthlySubtext">Same pace shown on Dashboard</small>
+                </div>
+                <div>
+                  <p id="simulationHorizonLabel">In 20 years · real pace</p>
+                  <strong class="sim-kpi-value" id="simulationHorizonValue">—</strong>
+                  <small>Principal-only projection</small>
+                </div>
+              </div>
+              <div class="sim-key" id="simulationScenarioKey"></div>
+              <p class="sim-hints" id="simulationTargetHints"></p>
+              <div class="sim-chart-wrap">
+                <canvas id="simulationTrendChart" role="img" aria-label="Scenario corridor"></canvas>
+                <p class="sim-chart-empty" id="simulationChartEmpty" hidden></p>
+              </div>
+              <div id="simulationCrossings"></div>
+              <p class="sim-note" id="simulationDataNote"></p>
+            </section>
           </div>
-          <div class="simulation-note" id="simulationDataNote"></div>
+          <div class="sim-bottom">
+            <section class="sim-card" id="simulationNextStop" aria-labelledby="simulationNextTitle"></section>
+            <section class="sim-card" aria-labelledby="simulationDriversTitle">
+              <div class="sim-card-head">
+                <div>
+                  <h2 id="simulationDriversTitle">Account drivers</h2>
+                  <p>Signed monthly change · each account's own lifetime</p>
+                </div>
+              </div>
+              <div class="sim-drivers" id="simulationDrivers"></div>
+            </section>
+          </div>
         </div>
 
         <!-- PORTFOLIO -->
