@@ -1428,7 +1428,9 @@ function renderSimulationDrivers() {
   root.style.setProperty('--sim-driver-rows', String(Math.ceil(rows.length / 2)));
   root.innerHTML = rows.map(account => {
     const negative = account.delta < -0.004;
-    return `<div class="sim-driver"><span>${esc(account.name)}</span><b class="${negative ? 'is-neg' : ''}">${esc(formatSignedEUR(account.delta))}</b></div>`;
+    const positive = account.delta > 0.004;
+    const cls = negative ? 'is-neg' : (positive ? 'is-pos' : '');
+    return `<div class="sim-driver"><span>${esc(account.name)}</span><b class="${cls}">${esc(formatSignedEUR(account.delta))}</b></div>`;
   }).join('');
 }
 
@@ -1739,10 +1741,12 @@ function renderSimulation() {
     document.getElementById('page-simulation')?.classList.toggle('is-blurred', blurActive());
     currentEl.textContent = simulationFormatMoney(projection.current);
     currentEl.classList.toggle('is-neg', projection.current < -0.004);
+    currentEl.classList.toggle('is-pos', projection.current > 0.004);
     const monthlyEl = $('#simulationMonthlyChange');
     if (monthlyEl) {
       monthlyEl.textContent = Number.isFinite(real) ? formatSignedEUR(real) : '—';
       monthlyEl.classList.toggle('is-neg', Number.isFinite(real) && real < -0.004);
+      monthlyEl.classList.toggle('is-pos', Number.isFinite(real) && real > 0.004);
     }
     const monthlySub = $('#simulationMonthlySubtext');
     if (monthlySub) {
@@ -1757,6 +1761,7 @@ function renderSimulation() {
     if (horizonEl) {
       horizonEl.textContent = Number.isFinite(horizonValue) ? simulationFormatMoney(horizonValue) : '—';
       horizonEl.classList.toggle('is-neg', Number.isFinite(horizonValue) && horizonValue < -0.004);
+      horizonEl.classList.toggle('is-pos', Number.isFinite(horizonValue) && horizonValue > 0.004);
     }
     const edited = renderSimulationPaceControls(real);
     const editedMonthly = edited ? simulationPaceOverride : null;
