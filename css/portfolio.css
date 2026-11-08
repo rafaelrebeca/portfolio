@@ -6607,9 +6607,9 @@ select {
   font-weight: 600;
 }
 
-#page-simulation .sim-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+#page-simulation .sim-lead {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
@@ -7129,6 +7129,13 @@ select {
 
 #page-simulation .sim-drivers {
   display: grid;
+  grid-template-columns: repeat(var(--sim-driver-cols, 1), minmax(0, 1fr));
+  gap: 18px 28px;
+  min-width: 0;
+}
+
+#page-simulation .sim-driver-group {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) max-content max-content;
   column-gap: 12px;
   align-items: baseline;
@@ -7163,19 +7170,12 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-#page-simulation .sim-driver-head {
+#page-simulation .sim-driver-head > * {
+  padding-bottom: 2px;
+  color: var(--muted);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.3;
-  padding-bottom: 2px;
-}
-
-#page-simulation .sim-driver-total > * {
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-  color: var(--text);
-  font-weight: 700;
 }
 
 #page-simulation .sim-empty {
@@ -7185,7 +7185,6 @@ select {
 
 @media (max-width: 1023px) {
 
-  #page-simulation .sim-top,
   #page-simulation .sim-bottom {
     grid-template-columns: 1fr;
   }

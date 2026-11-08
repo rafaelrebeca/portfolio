@@ -1421,6 +1421,12 @@ function simulationDriverCell(value) {
   return `<b class="${tone}">${esc(formatSignedEUR(value))}</b>`;
 }
 
+function simulationDriverColumnCount(width) {
+  if (width >= 900) return 3;
+  if (width >= 560) return 2;
+  return 1;
+}
+
 function renderSimulationDrivers() {
   const root = $('#simulationDrivers');
   if (!root) return;
@@ -1429,28 +1435,37 @@ function renderSimulationDrivers() {
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || String(a.name).localeCompare(String(b.name)));
   if (!rows.length) {
     root.removeAttribute('role');
+    root.style.removeProperty('--sim-driver-cols');
     root.innerHTML = '<p class="sim-empty">No account history yet.</p>';
     return;
   }
+  const width = root.clientWidth;
+  if (width < 20 && document.getElementById('page-simulation')?.classList.contains('active')) {
+    requestAnimationFrame(() => {
+      const again = $('#simulationDrivers');
+      if (again && again.clientWidth >= 20 && currentPage === 'simulation') renderSimulationDrivers();
+    });
+  }
+  const columnCount = Math.min(simulationDriverColumnCount(width), rows.length);
+  const perColumn = Math.ceil(rows.length / columnCount);
   const ytdTotals = new Map();
   calculateAccountGrowths('ytd').forEach((row, id) => {
     ytdTotals.set(String(id), row.delta * row.monthsExisted);
   });
-  let monthlySum = 0;
-  let ytdSum = 0;
-  let ytdKnown = 0;
-  const body = rows.map(account => {
-    monthlySum += account.delta;
-    const ytd = ytdTotals.has(String(account.id)) ? ytdTotals.get(String(account.id)) : null;
-    if (Number.isFinite(ytd)) {
-      ytdSum += ytd;
-      ytdKnown += 1;
-    }
-    return `<div class="sim-driver" role="row"><span>${esc(account.name)}</span>${simulationDriverCell(account.delta)}${simulationDriverCell(ytd)}</div>`;
-  }).join('');
-  root.setAttribute('role', 'table');
+  const groups = [];
+  for (let column = 0; column < columnCount; column += 1) {
+    const slice = rows.slice(column * perColumn, (column + 1) * perColumn);
+    if (!slice.length) continue;
+    const body = slice.map(account => {
+      const ytd = ytdTotals.has(String(account.id)) ? ytdTotals.get(String(account.id)) : null;
+      return `<div class="sim-driver" role="row"><span>${esc(account.name)}</span>${simulationDriverCell(account.delta)}${simulationDriverCell(ytd)}</div>`;
+    }).join('');
+    groups.push(`<div class="sim-driver-group" role="table"><div class="sim-driver sim-driver-head" role="row"><span role="columnheader">Account</span><span role="columnheader">Monthly</span><span role="columnheader">YTD</span></div>${body}</div>`);
+  }
+  root.removeAttribute('role');
+  root.style.setProperty('--sim-driver-cols', String(groups.length));
   root.setAttribute('aria-labelledby', 'simulationDriversTitle');
-  root.innerHTML = `<div class="sim-driver sim-driver-head" role="row"><span role="columnheader">Account</span><span role="columnheader">Monthly</span><span role="columnheader">YTD</span></div>${body}<div class="sim-driver sim-driver-total" role="row"><span>Total</span>${simulationDriverCell(monthlySum)}${simulationDriverCell(ytdKnown ? ytdSum : null)}</div>`;
+  root.innerHTML = groups.join('');
 }
 
 function drawSimulationMarker(ctx, shape, x, y, color) {
