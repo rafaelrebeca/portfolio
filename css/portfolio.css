@@ -7130,7 +7130,7 @@ select {
 #page-simulation .sim-drivers {
   display: grid;
   grid-template-columns: repeat(var(--sim-driver-cols, 1), minmax(0, 1fr));
-  gap: 18px 28px;
+  gap: 18px 0;
   min-width: 0;
 }
 
@@ -7142,6 +7142,15 @@ select {
   min-width: 0;
   font-size: 13px;
   line-height: 1.7;
+}
+
+#page-simulation .sim-driver-group:not(:first-child) {
+  border-left: 1px solid var(--border);
+  padding-left: 22px;
+}
+
+#page-simulation .sim-driver-group:not(:last-child) {
+  padding-right: 22px;
 }
 
 #page-simulation .sim-driver {
