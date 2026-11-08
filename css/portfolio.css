@@ -6607,9 +6607,9 @@ select {
   font-weight: 600;
 }
 
-#page-simulation .sim-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+#page-simulation .sim-lead {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
@@ -7129,17 +7129,32 @@ select {
 
 #page-simulation .sim-drivers {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(var(--sim-driver-rows, 1), auto);
-  column-gap: 18px;
+  grid-template-columns: repeat(var(--sim-driver-cols, 1), minmax(0, 1fr));
+  gap: 18px 0;
+  min-width: 0;
+}
+
+#page-simulation .sim-driver-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  column-gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+#page-simulation .sim-driver-group:not(:first-child) {
+  border-left: 1px solid var(--border);
+  padding-left: 22px;
+}
+
+#page-simulation .sim-driver-group:not(:last-child) {
+  padding-right: 22px;
 }
 
 #page-simulation .sim-driver {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
+  display: contents;
   font-size: 13px;
   line-height: 1.7;
 }
@@ -7152,11 +7167,24 @@ select {
   white-space: nowrap;
 }
 
+#page-simulation .sim-driver > :not(:first-child) {
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
+}
+
 #page-simulation .sim-driver b {
-  flex: none;
   color: var(--text);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+#page-simulation .sim-driver-head > * {
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 #page-simulation .sim-empty {
@@ -7166,7 +7194,6 @@ select {
 
 @media (max-width: 1023px) {
 
-  #page-simulation .sim-top,
   #page-simulation .sim-bottom {
     grid-template-columns: 1fr;
   }
@@ -7189,8 +7216,7 @@ select {
 
 @media (max-width: 768px) {
 
-  #page-simulation .sim-kpis,
-  #page-simulation .sim-drivers {
+  #page-simulation .sim-kpis {
     grid-template-columns: 1fr;
     grid-auto-flow: row;
     grid-template-rows: auto;
