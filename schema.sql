@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'guest' CHECK (role IN ('user', 'admin')),
+  role TEXT NOT NULL DEFAULT 'guest' CHECK (role IN ('guest', 'user', 'admin')),
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login DATETIME,
   fire_expenses REAL,
