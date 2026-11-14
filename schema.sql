@@ -2,10 +2,11 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  role TEXT NOT NULL DEFAULT 'guest' CHECK (role IN ('user', 'admin')),
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login DATETIME,
-  fire_expenses REAL
+  fire_expenses REAL,
+  currency TEXT
 );
 
 -- Initial admin user (username: admin, password: admin)
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS providers (
 CREATE TABLE IF NOT EXISTS asset_type (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL UNIQUE,
-  label TEXT NOT NULL
+  label TEXT NOT NULL -- live: nullable
 );
 INSERT INTO asset_type ("id","type","label") VALUES(1,'stock','Stock');
 INSERT INTO asset_type ("id","type","label") VALUES(2,'bond','Bond');
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS assets (
   name TEXT NOT NULL,
   symbol TEXT,
   type TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- live: no default
   updated_at DATETIME,
   price REAL,
   coin TEXT,
@@ -57,7 +58,7 @@ CREATE TABLE IF NOT EXISTS personal_assets (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   symbol TEXT,
-  type TEXT NOT NULL,
+  type TEXT NOT NULL, -- live: nullable
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME,
   price REAL,
@@ -117,23 +118,24 @@ CREATE TABLE IF NOT EXISTS goal_link (
 
 CREATE TABLE IF NOT EXISTS currency (
   coin TEXT PRIMARY KEY,
-  value REAL NOT NULL
+  value REAL NOT NULL -- live: nullable
 );
 INSERT OR IGNORE INTO currency (coin, value) VALUES ('USD', 1.0), ('EUR', 0.8639);
 
 CREATE TABLE IF NOT EXISTS update_story (
   what TEXT PRIMARY KEY,
-  "when" TEXT NOT NULL
+  "when" TEXT NOT NULL -- live: nullable
 );
 INSERT INTO update_story ("what","when") VALUES('CURRENCY','20260101000000');
 
 CREATE TABLE IF NOT EXISTS dashboard_snapshots (
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- live: FK missing
   day TEXT NOT NULL,
   data TEXT NOT NULL,
   created_at TEXT NOT NULL,
   PRIMARY KEY (user_id, day)
 );
+CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_user_id_day ON dashboard_snapshots (user_id, day);
 
 CREATE TABLE IF NOT EXISTS expense_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
