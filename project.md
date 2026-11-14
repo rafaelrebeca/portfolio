@@ -57,7 +57,7 @@ npm run dev
 npm run deploy
 ```
 
-`npm run dev` starts Wrangler Pages development for the repository. `npm run deploy` deploys the current directory to the Cloudflare Pages project `portfolio-manager`.
+`npm run dev` starts Wrangler Pages development for the repository. `npm run deploy` deploys the current directory to the Cloudflare Pages project `myportfoliomanager`.
 
 The repository uses `bcryptjs` at runtime and Wrangler as a development dependency. The worker reads provider-specific credentials from the environment: `env.STOCK_API_KEY_TWELVEDATA` for Twelve Data, `env.STOCK_API_KEY_MASSIVE` for Massive, `env.STOCK_API_KEY_FINHUB` for Finnhub, and `env.API_KEY` for ExchangeRate-API. Each price provider reads only its own variable, with no shared fallback. In production these should be configured as Cloudflare secrets; local development may provide them through the local Wrangler configuration.
 

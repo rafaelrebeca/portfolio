@@ -137,7 +137,7 @@ To deploy updates directly to Cloudflare Pages:
 npm run deploy
 ```
 
-This runs `wrangler pages deploy . --project-name portfolio-manager`.
+This runs `wrangler pages deploy . --project-name myportfoliomanager`.
 
 ---
 
