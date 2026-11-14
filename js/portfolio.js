@@ -7520,21 +7520,39 @@ function goalMilestoneLabel(goal, value, pace) {
   return formatSimulationDate(date);
 }
 
+function formatGoalTargetDate(value) {
+  if (!value) return '';
+  const raw = String(value);
+  const date = new Date(raw.endsWith('Z') ? raw : `${raw.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return formatDate(value);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+function goalPaceUnknown(est) {
+  return !est || est.status === 'no_history' || est.reachText === 'Need snapshot history';
+}
+
 function goalWhatIfSummary(goal, extra) {
   const est = calculateGoalPaceAndEstimate(goal);
-  const pace = (est?.monthlyGrowth || 0) + (Number(extra) || 0);
+  const currency = goal.coin || 'USD';
+  if (goalPaceUnknown(est)) return { headline: '—', pace: '', note: 'Need snapshot history' };
+  const pace = (est.monthlyGrowth || 0) + (Number(extra) || 0);
   const target = Number(goal.value || 0);
   const current = goalCurrentValue(goal);
-  const currency = goal.coin || 'USD';
   const remaining = goalIsDebt(goal) ? Math.abs(Math.min(current, 0)) : Math.max(0, target - current);
-  if (remaining <= 0.004) return 'Already reached · nothing is saved';
-  if (!(pace > 0)) return 'Not reached at this pace · nothing is saved';
+  if (remaining <= 0.004) return { headline: 'Reached', pace: '', note: 'Nothing is saved' };
+  if (!(pace > 0)) return { headline: '—', pace: '', note: 'Not reached at this pace · nothing is saved' };
   const months = Math.ceil(remaining / pace);
   const date = new Date();
   date.setUTCMonth(date.getUTCMonth() + months);
-  const sooner = est?.months > 0 ? est.months - months : null;
-  const soonerText = sooner > 0 ? ` · about ${sooner} month${sooner === 1 ? '' : 's'} sooner` : '';
-  return `${formatSimulationDate(date)} · ~${months} months at ${formatCurrency(pace, currency)}/mo${soonerText} · nothing is saved`;
+  const sooner = est.months > 0 ? est.months - months : null;
+  const soonerText = sooner > 0 ? `About ${sooner} month${sooner === 1 ? '' : 's'} sooner · ` : '';
+  return {
+    headline: formatSimulationDate(date),
+    pace: `${pace > 0.004 ? '+' : ''}${formatCurrency(pace, currency)}/mo`,
+    note: `~${months} month${months === 1 ? '' : 's'} · ${soonerText}nothing is saved`
+  };
 }
 
 function renderGoals() {
@@ -7555,7 +7573,7 @@ function renderGoals() {
     const selected = goal.id === selectedGoalId;
     const status = goalStatusInfo(goal);
     const pct = goalListPct(goal);
-    return `<div class="goal-row${selected ? ' is-selected' : ''}" role="listitem" tabindex="0" data-goal-select="${goal.id}" data-goal-row="${goal.id}" aria-pressed="${selected ? 'true' : 'false'}">
+    return `<div class="goal-row${selected ? ' is-selected' : ''}" role="listitem" tabindex="0" data-goal-select="${goal.id}" data-goal-row="${goal.id}"${selected ? ' aria-current="true"' : ''}>
       <span class="goal-row-num">${index + 1}</span>
       <span class="goal-row-main">
         <strong>${esc(goal.goal_name)}</strong>
@@ -7604,12 +7622,15 @@ function renderGoalDetail(goal, sorted) {
   const ahead = goalAheadAmount(goal);
   const pace = est?.monthlyGrowth || 0;
   const remaining = debt ? Math.abs(Math.min(current, 0)) : Math.max(0, current);
-  const reachMain = est?.reachDate ? formatSimulationDate(est.reachDate) : (est?.reachText || '—');
-  const reachSub = est?.months > 0 ? `~${est.months} month${est.months === 1 ? '' : 's'}` : '';
-  const aheadClass = ahead == null ? '' : ahead > 0.004 ? 'is-pos' : ahead < -0.004 ? 'is-neg' : '';
-  const aheadText = ahead == null ? '—' : `${ahead > 0.004 ? '+' : ahead < -0.004 ? '−' : ''}${formatCurrency(Math.abs(ahead), currency)}`;
-  const aheadNote = ahead == null ? (info ? 'Reached' : 'No target date') : 'per month';
-  const neededNote = ahead != null && info ? `Needed ${formatCurrency(info.requiredMonthly, currency)}/mo` : '';
+  const noHistory = goalPaceUnknown(est);
+  const aheadClass = noHistory || ahead == null ? '' : ahead > 0.004 ? 'is-pos' : ahead < -0.004 ? 'is-neg' : '';
+  const aheadText = noHistory || ahead == null ? '—' : `${ahead > 0.004 ? '+' : ahead < -0.004 ? '−' : ''}${formatCurrency(Math.abs(ahead), currency)}`;
+  const aheadNote = noHistory ? 'Need snapshot history' : (ahead == null ? (info ? 'Reached' : 'No target date') : 'per month');
+  const neededNote = !noHistory && ahead != null && info ? `Needed ${formatCurrency(info.requiredMonthly, currency)}/mo` : '';
+  const paceMain = noHistory ? '—' : (est?.paceText || '—');
+  const paceNote = noHistory ? 'Need snapshot history' : 'per month';
+  const reachMain = noHistory ? '—' : (est?.reachDate ? formatSimulationDate(est.reachDate) : (est?.reachText || '—'));
+  const reachSub = noHistory ? 'Need snapshot history' : (est?.months > 0 ? `~${est.months} month${est.months === 1 ? '' : 's'}` : '');
   const currentNote = current < -0.004 ? `−${formatCurrency(Math.abs(current), currency)}` : formatCurrency(current, currency);
   const subs = goalSubgoalValues(goal);
   const subHtml = subs.length ? subs.map((value, subIndex) => `
@@ -7626,7 +7647,7 @@ function renderGoalDetail(goal, sorted) {
     <header class="goal-detail-head">
       <div>
         <p class="goal-detail-kicker"><span>${index + 1}</span> ${esc(goal.goal_name)}</p>
-        <p class="goal-detail-meta">${esc(goalTypeLabel(goal))} · ${esc(currency)}${goal.end_date ? ` · target date ${esc(formatDate(goal.end_date))}` : ''}${index === 0 ? ` · ${goalIcon('pin')} Shown on Dashboard` : ''}</p>
+        <p class="goal-detail-meta">${esc(goalTypeLabel(goal))} · ${esc(currency)}${goal.end_date ? ` · target date ${esc(formatGoalTargetDate(goal.end_date))}` : ''}${index === 0 ? ` · ${goalIcon('pin')} Shown on Dashboard` : ''}</p>
       </div>
       <div class="goal-detail-actions">
         <span class="goal-status is-${esc(status.key)}">${esc(status.label)}</span>
@@ -7645,7 +7666,7 @@ function renderGoalDetail(goal, sorted) {
     </header>
     <div class="goal-metrics">
       <article><span>${debt ? 'Remaining to clear' : 'Saved toward target'}</span><strong>${formatCurrency(debt ? remaining : current, currency)}</strong><small>${debt ? `Current ${currentNote}` : `Target ${formatCurrency(target, currency)}`}</small></article>
-      <article><span>${debt ? 'Payoff pace' : 'Growth pace'}</span><strong>${esc(est?.paceText || '—')}</strong><small>per month</small></article>
+      <article><span>${debt ? 'Payoff pace' : 'Growth pace'}</span><strong>${esc(paceMain)}</strong><small>${esc(paceNote)}</small></article>
       <article><span>${debt ? 'Est. debt-free' : 'Est. reach'}</span><strong>${esc(reachMain)}</strong><small>${esc(reachSub)}</small></article>
       <article><span>Ahead of pace</span><strong class="${aheadClass}">${aheadText}</strong><small>${esc(aheadNote)}</small>${neededNote ? `<small>${esc(neededNote)}</small>` : ''}</article>
     </div>
@@ -7668,13 +7689,15 @@ function renderGoalDetail(goal, sorted) {
       </div>
     </div>
     <div class="goal-whatif" id="goalWhatIfForm">
-      <div>
+      <div class="goal-whatif-copy">
         <strong>What if your ${debt ? 'payoff' : 'savings'} pace increased?</strong>
         <p>Preview only · nothing is saved</p>
       </div>
       <label>Extra per month<input id="goalWhatIfInput" type="number" step="0.01" value="${goalWhatIfExtra ? esc(String(goalWhatIfExtra)) : ''}" aria-label="Extra monthly pace preview"></label>
-      <button type="button" class="btn-sm" id="goalWhatIfReset">${goalIcon('reset')} Reset</button>
-      <p id="goalWhatIfResult" class="goal-whatif-result"></p>
+      <div class="goal-whatif-end">
+        <div id="goalWhatIfResult" class="goal-whatif-result"></div>
+        <button type="button" class="btn-sm" id="goalWhatIfReset">${goalIcon('reset')} Reset</button>
+      </div>
     </div>`;
   paintGoalWhatIf(goal);
   renderGoalPathChart(goal, est, info);
@@ -7684,7 +7707,8 @@ function renderGoalDetail(goal, sorted) {
 function paintGoalWhatIf(goal = goalSortedList().find(item => item.id === selectedGoalId)) {
   const result = $('#goalWhatIfResult');
   if (!result || !goal) return;
-  result.textContent = goalWhatIfSummary(goal, goalWhatIfExtra);
+  const summary = goalWhatIfSummary(goal, goalWhatIfExtra);
+  result.innerHTML = `<strong>${esc(summary.headline)}</strong>${summary.pace ? `<span>${esc(summary.pace)}</span>` : ''}<small>${esc(summary.note)}</small>`;
 }
 
 function renderGoalPathChart(goal, est, info) {
@@ -7696,17 +7720,28 @@ function renderGoalPathChart(goal, est, info) {
   const debt = goalIsDebt(goal);
   const pace = est?.monthlyGrowth || 0;
   const needed = info && Number.isFinite(info.requiredMonthly) && info.status !== 'achieved' ? info.requiredMonthly : null;
-  const horizon = Math.max(6, Math.min(120, Math.ceil(Math.max(est?.months || 0, info?.monthsLeft || 0, 12))));
+  const reachMonths = Number(est?.months);
+  const monthsLeft = Number(info?.monthsLeft);
+  const horizon = est?.status === 'achieved' || reachMonths === 0
+    ? 3
+    : (Number.isFinite(reachMonths) && reachMonths > 0 && reachMonths <= 1200)
+      ? Math.max(3, Math.min(120, Math.ceil(reachMonths) + 2))
+      : (Number.isFinite(monthsLeft) && monthsLeft > 0 ? Math.max(3, Math.min(120, Math.ceil(monthsLeft))) : 12);
   const labels = [];
   const currentSeries = [];
   const neededSeries = [];
   const start = debt ? Math.abs(Math.min(current, 0)) : current;
   for (let month = 0; month <= horizon; month += 1) {
-    labels.push(month === 0 ? 'Now' : `${month}m`);
+    const tick = new Date();
+    tick.setUTCDate(1);
+    tick.setUTCMonth(tick.getUTCMonth() + month);
+    labels.push(formatSimulationDate(tick));
     currentSeries.push(debt ? Math.max(0, start - pace * month) : current + pace * month);
     neededSeries.push(needed == null ? null : (debt ? Math.max(0, start - needed * month) : current + needed * month));
   }
   const ahead = needed == null ? null : pace - needed;
+  const yValues = currentSeries.concat(neededSeries.filter(value => value != null));
+  const yFloor = Math.min(...yValues);
   if (notes) {
     const aheadLabel = ahead == null
       ? 'Add a target date to compare with the pace required by that date.'
@@ -7728,8 +7763,19 @@ function renderGoalPathChart(goal, est, info) {
       animation: false,
       plugins: { legend: { position: 'top', align: 'end', labels: { color: '#e6ebf5', boxWidth: 12, font: { size: 11 }, padding: 12 } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(Number(context.parsed.y || 0), currency)}` } } },
       scales: {
-        x: { ticks: { color: '#8b96b3', maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { ticks: { color: '#8b96b3', callback: value => formatCurrency(Number(value), currency) }, grid: { color: 'rgba(255,255,255,.05)' } }
+        x: { ticks: { color: '#8b96b3', maxTicksLimit: 6, maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: {
+          min: yFloor >= 0 ? 0 : undefined,
+          grace: '5%',
+          bounds: 'ticks',
+          ticks: {
+            includeBounds: yFloor >= 0,
+            color: '#8b96b3',
+            maxTicksLimit: 6,
+            callback: value => simulationAxisLabel(Number(value))
+          },
+          grid: { color: 'rgba(255,255,255,.05)' }
+        }
       }
     }
   });
@@ -7761,18 +7807,6 @@ function renderGoalContribChart(goal, entries, absTotal, currency) {
   }).join('') : '<p class="goal-list-empty">No linked accounts.</p>';
 }
 
-// Compact on-track badge shown next to the goal name (icon + status only).
-function goalOnTrackBadge(info) {
-  if (!info) return '';
-  if (info.status === 'achieved') {
-    return `<span class="goal-ontrack-badge on-track" title="Target reached">✅ On track</span>`;
-  }
-  if (info.onTrack) {
-    return `<span class="goal-ontrack-badge on-track" title="On pace to reach the target by ${esc(formatDate(info.endDate))}">🟢 On track</span>`;
-  }
-  return `<span class="goal-ontrack-badge off-track" title="Need an extra ${esc(formatCurrency(info.extraMonthly, info.currency || 'USD'))}/mo to reach the target by ${esc(formatDate(info.endDate))}">🔴 Not on track</span>`;
-}
-
 // Detail-grid field replacing "Target Date": shows the extra monthly amount
 // needed (off track) or the surplus by which the pace exceeds what's required
 // (on track / achieved).
@@ -7799,18 +7833,13 @@ function renderGoalStats() {
     return;
   }
 
-  // Classify each goal: achieved, on track (has end_date & on pace), off track
-  // (has end_date & not on pace), or no target date.
-  let achieved = 0, onTrack = 0, offTrack = 0, noDate = 0;
+  let achieved = 0, onTrack = 0, behind = 0, noDate = 0;
   goals.forEach(g => {
-    const info = goalOnTrackInfo(g);
-    if (info) {
-      if (info.status === 'achieved') achieved++;
-      else if (info.onTrack) onTrack++;
-      else offTrack++;
-    } else {
-      noDate++;
-    }
+    const key = goalStatusInfo(g).key;
+    if (key === 'achieved') achieved++;
+    else if (key === 'on_track') onTrack++;
+    else if (key === 'behind') behind++;
+    else noDate++;
   });
 
   // Best / worst performing based on projected reach:
@@ -7858,24 +7887,28 @@ function renderGoalStats() {
     best = byPctDesc[0];
   }
 
-  const stat = (label, value, cls = '') => `
+  const stat = (label, value, cls = '', title = '') => `
     <div class="goal-stat">
-      <div class="goal-stat-value ${cls}">${value}</div>
+      <div class="goal-stat-value ${cls}"${title ? ` title="${esc(title)}"` : ''}>${value}</div>
       <div class="goal-stat-label">${label}</div>
     </div>`;
+  const bestName = best ? best.g.goal_name : '—';
+  const worstName = worst ? worst.g.goal_name : '—';
 
   card.innerHTML = `
     <div class="goal-stats-head">
-      <span class="goal-stats-title">📊 Goal Statistics</span>
+      <span class="goal-stats-title">${goalIcon('chart')} Goal statistics</span>
     </div>
     <div class="goal-stats-grid">
-      ${stat('Total Goals', goals.length)}
-      ${stat('On Track', onTrack, 'pos')}
-      ${stat('Not On Track', offTrack, 'neg')}
+      ${stat('Total goals', goals.length)}
+      ${stat('On track', onTrack, 'pos')}
+      ${stat('Behind', behind, 'neg')}
       ${stat('Achieved', achieved, 'pos')}
-      ${stat('No Target Date', noDate)}
-      ${stat('Best Performing', best ? esc(best.g.goal_name) : '—', 'pos')}
-      ${stat('Worst Performing', worst ? esc(worst.g.goal_name) : '—', 'neg')}
+      ${stat('No target date', noDate)}
+      <div class="goal-stats-side">
+        ${stat('Best performing', esc(bestName), 'pos', bestName)}
+        ${stat('Worst performing', esc(worstName), 'neg', worstName)}
+      </div>
     </div>`;
 }
 
