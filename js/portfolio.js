@@ -660,6 +660,14 @@ let portfolioTypeChartInstance = null;
 let goalDetailsChartInstance = null;
 let goalDetailsGoalId = null;
 let goalDetailsChartMode = 'donut';
+let selectedGoalId = null;
+let goalListQuery = '';
+let goalListFilter = 'all';
+let goalWhatIfExtra = 0;
+let goalMenuOpen = false;
+let goalReorderFocusId = null;
+let goalPathChartInstance = null;
+let goalContribChartInstance = null;
 let goalDetailsDonutData = null;
 let goalDetailsHistoryData = null;
 let accountDetailsChartInstance = null;
@@ -7406,57 +7414,351 @@ function goalProgressHTML(g, current, target, currency) {
     ${activeLabel ? `<div class="goal-sub-label">${esc(activeLabel)}</div>` : ''}`;
 }
 
+function goalIcon(name) {
+  const paths = {
+    up: '<path d="m6 14 6-6 6 6"/>',
+    down: '<path d="m6 10 6 6 6-6"/>',
+    pin: '<path d="M12 17v5"/><path d="M8 10.5h8L15 17H9z"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+    chart: '<path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/>',
+    zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+    trash: '<path d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12"/>',
+    reset: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'
+  };
+  return `<svg class="goal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ''}</svg>`;
+}
+
+function goalSortedList() {
+  return state.goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
+}
+
+function goalIsDebt(goal) {
+  return Number(goal?.value || 0) === 0;
+}
+
+function goalTypeLabel(goal) {
+  return goalIsDebt(goal) ? 'Debt payoff' : 'Savings goal';
+}
+
+function goalStatusInfo(goal) {
+  const info = goalOnTrackInfo(goal);
+  const est = calculateGoalPaceAndEstimate(goal);
+  if (info?.status === 'achieved' || est?.status === 'achieved') return { key: 'achieved', label: 'Achieved' };
+  if (!info) return { key: 'no_date', label: 'No target date' };
+  if (info.onTrack) return { key: 'on_track', label: 'On track' };
+  return { key: 'behind', label: 'Behind' };
+}
+
+function goalListPct(goal) {
+  const target = Number(goal.value || 0);
+  const current = goalCurrentValue(goal);
+  const currency = goal.coin || 'USD';
+  if (target === 0) {
+    let posSum = 0;
+    let negSum = 0;
+    state.accounts.filter(account => (goal.account_ids || []).includes(account.id)).forEach(account => {
+      const rate = getExchangeRate(account.coin || 'USD', currency);
+      const converted = rate ? accountValue(account, false) * rate : accountValue(account, false);
+      if (converted > 0) posSum += converted;
+      else negSum += converted;
+    });
+    const absNeg = Math.abs(negSum);
+    if (absNeg <= 0) return current >= 0 ? 100 : 0;
+    return Math.min(100, Math.max(0, (posSum / absNeg) * 100));
+  }
+  if (!(target > 0)) return 0;
+  return Math.min(100, Math.max(0, (current / target) * 100));
+}
+
+function goalMatchesList(goal) {
+  const query = goalListQuery.trim().toLowerCase();
+  if (query && !String(goal.goal_name || '').toLowerCase().includes(query)) return false;
+  if (goalListFilter === 'all') return true;
+  if (goalListFilter === 'debt' || goalListFilter === 'savings') {
+    return (goalIsDebt(goal) ? 'debt' : 'savings') === goalListFilter;
+  }
+  return goalStatusInfo(goal).key === goalListFilter;
+}
+
+function goalLinkedEntries(goal) {
+  const currency = goal.coin || 'USD';
+  const linked = state.accounts.filter(account => (goal.account_ids || []).includes(account.id));
+  return linked.map(account => {
+    const rate = getExchangeRate(account.coin || 'USD', currency);
+    const value = rate ? accountValue(account, false) * rate : accountValue(account, false);
+    return {
+      id: account.id,
+      name: account.name || 'Account',
+      provider: account.provider_name || providerName(account.provider_id),
+      label: `${account.name} (${account.provider_name || providerName(account.provider_id)})`,
+      value
+    };
+  }).sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || a.name.localeCompare(b.name));
+}
+
+function goalAheadAmount(goal) {
+  const info = goalOnTrackInfo(goal);
+  const est = calculateGoalPaceAndEstimate(goal);
+  if (!info || info.status === 'achieved' || !est) return null;
+  return (est.monthlyGrowth || 0) - (Number.isFinite(info.requiredMonthly) ? info.requiredMonthly : 0);
+}
+
+function goalMilestoneLabel(goal, value, pace) {
+  const current = goalCurrentValue(goal);
+  const currency = goal.coin || 'USD';
+  if (current >= value && !goalIsDebt(goal)) return 'Reached';
+  if (goalIsDebt(goal) && current >= value) return 'Reached';
+  if (!(pace > 0)) return '—';
+  const months = Math.ceil((value - current) / pace);
+  if (months <= 0) return 'Reached';
+  if (months > 1200) return '> 100 years';
+  const date = new Date();
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return formatSimulationDate(date);
+}
+
+function goalWhatIfSummary(goal, extra) {
+  const est = calculateGoalPaceAndEstimate(goal);
+  const pace = (est?.monthlyGrowth || 0) + (Number(extra) || 0);
+  const target = Number(goal.value || 0);
+  const current = goalCurrentValue(goal);
+  const currency = goal.coin || 'USD';
+  const remaining = goalIsDebt(goal) ? Math.abs(Math.min(current, 0)) : Math.max(0, target - current);
+  if (remaining <= 0.004) return 'Already reached · nothing is saved';
+  if (!(pace > 0)) return 'Not reached at this pace · nothing is saved';
+  const months = Math.ceil(remaining / pace);
+  const date = new Date();
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const sooner = est?.months > 0 ? est.months - months : null;
+  const soonerText = sooner > 0 ? ` · about ${sooner} month${sooner === 1 ? '' : 's'} sooner` : '';
+  return `${formatSimulationDate(date)} · ~${months} months at ${formatCurrency(pace, currency)}/mo${soonerText} · nothing is saved`;
+}
+
 function renderGoals() {
-  if (!$('#goalsList')) return;
-  const sorted = state.goals.slice().sort((a, b) => (a.order_by ?? 0) - (b.order_by ?? 0) || a.id - b.id);
-  $('#goalsList').innerHTML = sorted.length ? sorted.map((g, idx) => {
-    const current = goalCurrentValue(g);
-    const target = Number(g.value || 0);
-    const diff = current - target;
-    const linked = state.accounts.filter(a => (g.account_ids || []).includes(a.id));
-    const linkedNames = linked.map(a => `${esc(a.name)} (${esc(a.provider_name || providerName(a.provider_id))})`).join(', ') || 'No linked accounts';
-    const progressHTML = goalProgressHTML(g, current, target, g.coin || 'USD');
-    const isFirst = idx === 0;
-    const isLast = idx === sorted.length - 1;
+  const list = $('#goalsList');
+  if (!list) return;
+  const sorted = goalSortedList();
+  const visible = sorted.filter(goalMatchesList);
+  if (!visible.some(goal => goal.id === selectedGoalId)) {
+    selectedGoalId = visible[0]?.id ?? null;
+  }
+  document.querySelectorAll('[data-goal-filter]').forEach(button => {
+    const on = button.dataset.goalFilter === goalListFilter;
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  list.innerHTML = visible.length ? visible.map(goal => {
+    const index = sorted.findIndex(item => item.id === goal.id);
+    const selected = goal.id === selectedGoalId;
+    const status = goalStatusInfo(goal);
+    const pct = goalListPct(goal);
+    return `<div class="goal-row${selected ? ' is-selected' : ''}" role="listitem" tabindex="0" data-goal-select="${goal.id}" data-goal-row="${goal.id}" aria-pressed="${selected ? 'true' : 'false'}">
+      <span class="goal-row-num">${index + 1}</span>
+      <span class="goal-row-main">
+        <strong>${esc(goal.goal_name)}</strong>
+        <small>${esc(goalTypeLabel(goal))}${index === 0 ? ` · <em class="goal-pin">${goalIcon('pin')} Shown on Dashboard</em>` : ''}</small>
+      </span>
+      <span class="goal-row-pct">${pct.toFixed(1)}%</span>
+      <span class="goal-status is-${esc(status.key)}">${esc(status.label)}</span>
+      ${selected ? `<span class="goal-order-btns">
+        <button type="button" class="goal-order-btn" data-goal-up="${goal.id}" aria-label="Move ${esc(goal.goal_name)} up" ${index === 0 ? 'disabled' : ''}>${goalIcon('up')}</button>
+        <button type="button" class="goal-order-btn" data-goal-down="${goal.id}" aria-label="Move ${esc(goal.goal_name)} down" ${index === sorted.length - 1 ? 'disabled' : ''}>${goalIcon('down')}</button>
+      </span>` : ''}
+    </div>`;
+  }).join('') : '<p class="goal-list-empty">No goals match this view.</p>';
+  renderGoalDetail(sorted.find(goal => goal.id === selectedGoalId) || null, sorted);
+  renderGoalStats();
+  if (goalReorderFocusId != null) {
+    const row = document.querySelector(`[data-goal-row="${goalReorderFocusId}"]`);
+    row?.focus();
+    goalReorderFocusId = null;
+  }
+}
 
-    const est = calculateGoalPaceAndEstimate(g);
-    const paceClass = est && est.monthlyGrowth > 0 ? 'pos' : (est && est.monthlyGrowth < 0 ? 'neg' : '');
-    const estClass = est && est.status === 'achieved' ? 'pos' : (est && est.status === 'stalled' ? 'neg' : '');
-    const onTrack = goalOnTrackInfo(g);
-    const onTrackBadge = onTrack ? goalOnTrackBadge(onTrack) : '';
-    const extraField = onTrack ? goalExtraFieldHTML(onTrack) : '';
-
-    return `
-      <div class="goal-card">
-        <div class="goal-card-head">
-          <span class="goal-name">🎯 ${esc(g.goal_name)} <span class="tag goal">${esc(g.coin || 'USD')}</span>${onTrackBadge}</span>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-            <span class="goal-order-btns">
-              <button class="btn-sm goal-order-btn" data-goal-up="${g.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
-              <button class="btn-sm goal-order-btn" data-goal-down="${g.id}" title="Move down" ${isLast ? 'disabled' : ''}>↓</button>
-            </span>
-            <button class="btn-sm action-icon-btn" data-goal-details="${g.id}" title="Details">ℹ️</button>
-            ${timeTravelList.length > 0 ? `<button class="btn-sm action-icon-btn" data-goal-history="${g.id}" title="History">📈</button>` : ''}
-            <button class="btn-sm action-icon-btn" data-simulate-goal="${g.id}" title="Simulate">⚡</button>
-            <button class="btn-sm action-icon-btn" data-duplicate-goal="${g.id}" title="Duplicate">📄</button>
-            <button class="btn-sm action-icon-btn" data-edit-goal="${g.id}" title="Edit">✏️</button>
-            <button class="btn-sm action-icon-btn danger" data-delete-goal="${g.id}" title="Delete">🗑️</button>
+function renderGoalDetail(goal, sorted) {
+  const root = $('#goalDetail');
+  if (!root) return;
+  if (goalPathChartInstance) {
+    goalPathChartInstance.destroy();
+    goalPathChartInstance = null;
+  }
+  if (goalContribChartInstance) {
+    goalContribChartInstance.destroy();
+    goalContribChartInstance = null;
+  }
+  if (!goal) {
+    root.innerHTML = '<p class="goal-list-empty">No goals yet. Create one to start tracking your targets.</p>';
+    return;
+  }
+  const index = Math.max(0, sorted.findIndex(item => item.id === goal.id));
+  const currency = goal.coin || 'USD';
+  const current = goalCurrentValue(goal);
+  const target = Number(goal.value || 0);
+  const debt = goalIsDebt(goal);
+  const est = calculateGoalPaceAndEstimate(goal);
+  const info = goalOnTrackInfo(goal);
+  const status = goalStatusInfo(goal);
+  const ahead = goalAheadAmount(goal);
+  const pace = est?.monthlyGrowth || 0;
+  const remaining = debt ? Math.abs(Math.min(current, 0)) : Math.max(0, current);
+  const reachMain = est?.reachDate ? formatSimulationDate(est.reachDate) : (est?.reachText || '—');
+  const reachSub = est?.months > 0 ? `~${est.months} month${est.months === 1 ? '' : 's'}` : '';
+  const aheadClass = ahead == null ? '' : ahead > 0.004 ? 'is-pos' : ahead < -0.004 ? 'is-neg' : '';
+  const aheadText = ahead == null ? '—' : `${ahead > 0.004 ? '+' : ahead < -0.004 ? '−' : ''}${formatCurrency(Math.abs(ahead), currency)}`;
+  const aheadNote = ahead == null ? (info ? 'Reached' : 'No target date') : 'per month';
+  const neededNote = ahead != null && info ? `Needed ${formatCurrency(info.requiredMonthly, currency)}/mo` : '';
+  const currentNote = current < -0.004 ? `−${formatCurrency(Math.abs(current), currency)}` : formatCurrency(current, currency);
+  const subs = goalSubgoalValues(goal);
+  const subHtml = subs.length ? subs.map((value, subIndex) => `
+    <div class="goal-sub-row"><span>Sub-goal ${subIndex + 1}</span><strong>${formatCurrency(value, currency)}</strong><em>${esc(goalMilestoneLabel(goal, value, pace))}</em></div>
+  `).join('') : '<p class="goal-list-empty">No sub-goals.</p>';
+  const entries = goalLinkedEntries(goal);
+  const absTotal = entries.reduce((sum, entry) => sum + Math.abs(entry.value), 0);
+  const largest = entries.filter(entry => entry.value > 0).sort((a, b) => b.value - a.value)[0]
+    || entries[0];
+  const historyButton = timeTravelList.length > 0
+    ? `<button type="button" role="menuitem" data-goal-history="${goal.id}">${goalIcon('chart')} History</button>`
+    : '';
+  root.innerHTML = `
+    <header class="goal-detail-head">
+      <div>
+        <p class="goal-detail-kicker"><span>${index + 1}</span> ${esc(goal.goal_name)}</p>
+        <p class="goal-detail-meta">${esc(goalTypeLabel(goal))} · ${esc(currency)}${goal.end_date ? ` · target date ${esc(formatDate(goal.end_date))}` : ''}${index === 0 ? ` · ${goalIcon('pin')} Shown on Dashboard` : ''}</p>
+      </div>
+      <div class="goal-detail-actions">
+        <span class="goal-status is-${esc(status.key)}">${esc(status.label)}</span>
+        <button type="button" class="btn-sm" data-edit-goal="${goal.id}">${goalIcon('edit')} Edit goal</button>
+        <div class="goal-menu">
+          <button type="button" class="goal-order-btn" id="goalMenuBtn" aria-label="More goal actions" aria-expanded="${goalMenuOpen ? 'true' : 'false'}" aria-controls="goalActionMenu">${goalIcon('more')}</button>
+          <div id="goalActionMenu" class="goal-menu-pop" role="menu" ${goalMenuOpen ? '' : 'hidden'}>
+            <button type="button" role="menuitem" data-goal-details="${goal.id}">${goalIcon('info')} Details</button>
+            ${historyButton}
+            <button type="button" role="menuitem" data-simulate-goal="${goal.id}">${goalIcon('zap')} Simulate</button>
+            <button type="button" role="menuitem" data-duplicate-goal="${goal.id}">${goalIcon('file')} Duplicate</button>
+            <button type="button" role="menuitem" class="is-danger" data-delete-goal="${goal.id}">${goalIcon('trash')} Delete</button>
           </div>
         </div>
-        <div class="goal-detail-grid">
-          <div><div class="dlabel">Target</div><div class="dvalue">${formatCurrency(target, g.coin || 'USD')}</div></div>
-          <div><div class="dlabel">Current</div><div class="dvalue ${current < 0 ? 'neg' : 'pos'}">${formatCurrency(current, g.coin || 'USD')}</div></div>
-          <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), g.coin || 'USD')}</div></div>
-          <div><div class="dlabel">Growth Pace</div><div class="dvalue ${paceClass}">${esc(est?.paceText || '—')}</div></div>
-          <div><div class="dlabel">Est. Reach</div><div class="dvalue ${estClass}">${esc(est?.reachText || '—')}</div></div>
-          ${extraField}
+      </div>
+    </header>
+    <div class="goal-metrics">
+      <article><span>${debt ? 'Remaining to clear' : 'Saved toward target'}</span><strong>${formatCurrency(debt ? remaining : current, currency)}</strong><small>${debt ? `Current ${currentNote}` : `Target ${formatCurrency(target, currency)}`}</small></article>
+      <article><span>${debt ? 'Payoff pace' : 'Growth pace'}</span><strong>${esc(est?.paceText || '—')}</strong><small>per month</small></article>
+      <article><span>${debt ? 'Est. debt-free' : 'Est. reach'}</span><strong>${esc(reachMain)}</strong><small>${esc(reachSub)}</small></article>
+      <article><span>Ahead of pace</span><strong class="${aheadClass}">${aheadText}</strong><small>${esc(aheadNote)}</small>${neededNote ? `<small>${esc(neededNote)}</small>` : ''}</article>
+    </div>
+    <div class="goal-progress-slot">${goalProgressHTML(goal, current, target, currency)}</div>
+    <h3 class="goal-section-title">${debt ? 'The path to debt-free' : 'The path to target'}</h3>
+    <div class="goal-chart-wrap"><canvas id="goalPathChart" aria-label="${debt ? 'Path to debt-free' : 'Path to target'}"></canvas></div>
+    <div class="goal-path-notes" id="goalPathNotes"></div>
+    <div class="goal-split">
+      <div>
+        <h3 class="goal-section-title">Sub-goals</h3>
+        ${subHtml}
+      </div>
+      <div>
+        <h3 class="goal-section-title">Linked accounts · contribution</h3>
+        <p class="goal-callout">${largest ? `<strong>Largest contributor:</strong> ${esc(largest.label)} — ${formatCurrency(largest.value, currency)}` : 'No linked accounts'}</p>
+        <div class="goal-contrib">
+          <div class="goal-chart-wrap goal-donut-wrap"><canvas id="goalContribChart" aria-label="Linked account contribution"></canvas></div>
+          <div class="goal-contrib-legend" id="goalContribLegend"></div>
         </div>
-        ${progressHTML}
-        <div class="goal-linked">Linked: ${linkedNames}</div>
-      </div>`;
-  }).join('') : '<div class="page-desc">No goals yet. Create one to start tracking your targets.</div>';
+      </div>
+    </div>
+    <div class="goal-whatif" id="goalWhatIfForm">
+      <div>
+        <strong>What if your ${debt ? 'payoff' : 'savings'} pace increased?</strong>
+        <p>Preview only · nothing is saved</p>
+      </div>
+      <label>Extra per month<input id="goalWhatIfInput" type="number" step="0.01" value="${goalWhatIfExtra ? esc(String(goalWhatIfExtra)) : ''}" aria-label="Extra monthly pace preview"></label>
+      <button type="button" class="btn-sm" id="goalWhatIfReset">${goalIcon('reset')} Reset</button>
+      <p id="goalWhatIfResult" class="goal-whatif-result"></p>
+    </div>`;
+  paintGoalWhatIf(goal);
+  renderGoalPathChart(goal, est, info);
+  renderGoalContribChart(goal, entries, absTotal, currency);
+}
 
-  renderGoalStats();
+function paintGoalWhatIf(goal = goalSortedList().find(item => item.id === selectedGoalId)) {
+  const result = $('#goalWhatIfResult');
+  if (!result || !goal) return;
+  result.textContent = goalWhatIfSummary(goal, goalWhatIfExtra);
+}
+
+function renderGoalPathChart(goal, est, info) {
+  const canvas = document.getElementById('goalPathChart');
+  const notes = $('#goalPathNotes');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const currency = goal.coin || 'USD';
+  const current = goalCurrentValue(goal);
+  const debt = goalIsDebt(goal);
+  const pace = est?.monthlyGrowth || 0;
+  const needed = info && Number.isFinite(info.requiredMonthly) && info.status !== 'achieved' ? info.requiredMonthly : null;
+  const horizon = Math.max(6, Math.min(120, Math.ceil(Math.max(est?.months || 0, info?.monthsLeft || 0, 12))));
+  const labels = [];
+  const currentSeries = [];
+  const neededSeries = [];
+  const start = debt ? Math.abs(Math.min(current, 0)) : current;
+  for (let month = 0; month <= horizon; month += 1) {
+    labels.push(month === 0 ? 'Now' : `${month}m`);
+    currentSeries.push(debt ? Math.max(0, start - pace * month) : current + pace * month);
+    neededSeries.push(needed == null ? null : (debt ? Math.max(0, start - needed * month) : current + needed * month));
+  }
+  const ahead = needed == null ? null : pace - needed;
+  if (notes) {
+    const aheadLabel = ahead == null
+      ? 'Add a target date to compare with the pace required by that date.'
+      : `${ahead >= -0.004 ? 'Ahead' : 'Behind'} ${formatCurrency(Math.abs(ahead), currency)} per month`;
+    notes.innerHTML = `<span>Current pace ${esc(est?.paceText || '—')}</span><span>${needed == null ? 'Needed pace —' : `Needed pace ${formatCurrency(needed, currency)}/mo`}</span><span>${esc(aheadLabel)}</span>`;
+  }
+  goalPathChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Current pace', data: currentSeries, borderColor: '#4f8cff', borderWidth: 2, pointRadius: 0, tension: 0 },
+        { label: 'Needed by target date', data: neededSeries, borderColor: '#8b96b3', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, tension: 0, spanGaps: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { position: 'top', align: 'end', labels: { color: '#e6ebf5', boxWidth: 12, font: { size: 11 }, padding: 12 } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(Number(context.parsed.y || 0), currency)}` } } },
+      scales: {
+        x: { ticks: { color: '#8b96b3', maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { ticks: { color: '#8b96b3', callback: value => formatCurrency(Number(value), currency) }, grid: { color: 'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+}
+
+function renderGoalContribChart(goal, entries, absTotal, currency) {
+  const canvas = document.getElementById('goalContribChart');
+  const legend = $('#goalContribLegend');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const colors = entries.map(entry => entry.value < 0 ? dashboardDebtPattern('#ff5c72') : CHART_COLORS[entries.indexOf(entry) % CHART_COLORS.length]);
+  goalContribChartInstance = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(entry => entry.label),
+      datasets: [{
+        data: entries.length ? entries.map(entry => Math.abs(entry.value)) : [1],
+        backgroundColor: entries.length ? colors : ['#2a3550'],
+        borderWidth: 0
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%', plugins: { legend: { display: false } } }
+  });
+  if (!legend) return;
+  legend.innerHTML = entries.length ? entries.map((entry, index) => {
+    const share = absTotal > 0 ? Math.abs(entry.value) / absTotal * 100 : 0;
+    const debt = entry.value < -0.004;
+    const signed = `${entry.value < -0.004 ? '−' : entry.value > 0.004 ? '+' : ''}${formatCurrency(Math.abs(entry.value), currency)}`;
+    return `<div class="goal-legend-row"><i class="${debt ? 'is-debt' : ''}" style="${debt ? '' : `background:${CHART_COLORS[index % CHART_COLORS.length]}`}"></i><span>${esc(entry.label)}${debt ? ' <em>Debt</em>' : ''}</span><b class="${debt ? 'is-neg' : entry.value > 0.004 ? 'is-pos' : ''}">${signed}</b><small>${share.toFixed(1)}%</small></div>`;
+  }).join('') : '<p class="goal-list-empty">No linked accounts.</p>';
 }
 
 // Compact on-track badge shown next to the goal name (icon + status only).
@@ -10045,6 +10347,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#holdingAssetTypeFilter')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#holdingAccount')?.addEventListener('change', () => fillHoldingAssetSelect());
   $('#newGoalBtn')?.addEventListener('click', () => openGoalModal());
+  $('#goalSearch')?.addEventListener('input', event => {
+    goalListQuery = event.target.value || '';
+    renderGoals();
+  });
+  $('#page-goals')?.addEventListener('input', event => {
+    if (event.target.id !== 'goalWhatIfInput') return;
+    const value = Number(event.target.value);
+    goalWhatIfExtra = Number.isFinite(value) ? value : 0;
+    paintGoalWhatIf();
+  });
+  $('#page-goals')?.addEventListener('click', event => {
+    if (!event.target.closest('#goalWhatIfReset')) return;
+    goalWhatIfExtra = 0;
+    const input = $('#goalWhatIfInput');
+    if (input) input.value = '';
+    paintGoalWhatIf();
+  });
+  $('#page-goals')?.addEventListener('keydown', event => {
+    const row = event.target.closest?.('[data-goal-select]');
+    if (!row || (event.key !== 'Enter' && event.key !== ' ')) return;
+    if (event.target.closest('button')) return;
+    event.preventDefault();
+    selectedGoalId = Number(row.dataset.goalSelect);
+    goalWhatIfExtra = 0;
+    goalMenuOpen = false;
+    renderGoals();
+  });
   $('#newUserBtn')?.addEventListener('click', () => openModal('userModalOverlay'));
   $('#currencyTestConvertBtn')?.addEventListener('click', runCurrencyTest);
   $('#welcomeModalOk')?.addEventListener('click', () => closeModal('welcomeModalOverlay'));
@@ -10899,6 +11228,59 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const goalSelect = event.target.closest('[data-goal-select]');
+    if (goalSelect && !event.target.closest('button')) {
+      const id = Number(goalSelect.dataset.goalSelect);
+      if (id !== selectedGoalId) {
+        selectedGoalId = id;
+        goalWhatIfExtra = 0;
+        goalMenuOpen = false;
+        renderGoals();
+      }
+      return;
+    }
+    const goalFilterBtn = event.target.closest('#goalFilterBtn');
+    if (goalFilterBtn) {
+      const menu = $('#goalFilterMenu');
+      const open = Boolean(menu?.hidden);
+      if (menu) menu.hidden = !open;
+      goalFilterBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
+    const goalFilterOpt = event.target.closest('[data-goal-filter]');
+    if (goalFilterOpt) {
+      goalListFilter = goalFilterOpt.dataset.goalFilter;
+      const menu = $('#goalFilterMenu');
+      if (menu) menu.hidden = true;
+      $('#goalFilterBtn')?.setAttribute('aria-expanded', 'false');
+      renderGoals();
+      return;
+    }
+    const goalMenuBtn = event.target.closest('#goalMenuBtn');
+    if (goalMenuBtn) {
+      goalMenuOpen = !goalMenuOpen;
+      const menu = $('#goalActionMenu');
+      if (menu) menu.hidden = !goalMenuOpen;
+      goalMenuBtn.setAttribute('aria-expanded', goalMenuOpen ? 'true' : 'false');
+      return;
+    }
+    if (event.target.closest('#goalActionMenu button')) {
+      goalMenuOpen = false;
+      const menu = $('#goalActionMenu');
+      if (menu) menu.hidden = true;
+      $('#goalMenuBtn')?.setAttribute('aria-expanded', 'false');
+    }
+    if (goalMenuOpen && !event.target.closest('#goalActionMenu')) {
+      goalMenuOpen = false;
+      const menu = $('#goalActionMenu');
+      if (menu) menu.hidden = true;
+      $('#goalMenuBtn')?.setAttribute('aria-expanded', 'false');
+    }
+    if ($('#goalFilterMenu') && !$('#goalFilterMenu').hidden && !event.target.closest('#goalFilterBtn') && !event.target.closest('#goalFilterMenu')) {
+      $('#goalFilterMenu').hidden = true;
+      $('#goalFilterBtn')?.setAttribute('aria-expanded', 'false');
+    }
+
     // Reorder Goal (up/down arrows)
     const goalUpBtn = event.target.closest('[data-goal-up]');
     const goalDownBtn = event.target.closest('[data-goal-down]');
@@ -10912,6 +11294,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Swap the two goals in the sorted array, then reassign sequential order_by.
       [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
       sorted.forEach((g, i) => { g.order_by = i + 1; });
+      goalReorderFocusId = id;
+      selectedGoalId = id;
       if (state.guest) {
         guestData.goals = sorted.map(g => ({ ...g }));
         await loadData();

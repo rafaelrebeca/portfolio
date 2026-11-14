@@ -728,7 +728,30 @@
             <button class="btn-sm primary write-action" id="newGoalBtn">+ New Goal</button>
           </div>
           <div id="goalStatsCard" class="goal-stats-card"></div>
-          <div id="goalsList"></div>
+          <div class="goal-workspace">
+            <aside class="goal-list-pane" aria-label="Goal list">
+              <div class="goal-list-tools">
+                <label class="goal-search">
+                  <svg class="goal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                  <input id="goalSearch" type="search" placeholder="Search goals" aria-label="Search goals" autocomplete="off">
+                </label>
+                <button type="button" class="goal-filter-btn" id="goalFilterBtn" aria-label="Filter goals" aria-expanded="false" aria-controls="goalFilterMenu">
+                  <svg class="goal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>
+                </button>
+                <div id="goalFilterMenu" class="goal-filter-menu" hidden role="group" aria-label="Goal filters">
+                  <button type="button" data-goal-filter="all" aria-pressed="true">All goals</button>
+                  <button type="button" data-goal-filter="debt" aria-pressed="false">Debt payoff</button>
+                  <button type="button" data-goal-filter="savings" aria-pressed="false">Savings goal</button>
+                  <button type="button" data-goal-filter="on_track" aria-pressed="false">On track</button>
+                  <button type="button" data-goal-filter="behind" aria-pressed="false">Behind</button>
+                  <button type="button" data-goal-filter="achieved" aria-pressed="false">Achieved</button>
+                  <button type="button" data-goal-filter="no_date" aria-pressed="false">No target date</button>
+                </div>
+              </div>
+              <div id="goalsList" class="goal-list" role="list"></div>
+            </aside>
+            <section id="goalDetail" class="goal-detail" aria-live="polite"></section>
+          </div>
         </div>
 
         <!-- TOOLS (admin): Data / Currency Test -->
