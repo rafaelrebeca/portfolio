@@ -657,9 +657,6 @@ let allocationChartInstance = null;
 let accountTypeChartInstance = null;
 let portfolioAssetChartInstance = null;
 let portfolioTypeChartInstance = null;
-let goalDetailsChartInstance = null;
-let goalDetailsGoalId = null;
-let goalDetailsChartMode = 'donut';
 let selectedGoalId = null;
 let goalListQuery = '';
 let goalListFilter = 'all';
@@ -668,8 +665,6 @@ let goalMenuOpen = false;
 let goalReorderFocusId = null;
 let goalPathChartInstance = null;
 let goalContribChartInstance = null;
-let goalDetailsDonutData = null;
-let goalDetailsHistoryData = null;
 let accountDetailsChartInstance = null;
 let providerDetailsChartInstance = null;
 let simulationTrendChartInstance = null;
@@ -7421,7 +7416,6 @@ function goalIcon(name) {
     pin: '<path d="M12 17v5"/><path d="M8 10.5h8L15 17H9z"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
     chart: '<path d="M4 19V5M4 19h16"/><path d="m7 14 4-4 3 3 5-6"/>',
     zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
     file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
@@ -7658,7 +7652,6 @@ function renderGoalDetail(goal, sorted) {
         <div class="goal-menu">
           <button type="button" class="goal-order-btn" id="goalMenuBtn" aria-label="More goal actions" aria-expanded="${goalMenuOpen ? 'true' : 'false'}" aria-controls="goalActionMenu">${goalIcon('more')}</button>
           <div id="goalActionMenu" class="goal-menu-pop" role="menu" ${goalMenuOpen ? '' : 'hidden'}>
-            <button type="button" role="menuitem" data-goal-details="${goal.id}">${goalIcon('info')} Details</button>
             ${historyButton}
             <button type="button" role="menuitem" data-simulate-goal="${goal.id}">${goalIcon('zap')} Simulate</button>
             <button type="button" role="menuitem" data-duplicate-goal="${goal.id}">${goalIcon('file')} Duplicate</button>
@@ -8160,7 +8153,6 @@ function refreshChartPrivacy() {
     goalHistoryChartInstance,
     accountDetailsChartInstance,
     providerDetailsChartInstance,
-    goalDetailsChartInstance,
     goalSimChartInstance,
     interestSimChartInstance,
     ...Object.values(expenseCharts)
@@ -9261,208 +9253,8 @@ function validateGoalSubs(value, subs) {
   return null;
 }
 
-/* ================= GOAL DETAILS ================= */
-
-function renderGoalDetailsChart() {
-  if (goalDetailsChartInstance) {
-    goalDetailsChartInstance.destroy();
-    goalDetailsChartInstance = null;
-  }
-  const canvas = document.getElementById('goalDetailsChart');
-  const ctx = canvas?.getContext('2d');
-  const row = $('#goalDetailsChartRow');
-  const chartWrap = $('#goalDetailsChartWrap');
-  const legend = $('#goalDetailsLegend');
-  const hint = $('#goalDetailsChartHint');
-  if (!ctx || typeof Chart === 'undefined' || !goalDetailsDonutData) return;
-
-  const showingHistory = goalDetailsChartMode === 'history' && goalDetailsHistoryData?.labels?.length;
-  if (row) {
-    row.classList.toggle('modal-line-layout', Boolean(showingHistory));
-    row.style.flexDirection = showingHistory ? 'column' : 'row';
-    row.style.alignItems = showingHistory ? 'stretch' : 'center';
-  }
-  if (chartWrap) {
-    chartWrap.classList.toggle('modal-line-chart', Boolean(showingHistory));
-    chartWrap.style.width = showingHistory ? '100%' : '200px';
-    chartWrap.style.height = showingHistory ? '240px' : '200px';
-  }
-  if (legend) legend.style.display = showingHistory ? 'none' : '';
-  if (hint) hint.textContent = showingHistory ? 'Click the chart to return to the current breakdown' : (goalDetailsHistoryData?.labels?.length ? 'Click the chart to view snapshot history' : 'Snapshot history is not available for this goal');
-  canvas.setAttribute('aria-label', showingHistory ? 'Snapshot history of goal contribution percentages; activate to return to current breakdown' : 'Current goal contribution breakdown; activate to view snapshot history');
-  canvas.style.cursor = goalDetailsHistoryData?.labels?.length ? 'pointer' : 'default';
-
-  if (showingHistory) {
-    const labels = goalDetailsHistoryData.labels;
-    const datasets = goalDetailsHistoryData.series.map((series, index) => ({
-      label: series.label,
-      data: historyLinePoints(series.values),
-      borderColor: CHART_COLORS[index % CHART_COLORS.length],
-      backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
-      tension: 0.3,
-      fill: false,
-      spanGaps: true,
-      pointRadius: 0
-    }));
-    const lastIndex = Math.max(0, labels.length - 1);
-    goalDetailsChartInstance = new Chart(ctx, {
-      type: 'line',
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        parsing: false,
-        normalized: true,
-        interaction: { mode: 'nearest', axis: 'x', intersect: false },
-        plugins: {
-          decimation: { enabled: true, algorithm: 'lttb', samples: HISTORY_LINE_MAX_POINTS, threshold: HISTORY_LINE_MAX_POINTS },
-          legend: { display: datasets.length > 1, labels: { color: '#e6ebf5', boxWidth: 12, usePointStyle: true } },
-          tooltip: {
-            callbacks: {
-              title: contexts => labels[Math.round(Number(contexts[0]?.parsed?.x ?? 0))] || '',
-              label: context => `${context.dataset.label}: ${Number(context.parsed.y || 0).toFixed(1)}%`
-            }
-          }
-        },
-        scales: {
-          x: {
-            type: 'linear', min: 0, max: lastIndex,
-            ticks: { maxTicksLimit: 10, color: '#e6ebf5', callback: value => labels[Math.round(Number(value))] || '' },
-            grid: { color: 'rgba(255,255,255,.05)' }
-          },
-          y: {
-            min: 0, max: 100,
-            ticks: { color: '#e6ebf5', callback: value => `${value}%` },
-            grid: { color: 'rgba(255,255,255,.05)' }
-          }
-        }
-      }
-    });
-    return;
-  }
-
-  const { labels, data, colors } = goalDetailsDonutData;
-  goalDetailsChartInstance = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: labels.length ? labels : ['No Data'],
-      datasets: [{ data: data.length ? data : [1], backgroundColor: data.length ? colors : ['#2a3550'], borderWidth: 0 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-  });
-}
-
-function toggleGoalDetailsChart() {
-  if (!goalDetailsHistoryData?.labels?.length) return;
-  goalDetailsChartMode = goalDetailsChartMode === 'donut' ? 'history' : 'donut';
-  renderGoalDetailsChart();
-}
-
-function closeGoalDetailsModal() { closeModal('goalDetailsModalOverlay'); }
-
-function openGoalDetailsModal(goalId) {
-  const g = state.goals.find(item => item.id === goalId);
-  if (!g) return;
-  goalDetailsGoalId = goalId;
-  const currency = g.coin || 'USD';
-  $('#goalDetailsTitle').textContent = `Details: ${g.goal_name}`;
-
-  const linked = state.accounts.filter(a => (g.account_ids || []).includes(a.id));
-  const current = goalCurrentValue(g);
-  const target = Number(g.value || 0);
-  const diff = current - target;
-
-  // Summary
-  const summary = $('#goalDetailsSummary');
-  if (summary) {
-    const est = calculateGoalPaceAndEstimate(g);
-    const paceClass = est && est.monthlyGrowth > 0 ? 'pos' : (est && est.monthlyGrowth < 0 ? 'neg' : '');
-    const estClass = est && est.status === 'achieved' ? 'pos' : (est && est.status === 'stalled' ? 'neg' : '');
-
-    summary.innerHTML = `
-      <div><div class="dlabel">Target</div><div class="dvalue">${formatCurrency(target, currency)}</div></div>
-      <div><div class="dlabel">Current</div><div class="dvalue ${current < 0 ? 'neg' : 'pos'}">${formatCurrency(current, currency)}</div></div>
-      <div><div class="dlabel">Difference</div><div class="dvalue ${diff < 0 ? 'neg' : 'pos'}">${diff < 0 ? '−' : '+'}${formatCurrency(Math.abs(diff), currency)}</div></div>
-      <div><div class="dlabel">Accounts</div><div class="dvalue">${linked.length}</div></div>
-      <div><div class="dlabel">Growth Pace</div><div class="dvalue ${paceClass}">${esc(est?.paceText || '—')}</div></div>
-      <div><div class="dlabel">Est. Reach</div><div class="dvalue ${estClass}">${esc(est?.reachText || '—')}</div></div>
-    `;
-  }
-
-  // Progress bar (same logic as the goal card, including sub-goal display)
-  const progressEl = $('#goalDetailsProgress');
-  if (progressEl) {
-    progressEl.innerHTML = goalProgressHTML(g, current, target, currency);
-  }
-
-  // Per-account values, converted to goal currency, sorted descending
-  const accountMap = {};
-  linked.forEach(acc => {
-    const val = accountValue(acc, false);
-    const rate = getExchangeRate(acc.coin || 'USD', currency);
-    const converted = rate ? val * rate : val;
-    const label = `${acc.name} (${acc.provider_name || providerName(acc.provider_id)})`;
-    accountMap[label] = (accountMap[label] || 0) + converted;
-  });
-  const entries = Object.entries(accountMap).sort((a, b) => b[1] - a[1]);
-  const labels = entries.map(e => e[0]);
-  const data = entries.map(e => e[1]);
-  const dataAbs = data.map(v => Math.abs(v));
-  const colors = CHART_COLORS;
-
-  // Largest contributor / largest debt callout
-  const calloutEl = $('#goalDetailsCallout');
-  if (calloutEl && entries.length) {
-    const top = entries[0];
-    const topLabel = top[0];
-    const topVal = top[1];
-    const isDebt = topVal < 0;
-    calloutEl.innerHTML = `
-      <span class="goal-details-callout-icon">${isDebt ? '💳' : '📈'}</span>
-      <span><strong>${isDebt ? 'Largest debt' : 'Largest contributor'}:</strong> ${esc(topLabel)} — ${formatCurrency(Math.abs(topVal), currency)}</span>
-    `;
-  } else if (calloutEl) {
-    calloutEl.innerHTML = '';
-  }
-
-  goalDetailsChartMode = 'donut';
-  goalDetailsDonutData = { labels, data: dataAbs, colors };
-  goalDetailsHistoryData = null;
-  try { hydrateSnapshotCache(); } catch (error) { console.warn('Could not load goal chart snapshot history:', error); }
-  const snapshots = (timeTravelList || []).slice().reverse();
-  if (snapshots.length && entries.length) {
-    const accountGroups = entries.map(([label]) => ({
-      label,
-      accounts: linked.filter(acc => `${acc.name} (${acc.provider_name || providerName(acc.provider_id)})` === label)
-    }));
-    const historyLabels = snapshots.map(snapshot => formatSnapshotDay(snapshot.day));
-    const series = accountGroups.map(group => ({
-      label: group.label,
-      values: snapshots.map(snapshot => {
-        const snapshotAccounts = snapshot.data?.accounts || [];
-        const snapshotById = new Map(snapshotAccounts.map(account => [account.id, Number(account.valueEur || 0)]));
-        if (!group.accounts.some(account => snapshotById.has(account.id))) return null;
-        return group.accounts.reduce((sum, account) => sum + (snapshotById.get(account.id) || 0), 0);
-      })
-    }));
-    const totals = snapshots.map((_, index) => series.reduce((sum, item) => sum + Math.abs(item.values[index] || 0), 0));
-    series.forEach(item => {
-      item.values = item.values.map((value, index) => value === null || totals[index] <= 0 ? null : Math.abs(value) / totals[index] * 100);
-    });
-    if (historyLabels.length && series.some(item => item.values.some(value => value !== null))) {
-      goalDetailsHistoryData = { labels: historyLabels, series };
-    }
-  }
-  renderGoalDetailsChart();
-
-  // Legend (reuse dashboard renderLegend which handles negatives + absolute values)
-  renderLegend('goalDetailsLegend', labels, data, colors);
-
-  openModal('goalDetailsModalOverlay');
-}
-
 /* ================= GOAL SIMULATOR ================= */
+
 
 let goalSimChartInstance = null;
 
@@ -10529,17 +10321,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   $('#interestSimFrequency')?.addEventListener('change', runInterestSimulation);
   $('#interestSimSearch')?.addEventListener('input', renderInterestSimTable);
-  $('#goalDetailsSimulateBtn')?.addEventListener('click', () => {
-    if (goalDetailsGoalId == null) return;
-    closeGoalDetailsModal();
-    openGoalSimModal(goalDetailsGoalId);
-  });
-  $('#goalDetailsChart')?.addEventListener('click', toggleGoalDetailsChart);
-  $('#goalDetailsChart')?.addEventListener('keydown', event => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    toggleGoalDetailsChart();
-  });
   $('#closeUserModalBtn')?.addEventListener('click', () => closeModal('userModalOverlay'));
   $('#closeResetPasswordModalBtn')?.addEventListener('click', () => closeModal('resetPasswordModalOverlay'));
   // Modal header X close buttons
@@ -10579,7 +10360,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#closeGoalSimX')?.addEventListener('click', () => closeModal('goalSimModalOverlay'));
   $('#closeLoanSimX')?.addEventListener('click', () => closeModal('loanSimModalOverlay'));
   $('#closeInterestSimX')?.addEventListener('click', () => closeModal('interestSimModalOverlay'));
-  $('#closeGoalDetailsX')?.addEventListener('click', closeGoalDetailsModal);
   $('#closeAccountDetailsX')?.addEventListener('click', () => closeModal('accountDetailsModalOverlay'));
   $('#closeProviderDetailsX')?.addEventListener('click', () => closeModal('providerDetailsModalOverlay'));
   $('#closeUserModalX')?.addEventListener('click', () => closeModal('userModalOverlay'));
@@ -11355,13 +11135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         toast(err.message);
         await loadData();
       }
-      return;
-    }
-
-    // Goal Details
-    const goalDetailsBtn = event.target.closest('[data-goal-details]');
-    if (goalDetailsBtn) {
-      openGoalDetailsModal(Number(goalDetailsBtn.dataset.goalDetails));
       return;
     }
 

@@ -2796,23 +2796,6 @@ select {
   margin-top: 2px;
 }
 
-.goal-details-callout {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 10px 14px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--text);
-}
-
-.goal-details-callout-icon {
-  font-size: 16px;
-}
-
 .goal-accounts-list {
   display: flex;
   flex-direction: column;
