@@ -7531,6 +7531,9 @@ select {
 }
 
 #page-goals .goal-split.is-solo { grid-template-columns: 1fr; }
+#page-goals .goal-split.is-solo .goal-contrib { justify-content: flex-start; }
+#page-goals .goal-split.is-solo .goal-contrib-legend { flex: none; width: max-content; max-width: min(460px, 100%); }
+#page-goals .goal-split.is-solo .goal-legend-row { grid-template-columns: 12px minmax(7rem, max-content) auto auto; }
 
 @media (prefers-reduced-motion: reduce) {
   #page-goals .goal-mark::after { transition: none; }
