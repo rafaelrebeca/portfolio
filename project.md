@@ -34,6 +34,7 @@ portfolio/
 ├── wrangler.toml
 ├── package.json
 ├── package-lock.json
+├── README.md
 ├── sw.js
 ├── manifest.webmanifest
 ├── project.md
@@ -207,7 +208,7 @@ Navigation items are buttons with the same `data-page` values. `#navAssets` stil
 
 The Dashboard is a net-worth layout. Monetary calculations are normalized to EUR using `accountValue(account, true)` and `convertToEUR`.
 
-The **Net worth** hero shows the global value, today's change versus the previous snapshot, and a neutral **Debt-heavy** tag when the value is negative. A split bar compares assets (positive account values, stored as `debit`) with liabilities (negative values, stored as `credit`), and a break-even line shows the absolute gap. **History** opens the existing Portfolio Value Ranges modal for Global Value, Assets, and Liabilities.
+The **Net worth** hero shows the global value, today's change versus the previous snapshot, and a neutral **Debt-heavy** tag when the value is negative. The value itself is green (`dash-networth-value.pos`, the accent green) when it is above zero and red (`dash-networth-value.neg`) when it is below zero, using the same ±0.004 threshold as the Debt-heavy tag. Exactly zero stays the default text color. Time Travel uses the same hero function, so the color follows the snapshot total. A split bar compares assets (positive account values, stored as `debit`) with liabilities (negative values, stored as `credit`), and a break-even line shows the absolute gap. **History** opens the existing Portfolio Value Ranges modal for Global Value, Assets, and Liabilities.
 
 **Growth** sits beside it with All-time, YTD, and Month tabs. The selected mode is stored as `portfolio_growth_card_mode`. Each tab uses the same baseline comparison as before: percentage versus the baseline snapshot and the average pace.
 
@@ -297,7 +298,9 @@ The corridor chart shows the real pace as a dashed line, the +5% path as a dotte
 
 Both FIRE targets use `monthly × 12 × 25`. The 6-month target averages My Expenses over the last six complete months, excluding the current month, using `expenseAmountInEur`. Only months that have rows are included in the divisor. If none of them have rows, the line is hidden and the page says to add monthly expenses in My Expenses. While the monthly pace is edited, the FIRE dates and the next-stop ladder follow that edited pace. It does not use snapshot losses. The profile target reads Profile “Monthly expenses for FIRE (€)” and, when that value is missing, says to add monthly expenses in Profile. Crossing markers and the table under the chart give the month each scenario reaches each target, rounded up to a month.
 
-Next stop is the next power of ten at or above zero (€0 below zero, then €10, €100, €1k, and so on), with reach months at the real pace. If that pace is not positive, the card says “Not reached at current pace”. Account drivers replace the old doughnut: each account’s signed all-time monthly change, in two columns, with negatives in red and a minus sign. The projection still ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
+Next stop is a full-width card above Account drivers. It is the next power of ten at or above zero (€0 below zero, then €10, €100, €1k, and so on), with a ladder of later stops. Reach months follow the real pace, or the edited pace while that preview is active. If the pace is unknown the headline is an em dash and the card says two dated snapshots are needed. If the pace is not improving, it says “Not reached at this pace”.
+
+Account drivers is its own full-width card under Next stop. The subtitle is “Avg monthly change (lifetime) · change year to date”. Monthly is the lifetime average monthly change. YTD is the euro change since 1 January, the same total `calculateAccountGrowths('ytd')` already computes (`delta * monthsExisted`). An account with no year-to-date observation shows an em dash. Rows sort by the absolute monthly change and fill top to bottom, then across, in up to three groups: one below 560px, two below 900px, and three from 900px up. A divider separates side-by-side groups and is omitted when only one group fits. There is no total row. Negatives are red, positives are green, and zero is neutral. The projection still ignores interest, dividends, market returns, inflation, and future deposits or withdrawals.
 
 ### My Portfolio
 
@@ -315,27 +318,25 @@ The By Asset Type and Type by Account modes use the reusable `topNWithOthers(map
 
 ### Goals
 
-Goals can link to multiple accounts, hold any number of sub-goals, and be reordered with arrow controls. Positive goals use segmented progress bars; debt goals use a debt-cleared bar with milestone diamond markers. Goal Details and Goal Simulation reuse the same progress and account-value calculations. Goal History plots historical progress from snapshots.
+The Goals page is a split list and detail view. A statistics strip stays above both columns. Below about 1280px the list stacks above the detail.
+
+The list follows `order_by`. Each row shows its order number, name, type (Debt payoff or Savings goal), progress percent, and a status chip. Search and a filter (all goals, debt payoff, savings goal, on track, behind, achieved, no target date) sit above the rows. The selected row has Move up and Move down. Up is disabled on the first goal and down on the last. Those buttons write `order_by` through the existing reorder request. Goal #1 shows a Shown on Dashboard pin, because the Dashboard top-goal card uses that first goal.
+
+The detail pane shows the selected goal: order number, name, type, currency, target date (`end_date`, formatted as a day plus short month, such as 31 Dec 2028), the dashboard pin when it is #1, a status chip, Edit goal, and a ⋯ menu. The menu is History, Simulate, Duplicate, and Delete.
+
+Four metrics come from `calculateGoalPaceAndEstimate` and `goalOnTrackInfo`. A debt goal (target value 0) shows Remaining to clear as a positive amount, Payoff pace, Est. debt-free, and Ahead of pace. A savings goal shows Saved toward target, Growth pace, Est. reach, and Ahead of pace. Pace is the sum of each linked account's all-time monthly growth, converted to the goal currency. Reach is the projected month at that pace. When snapshot history is missing, the big figure is an em dash and the note says Need snapshot history.
+
+Progress bars still come from `goalProgressHTML()`. A debt goal uses one bar, white sub-goal ticks, and a “percent of debt cleared” label. A savings goal with sub-goals uses a segmented bar and a caption for the active sub-goal. A goal with no sub-goals uses a plain bar.
+
+The path chart draws the current pace against the pace required by the target date. Sub-goals come from the `subgoals` table (the legacy `sub1`/`sub2`/`sub3` columns are only a fallback) and each row shows its threshold and an estimated date. The Sub-goals block is omitted when there are none, and the contribution block then spans the row without stretching its legend across the page. Linked accounts · contribution shows the largest positive contributor, a doughnut, and a legend with amount and share of the absolute total. A debt account is a hatched slice with a minus sign and a Debt tag. The what-if row previews a higher monthly pace and the resulting date. Reset restores the real pace. Nothing is saved.
 
 The create/edit modal manages sub-goals as a dynamic list: **+ Add Sub-goal** appends a row and each row has a ✕ button to remove it, so the user can add and delete as many as they want. A hint below the list states the rule for the current target value (negative for a debt goal, positive and ascending below the target otherwise). Sub-goals are read in row order and submitted as an ordered array.
 
 For goals whose linked accounts include both positive and negative values, the Goal History chart plots two dashed lines alongside the Progress (%) line: **Positive (%)** in green and **Negative (%)** in red. Each is that side's share of the goal's absolute total, so a goal with −100 and +50 reads 66.7% negative and 33.3% positive. The two lines sum to 100%. They are absent for goals that are entirely positive or entirely negative, and the chart legend appears only when these lines are present. Snapshots where the goal has no mixed split leave a gap in both lines.
 
-Each goal card and the Goal Details modal display two additional fields computed by `calculateGoalPaceAndEstimate(goal)`:
+Status text comes from `goalStatusInfo(goal)`. Achieved wins when the target is already reached, including a goal that has no end date. Otherwise a goal with no end date is No target date, a pace that meets `end_date` is On track, and a pace that does not is Behind.
 
-- **Growth Pace** — the sum of each linked account's all-time monthly growth rate, converted to the goal's currency. Shown in green when positive, red when negative.
-- **Est. Reach** — the projected date at which the current pace reaches the goal target (e.g. `Oct 2026 (~8 mos)`). Shows `Target reached` / `Debt cleared` when already achieved, `Declining` or `No growth` when the pace is ≤ 0, and `Need snapshot history` when no snapshot data is available.
-
-The Dashboard Top Goal Status card also shows this estimate beneath the goal name.
-
-Goals have an optional **Target Date** (`end_date`, `YYYY-MM-DD`) set with a calendar picker in the create/edit form. When a target date is present, the goal name is followed by a compact on-track badge computed by `goalOnTrackInfo(goal)`:
-
-- **On track** (green pill, 🟢) — the current monthly pace is enough to close the gap by the target date, or the target is already reached.
-- **Not on track** (red pill, 🔴) — the current pace is insufficient to reach the target on/before the date.
-
-In the Goal Details grid, the target date is replaced by a status field that states the **extra monthly amount** needed when off track (e.g. `Extra Needed +€242.39/mo`), the surplus pace when on track (`Ahead of Pace +Y/mo`), or `Status: Reached` when the goal is already achieved.
-
-Above the goal list, a **Goal Statistics** card (`renderGoalStats`) summarizes the goals: total count, how many are on track / not on track / achieved / without a target date, and the best- and worst-performing goals. Best/Worst are judged by projected reach date among not-yet-achieved goals with growth (earliest reach = best; won't-reach or latest reach = worst), not by progress percentage. No combined target/current totals are shown.
+The statistics strip (`renderGoalStats`) counts with that same function, so the strip matches the list. The labels are Total goals, On track, Behind, Achieved, and No target date, plus Best performing and Worst performing. Best and worst are still judged by projected reach among goals that are not yet achieved (earliest reach is best; a goal that will not reach, or the latest reach, is worst). The full name is on the title attribute when the label is clipped. No combined target or current totals are shown. Goal Simulation and Goal History still use the same progress and account-value calculations as the detail pane. The Dashboard top-goal card still reads the first goal in `order_by`.
 
 ### Tools, Users, Profile, and Currency
 
@@ -437,7 +438,7 @@ Massive.com is used only for the previous trading day's US stock close. It does 
 
 ExchangeRate-API data is previous-day/end-of-day data and is refreshed at most once per UTC day through `update_story`.
 
-The service worker and manifest provide the existing PWA shell/offline boundary. Cached snapshot history is not equivalent to an offline authenticated dashboard: live API data, authentication, and unsaved changes still require the application/backend environment.
+The service worker and manifest provide the existing PWA shell/offline boundary. `sw.js` caches the shell under `portfolio-manager-v26` and deletes older cache names on activate. Cached snapshot history is not equivalent to an offline authenticated dashboard: live API data, authentication, and unsaved changes still require the application/backend environment.
 
 Source checks can validate syntax and documentation consistency, but they do not prove browser layout, PWA installation, authenticated Cloudflare behavior, D1 binding configuration, or external API availability. Those require a live browser/deployment check.
 
