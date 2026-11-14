@@ -2327,6 +2327,7 @@ select {
 
 .goal-seg {
   height: 100%;
+  min-width: 0;
   border-radius: 6px;
   background: var(--panel2);
   overflow: hidden;
@@ -7471,7 +7472,7 @@ select {
 
 #page-goals .goal-status.is-on_track,
 #page-goals .goal-status.is-achieved { color: var(--accent2); background: rgba(63, 208, 163, .15); }
-#page-goals .goal-status.is-behind { color: var(--danger); background: rgba(255, 92, 114, .15); }
+#page-goals .goal-status.is-behind { color: #ff8a9a; background: rgba(255, 92, 114, .15); }
 #page-goals .goal-status.is-no_date { color: var(--muted); background: var(--panel2); }
 
 #page-goals .goal-detail { padding: 16px 18px 18px; }
@@ -7545,6 +7546,8 @@ select {
   #page-goals .goal-contrib { flex-direction: column; align-items: stretch; }
   #page-goals .goal-metrics strong { font-size: 20px; }
 }
+
+#page-goals .goal-split.is-solo { grid-template-columns: 1fr; }
 
 @media (prefers-reduced-motion: reduce) {
   #page-goals .goal-mark::after { transition: none; }

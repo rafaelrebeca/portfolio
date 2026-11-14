@@ -7380,7 +7380,7 @@ function goalProgressHTML(g, current, target, currency) {
     const width = ((end - prev) / target) * 100;
     const segPct = Math.min(100, Math.max(0, ((current - prev) / (end - prev)) * 100));
     const segColor = `hsl(${segPct * 1.2}, 80%, 50%)`;
-    const seg = `<div class="goal-seg" style="width:${width}%;"><div class="goal-seg-fill" style="width:${segPct}%;background:${segColor};"></div></div>`;
+    const seg = `<div class="goal-seg" style="flex:${Math.max(width, 0)} 1 0;"><div class="goal-seg-fill" style="width:${segPct}%;background:${segColor};"></div></div>`;
     prev = end;
     return seg;
   }).join('');
@@ -7573,7 +7573,7 @@ function renderGoals() {
     const selected = goal.id === selectedGoalId;
     const status = goalStatusInfo(goal);
     const pct = goalListPct(goal);
-    return `<div class="goal-row${selected ? ' is-selected' : ''}" role="listitem" tabindex="0" data-goal-select="${goal.id}" data-goal-row="${goal.id}"${selected ? ' aria-current="true"' : ''}>
+    return `<div class="goal-row${selected ? ' is-selected' : ''}" role="listitem" tabindex="${selected ? '0' : '-1'}" data-goal-select="${goal.id}" data-goal-row="${goal.id}"${selected ? ' aria-current="true"' : ''}>
       <span class="goal-row-num">${index + 1}</span>
       <span class="goal-row-main">
         <strong>${esc(goal.goal_name)}</strong>
@@ -7633,9 +7633,12 @@ function renderGoalDetail(goal, sorted) {
   const reachSub = noHistory ? 'Need snapshot history' : (est?.months > 0 ? `~${est.months} month${est.months === 1 ? '' : 's'}` : '');
   const currentNote = current < -0.004 ? `−${formatCurrency(Math.abs(current), currency)}` : formatCurrency(current, currency);
   const subs = goalSubgoalValues(goal);
-  const subHtml = subs.length ? subs.map((value, subIndex) => `
-    <div class="goal-sub-row"><span>Sub-goal ${subIndex + 1}</span><strong>${formatCurrency(value, currency)}</strong><em>${esc(goalMilestoneLabel(goal, value, pace))}</em></div>
-  `).join('') : '<p class="goal-list-empty">No sub-goals.</p>';
+  const subBlock = subs.length ? `<div>
+        <h3 class="goal-section-title">Sub-goals</h3>
+        ${subs.map((value, subIndex) => `
+          <div class="goal-sub-row"><span>Sub-goal ${subIndex + 1}</span><strong>${formatCurrency(value, currency)}</strong><em>${esc(goalMilestoneLabel(goal, value, pace))}</em></div>
+        `).join('')}
+      </div>` : '';
   const entries = goalLinkedEntries(goal);
   const absTotal = entries.reduce((sum, entry) => sum + Math.abs(entry.value), 0);
   const largest = entries.filter(entry => entry.value > 0).sort((a, b) => b.value - a.value)[0]
@@ -7674,11 +7677,8 @@ function renderGoalDetail(goal, sorted) {
     <h3 class="goal-section-title">${debt ? 'The path to debt-free' : 'The path to target'}</h3>
     <div class="goal-chart-wrap"><canvas id="goalPathChart" aria-label="${debt ? 'Path to debt-free' : 'Path to target'}"></canvas></div>
     <div class="goal-path-notes" id="goalPathNotes"></div>
-    <div class="goal-split">
-      <div>
-        <h3 class="goal-section-title">Sub-goals</h3>
-        ${subHtml}
-      </div>
+    <div class="goal-split${subs.length ? '' : ' is-solo'}">
+      ${subBlock}
       <div>
         <h3 class="goal-section-title">Linked accounts · contribution</h3>
         <p class="goal-callout">${largest ? `<strong>Largest contributor:</strong> ${esc(largest.label)} — ${formatCurrency(largest.value, currency)}` : 'No linked accounts'}</p>
@@ -10399,6 +10399,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   $('#page-goals')?.addEventListener('keydown', event => {
     const row = event.target.closest?.('[data-goal-select]');
+    if (row && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && event.target.closest('#goalsList')) {
+      event.preventDefault();
+      event.stopPropagation();
+      const rows = [...document.querySelectorAll('#goalsList [data-goal-select]')];
+      const index = rows.indexOf(row);
+      const next = rows[index + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (!next) return;
+      rows.forEach(item => { item.tabIndex = item === next ? 0 : -1; });
+      next.focus();
+      return;
+    }
     if (!row || (event.key !== 'Enter' && event.key !== ' ')) return;
     if (event.target.closest('button')) return;
     event.preventDefault();
@@ -10439,6 +10450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       target.isContentEditable
     );
     if (isTyping) return;
+    if (target.closest?.('#goalsList, #goalWhatIfInput')) return;
 
     if (event.key === 'ArrowLeft') {
       const prevBtn = $('#timeTravelPrevBtn');
