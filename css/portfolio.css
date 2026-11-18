@@ -7531,6 +7531,9 @@ select {
 
 #page-goals .goal-detail {
   padding: 16px 18px 18px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
 }
 
 #page-goals .goal-detail-head {
@@ -7599,6 +7602,7 @@ select {
   display: block;
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 #page-goals .goal-metrics strong {
@@ -7606,6 +7610,7 @@ select {
   margin: 4px 0;
   font-size: 22px;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 #page-goals .goal-metrics strong.is-pos,
@@ -7625,7 +7630,83 @@ select {
 
 #page-goals .goal-chart-wrap {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+#page-goals .goal-path-plot {
+  position: relative;
   height: 220px;
+  min-width: 0;
+}
+
+#page-goals .goal-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 14px;
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+#page-goals .goal-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#page-goals .goal-chart-legend i {
+  width: 18px;
+  height: 0;
+  border-top: 2px solid #4f8cff;
+  flex: none;
+}
+
+#page-goals .goal-chart-legend i.is-dashed {
+  border-top: 2px dashed #8b96b3;
+}
+
+.goal-chart-tooltip {
+  position: fixed;
+  z-index: 80;
+  left: 0;
+  top: 0;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .82);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+}
+
+.goal-chart-tooltip[hidden] {
+  display: none;
+}
+
+.goal-chart-tooltip strong,
+.goal-chart-tooltip p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-chart-tooltip p {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.goal-chart-tooltip i {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: 2px;
+  flex: none;
 }
 
 #page-goals .goal-donut-wrap {

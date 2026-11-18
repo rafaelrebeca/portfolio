@@ -7601,6 +7601,7 @@ function renderGoalDetail(goal, sorted) {
     goalContribChartInstance.destroy();
     goalContribChartInstance = null;
   }
+  hideGoalChartTooltip();
   if (!goal) {
     root.innerHTML = '<p class="goal-list-empty">No goals yet. Create one to start tracking your targets.</p>';
     return;
@@ -7668,7 +7669,13 @@ function renderGoalDetail(goal, sorted) {
     </div>
     <div class="goal-progress-slot">${goalProgressHTML(goal, current, target, currency)}</div>
     <h3 class="goal-section-title">${debt ? 'The path to debt-free' : 'The path to target'}</h3>
-    <div class="goal-chart-wrap"><canvas id="goalPathChart" aria-label="${debt ? 'Path to debt-free' : 'Path to target'}"></canvas></div>
+    <div class="goal-chart-wrap">
+      <div class="goal-chart-legend">
+        <span><i style="background:#4f8cff"></i>Current pace</span>
+        <span><i class="is-dashed"></i>Needed by target date</span>
+      </div>
+      <div class="goal-path-plot"><canvas id="goalPathChart" aria-label="${debt ? 'Path to debt-free' : 'Path to target'}"></canvas></div>
+    </div>
     <div class="goal-path-notes" id="goalPathNotes"></div>
     <div class="goal-split${subs.length ? '' : ' is-solo'}">
       ${subBlock}
@@ -7702,6 +7709,78 @@ function paintGoalWhatIf(goal = goalSortedList().find(item => item.id === select
   if (!result || !goal) return;
   const summary = goalWhatIfSummary(goal, goalWhatIfExtra);
   result.innerHTML = `<strong>${esc(summary.headline)}</strong>${summary.pace ? `<span>${esc(summary.pace)}</span>` : ''}<small>${esc(summary.note)}</small>`;
+}
+
+let goalTooltipScrollBound = false;
+
+function hideGoalChartTooltip() {
+  const tip = document.getElementById('goalChartTooltip');
+  if (tip) tip.hidden = true;
+}
+
+function goalExternalTooltip(context) {
+  const tooltip = context.tooltip;
+  let tip = document.getElementById('goalChartTooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'goalChartTooltip';
+    tip.className = 'goal-chart-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.hidden = true;
+    document.body.appendChild(tip);
+  }
+  if (!goalTooltipScrollBound) {
+    goalTooltipScrollBound = true;
+    window.addEventListener('scroll', hideGoalChartTooltip, true);
+    window.addEventListener('resize', hideGoalChartTooltip);
+  }
+  if (!tooltip || tooltip.opacity === 0) {
+    tip.hidden = true;
+    return;
+  }
+  tip.replaceChildren();
+  (tooltip.title || []).forEach(line => {
+    const title = document.createElement('strong');
+    title.textContent = line;
+    tip.appendChild(title);
+  });
+  (tooltip.body || []).forEach((item, index) => {
+    (item.lines || []).forEach(line => {
+      const row = document.createElement('p');
+      const swatch = document.createElement('i');
+      const color = tooltip.labelColors?.[index]?.backgroundColor;
+      swatch.style.background = typeof color === 'string' ? color : '#8b96b3';
+      const text = document.createElement('span');
+      text.textContent = line;
+      row.append(swatch, text);
+      tip.appendChild(row);
+    });
+  });
+  tip.hidden = false;
+  tip.style.left = '0px';
+  tip.style.top = '0px';
+  const canvasBox = context.chart.canvas.getBoundingClientRect();
+  const tipBox = tip.getBoundingClientRect();
+  const margin = 8;
+  let left = canvasBox.left + tooltip.caretX + 12;
+  let top = canvasBox.top + tooltip.caretY + 12;
+  if (left + tipBox.width > window.innerWidth - margin) left = canvasBox.left + tooltip.caretX - tipBox.width - 12;
+  if (top + tipBox.height > window.innerHeight - margin) top = canvasBox.top + tooltip.caretY - tipBox.height - 12;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tipBox.width - margin));
+  top = Math.max(margin, Math.min(top, window.innerHeight - tipBox.height - margin));
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+}
+
+function goalChartTooltip(label, keepTitle = false) {
+  return {
+    enabled: false,
+    external: goalExternalTooltip,
+    callbacks: {
+      title: keepTitle ? undefined : () => [],
+      label
+    }
+  };
 }
 
 function renderGoalPathChart(goal, est, info) {
@@ -7754,7 +7833,11 @@ function renderGoalPathChart(goal, est, info) {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      plugins: { legend: { position: 'top', align: 'end', labels: { color: '#e6ebf5', boxWidth: 12, font: { size: 11 }, padding: 12 } }, tooltip: { callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(Number(context.parsed.y || 0), currency)}` } } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: goalChartTooltip(context => `${context.dataset.label}: ${formatCurrency(Number(context.parsed.y || 0), currency)}`, true)
+      },
       scales: {
         x: { ticks: { color: '#8b96b3', maxTicksLimit: 6, maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,.05)' } },
         y: {
@@ -7789,7 +7872,21 @@ function renderGoalContribChart(goal, entries, absTotal, currency) {
         borderWidth: 0
       }]
     },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%', plugins: { legend: { display: false } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: goalChartTooltip(context => {
+          const entry = entries[context.dataIndex];
+          if (!entry) return context.label || '';
+          const signed = `${entry.value < -0.004 ? '−' : entry.value > 0.004 ? '+' : ''}${formatCurrency(Math.abs(entry.value), currency)}`;
+          return `${entry.label}: ${signed}`;
+        })
+      }
+    }
   });
   if (!legend) return;
   legend.innerHTML = entries.length ? entries.map((entry, index) => {
