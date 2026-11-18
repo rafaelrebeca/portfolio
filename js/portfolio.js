@@ -8235,6 +8235,8 @@ function privacyMoneyTooltipLabel(context) {
 
 function configureChartPrivacyDefaults() {
   if (typeof Chart === 'undefined' || !Chart.defaults?.plugins?.tooltip?.callbacks) return;
+  Chart.defaults.plugins.tooltip.enabled = false;
+  Chart.defaults.plugins.tooltip.external = goalExternalTooltip;
   Chart.defaults.plugins.tooltip.callbacks.label = privacyMoneyTooltipLabel;
 }
 
