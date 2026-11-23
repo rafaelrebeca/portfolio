@@ -7718,6 +7718,14 @@ function hideGoalChartTooltip() {
   if (tip) tip.hidden = true;
 }
 
+function chartTooltipLayer() {
+  const fullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fullscreen) return fullscreen;
+  const dialog = document.querySelector('dialog[open]');
+  if (dialog) return dialog;
+  return document.body;
+}
+
 function goalExternalTooltip(context) {
   const tooltip = context.tooltip;
   let tip = document.getElementById('goalChartTooltip');
@@ -7727,8 +7735,9 @@ function goalExternalTooltip(context) {
     tip.className = 'goal-chart-tooltip';
     tip.setAttribute('role', 'tooltip');
     tip.hidden = true;
-    document.body.appendChild(tip);
   }
+  const layer = chartTooltipLayer();
+  if (tip.parentElement !== layer) layer.appendChild(tip);
   if (!goalTooltipScrollBound) {
     goalTooltipScrollBound = true;
     window.addEventListener('scroll', hideGoalChartTooltip, true);

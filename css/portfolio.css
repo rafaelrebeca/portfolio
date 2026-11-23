@@ -9,6 +9,7 @@
   --accent2: #3fd0a3;
   --danger: #ff5c72;
   --warn: #ffb454;
+  --chart-tooltip-z: 10000;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -7671,7 +7672,7 @@ select {
 
 .goal-chart-tooltip {
   position: fixed;
-  z-index: 80;
+  z-index: var(--chart-tooltip-z);
   left: 0;
   top: 0;
   max-width: min(420px, calc(100vw - 16px));
